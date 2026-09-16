@@ -15,7 +15,7 @@ Este é o MVP do Cuthub, uma aplicação SPA usando Vite, React, e Tailwind/shad
    npx supabase start
    ```
 
-2. As migrações em `supabase/migrations/` rodarão automaticamente, criando o banco de dados, ativando RLS e inserindo os dados de desenvolvimento (`00008_seed_desenvolvimento.sql`).
+2. As migrações em `supabase/migrations/` rodam automaticamente, criando o banco, ativando RLS e inserindo os dados de demonstração (`00008_seed_desenvolvimento.sql`). Em seguida o `supabase/seed.sql` habilita o login das contas de teste (veja abaixo).
 
 3. Crie um arquivo `.env.local` na raiz com as credenciais que o `npx supabase status` imprimiu:
    ```
@@ -32,8 +32,36 @@ Este é o MVP do Cuthub, uma aplicação SPA usando Vite, React, e Tailwind/shad
 
 ## Contas de desenvolvimento
 
-O seed cria três contas (`admin@cuthub.com`, `ownera@cuthub.com`, `ownerb@cuthub.com`), sendo as duas últimas donas de barbearias distintas — é esse par que permite testar o isolamento por RLS.
+O ambiente local já sobe pronto para uso. Todas as contas usam a senha `senha123`:
 
-**Atenção:** o seed insere essas linhas em `auth.users` com apenas `id` e `email`. Sem senha e sem registro em `auth.identities`, o login não funciona (o GoTrue responde `Database error querying schema`). Até que exista um script de seed de desenvolvimento que trate o Auth corretamente, é preciso completar esses registros manualmente no banco local. Senhas de desenvolvimento **não devem** ser gravadas em migrations, que rodam em todos os ambientes.
+| E-mail | Perfil | Enxerga |
+|---|---|---|
+| `ownera@cuthub.com` | owner | CutHub Barbearia |
+| `ownerb@cuthub.com` | owner | Barbearia Concorrente |
+| `admin@cuthub.com` | admin_supremo | todas as barbearias |
 
-Módulos futuros podem seguir o modelo das páginas `Clientes.tsx` (tabela + paginação) ou `Servicos.tsx` (grid + filtros).
+As duas contas de owner existem para testar o isolamento por RLS: cada uma enxerga apenas os próprios dados.
+
+### Onde essas credenciais vivem — e por quê
+
+A migration `00008_seed_desenvolvimento.sql` cria as contas em `auth.users` informando apenas `id` e `email`. Isso basta para as foreign keys, mas **não** para o GoTrue autenticar: faltam senha, `instance_id`, `aud`/`role`, o registro em `auth.identities`, e as colunas de token em NULL fazem o login falhar com `Database error querying schema`.
+
+Quem completa essas contas é o `supabase/seed.sql`, que o CLI executa **apenas no ambiente local** (`supabase start` e `supabase db reset`) e nunca em um `db push` ou ambiente remoto. É por isso que a senha de desenvolvimento mora lá e não em uma migration — migration roda em todo lugar, inclusive em produção.
+
+O script é idempotente e pode ser reexecutado à vontade:
+
+```bash
+npx supabase db reset
+```
+
+## Estrutura
+
+```
+src/services/*.service.ts   consultas ao Supabase; lançam erro, nunca engolem
+src/hooks/use*.ts           TanStack Query: cache, invalidação e mutações
+src/components/<módulo>/    UI de cada domínio
+src/pages/dashboard/        composição das telas
+src/lib/                    regras puras (disponibilidade, agendamento, financeiro)
+```
+
+Módulos novos podem seguir o modelo de `Clientes.tsx` (tabela + paginação) ou `Servicos.tsx` (grid + filtros). Os relatórios `FASE-*.md` registram as decisões técnicas, as validações feitas e as pendências em aberto de cada etapa.
