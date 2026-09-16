@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agendamentosService } from '@/services/agendamentos.service';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
 import type { Database } from '@/types/database.types';
 
 type AgendamentoInsert = Database['public']['Tables']['agendamento']['Insert'];
@@ -13,6 +15,8 @@ export function useAgendamentos(barbeariaId: string | null, inicio?: string, fim
   const invalidarAgenda = () => {
     queryClient.invalidateQueries({ queryKey: ['agendamentos', barbeariaId] });
     queryClient.invalidateQueries({ queryKey: ['disponibilidade', barbeariaId] });
+    queryClient.invalidateQueries({ queryKey: ['agendamentos_proximos', barbeariaId] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard_proximos', barbeariaId] });
   };
 
   const query = useQuery({
@@ -33,6 +37,11 @@ export function useAgendamentos(barbeariaId: string | null, inicio?: string, fim
     onSuccess: invalidarAgenda,
   });
 
+  const excluirMutation = useMutation({
+    mutationFn: (id: string) => agendamentosService.excluir(id),
+    onSuccess: invalidarAgenda,
+  });
+
   const cancelarMutation = useMutation({
     mutationFn: ({ id, canceladoPorId }: { id: string; canceladoPorId: string }) => 
       agendamentosService.cancelar(id, canceladoPorId),
@@ -50,5 +59,39 @@ export function useAgendamentos(barbeariaId: string | null, inicio?: string, fim
     isAtualizando: atualizarStatusMutation.isPending,
     cancelarAgendamento: cancelarMutation.mutateAsync,
     isCancelando: cancelarMutation.isPending,
+    excluirAgendamento: excluirMutation.mutateAsync,
+    isExcluindo: excluirMutation.isPending,
+  };
+}
+
+/**
+ * Próximos agendamentos da barbearia, agrupados por profissional.
+ *
+ * Alimenta o cartão "Próximo da fila" da Dashboard: a consulta é única e o
+ * agrupamento acontece em memória.
+ */
+export function useProximosPorProfissional(barbeariaId: string | null | undefined) {
+  const query = useQuery({
+    queryKey: ['agendamentos_proximos', barbeariaId],
+    queryFn: () => agendamentosService.listarProximos(barbeariaId!),
+    enabled: !!barbeariaId,
+  });
+
+  const porProfissional = useMemo(() => {
+    const mapa = new Map<string, AgendamentoComDetalhes>();
+    for (const agendamento of query.data ?? []) {
+      const id = agendamento.profissional?.id;
+      // A lista já vem ordenada por data_hora, então o primeiro de cada
+      // profissional é o próximo da fila dele
+      if (id && !mapa.has(id)) mapa.set(id, agendamento);
+    }
+    return mapa;
+  }, [query.data]);
+
+  return {
+    porProfissional,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
   };
 }

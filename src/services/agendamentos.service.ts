@@ -64,6 +64,35 @@ export const agendamentosService = {
     return (data as unknown) as AgendamentoComDetalhes;
   },
 
+  /**
+   * Agendamentos ainda por vir na barbearia, do mais próximo ao mais distante.
+   *
+   * Uma única consulta atende todos os profissionais — quem agrupa por
+   * profissional é a UI, evitando N requisições para N barbeiros.
+   */
+  async listarProximos(barbeariaId: string, limite = 100): Promise<AgendamentoComDetalhes[]> {
+    const { data, error } = await supabase
+      .from('agendamento')
+      .select(`
+        id, data_hora, data_hora_fim, status, observacoes,
+        cliente:cliente ( id, nome, telefone ),
+        profissional:profissional ( id, nome, avatar_url ),
+        agendamento_servico ( 
+          preco_cobrado, 
+          servico:servico ( id, nome, duracao_minutos, categoria ) 
+        )
+      `)
+      .eq('barbearia_id', barbeariaId)
+      .in('status', ['pendente', 'confirmado', 'em_atendimento'])
+      .gte('data_hora', new Date().toISOString())
+      .order('data_hora')
+      .limit(limite);
+
+    if (error) throw new Error(`Falha ao listar os próximos agendamentos: ${error.message}`);
+
+    return (data as unknown) as AgendamentoComDetalhes[];
+  },
+
   async criarAgendamento(
     agendamentoData: Omit<AgendamentoInsert, 'data_hora_fim'>, 
     servicoIds: string[]
@@ -131,6 +160,32 @@ export const agendamentosService = {
       .eq('id', id);
 
     if (error) throw new Error(`Falha ao atualizar status do agendamento: ${error.message}`);
+  },
+
+  /**
+   * Exclusão definitiva do agendamento.
+   *
+   * Diferente de `cancelar`, que preserva o registro para histórico, aqui a
+   * linha some do banco. Os vínculos em `agendamento_servico` são removidos
+   * antes por clareza — o ON DELETE CASCADE já faria isso, mas depender do
+   * cascade esconde a intenção de quem lê o código.
+   */
+  async excluir(id: string): Promise<void> {
+    const { error: erroServicos } = await supabase
+      .from('agendamento_servico')
+      .delete()
+      .eq('agendamento_id', id);
+
+    if (erroServicos) {
+      throw new Error(`Falha ao remover os serviços do agendamento: ${erroServicos.message}`);
+    }
+
+    const { error } = await supabase
+      .from('agendamento')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw new Error(`Falha ao excluir o agendamento: ${error.message}`);
   },
 
   async cancelar(id: string, canceladoPorId: string): Promise<void> {

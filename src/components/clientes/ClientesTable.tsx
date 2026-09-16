@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { Search, MoreHorizontal, Edit, Users, AlertCircle, Calendar, RefreshCcw } from 'lucide-react';
+import { Search, MoreHorizontal, Edit, Users, AlertCircle, Calendar, RefreshCcw, Plus } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -76,6 +76,12 @@ export function ClientesTable({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Cadastro sempre acessível: antes o gatilho só existia no estado vazio */}
+        <Button onClick={onNew} className="w-full sm:w-auto">
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Cliente
+        </Button>
       </div>
 
       {/* Container da Tabela com Rolagem Horizontal para Responsividade */}

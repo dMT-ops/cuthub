@@ -1,7 +1,8 @@
 import {
-  Bar,
-  BarChart,
+  Area,
   CartesianGrid,
+  ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,9 +14,11 @@ import type { PontoFaturamento } from '@/services/dashboard.service';
 
 interface FaturamentoChartProps {
   dados: PontoFaturamento[];
+  /** Chamado ao clicar em um ponto do gráfico, com o rótulo do dia (dd/MM) */
+  onPontoClick?: (dia: string) => void;
 }
 
-export function FaturamentoChart({ dados }: FaturamentoChartProps) {
+export function FaturamentoChart({ dados, onPontoClick }: FaturamentoChartProps) {
   const temMovimento = dados.some((ponto) => ponto.valor > 0);
 
   if (!temMovimento) {
@@ -28,7 +31,23 @@ export function FaturamentoChart({ dados }: FaturamentoChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={dados} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <ComposedChart
+        data={dados}
+        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        onClick={(estado: any) => {
+          const dia = estado?.activeLabel;
+          if (dia && onPontoClick) onPontoClick(dia);
+        }}
+        className={onPontoClick ? 'cursor-pointer' : undefined}
+      >
+        <defs>
+          {/* Preenchimento suave sob a linha, do tom da marca até transparente */}
+          <linearGradient id="gradienteFaturamento" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
         <XAxis
           dataKey="dia"
@@ -48,7 +67,7 @@ export function FaturamentoChart({ dados }: FaturamentoChartProps) {
           tickFormatter={(valor: number) => `R$ ${valor}`}
         />
         <Tooltip
-          cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
+          cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '4 4' }}
           contentStyle={{
             background: 'hsl(var(--card))',
             border: '1px solid hsl(var(--border))',
@@ -58,8 +77,28 @@ export function FaturamentoChart({ dados }: FaturamentoChartProps) {
           labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
           formatter={(valor) => [formatarMoeda(Number(valor ?? 0)), 'Entradas']}
         />
-        <Bar dataKey="valor" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-      </BarChart>
+
+        <Area
+          type="monotone"
+          dataKey="valor"
+          stroke="none"
+          fill="url(#gradienteFaturamento)"
+          isAnimationActive
+          animationDuration={1500}
+          animationEasing="ease-in-out"
+        />
+        <Line
+          type="monotone"
+          dataKey="valor"
+          stroke="hsl(var(--primary))"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+          isAnimationActive
+          animationDuration={1500}
+          animationEasing="ease-in-out"
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

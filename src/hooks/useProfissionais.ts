@@ -23,6 +23,15 @@ export function useProfissionais(
     },
   });
 
+  // Cadastro que tenta vincular uma conta existente pelo e-mail informado
+  const cadastrarComContaMutation = useMutation({
+    mutationFn: (dados: Parameters<typeof profissionaisService.cadastrarComConta>[0]) =>
+      profissionaisService.cadastrarComConta(dados),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profissionais', barbeariaId] });
+    },
+  });
+
   const atualizarMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<ProfissionalInsert> }) => 
       profissionaisService.atualizarProfissional(id, updates),
@@ -47,6 +56,8 @@ export function useProfissionais(
     error: query.error,
     criarProfissional: criarMutation.mutateAsync,
     isCriando: criarMutation.isPending,
+    cadastrarProfissionalComConta: cadastrarComContaMutation.mutateAsync,
+    isCadastrandoComConta: cadastrarComContaMutation.isPending,
     atualizarProfissional: atualizarMutation.mutateAsync,
     isAtualizando: atualizarMutation.isPending,
     alternarStatus: alternarStatusMutation.mutateAsync,

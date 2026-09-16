@@ -22,6 +22,15 @@ export function useClientes(
     },
   });
 
+  // Cadastro que tenta vincular uma conta existente pelo e-mail informado
+  const cadastrarComContaMutation = useMutation({
+    mutationFn: (dados: Parameters<typeof clientesService.cadastrarComConta>[0]) =>
+      clientesService.cadastrarComConta(dados),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clientes', barbeariaId] });
+    },
+  });
+
   const atualizarMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<ClienteInsert> }) => 
       clientesService.atualizarCliente(id, updates),
@@ -48,6 +57,8 @@ export function useClientes(
     error: query.error,
     criarCliente: criarMutation.mutateAsync,
     isCriando: criarMutation.isPending,
+    cadastrarClienteComConta: cadastrarComContaMutation.mutateAsync,
+    isCadastrandoComConta: cadastrarComContaMutation.isPending,
     atualizarCliente: atualizarMutation.mutateAsync,
     isAtualizando: atualizarMutation.isPending,
     alternarStatus: alternarStatusMutation.mutateAsync,

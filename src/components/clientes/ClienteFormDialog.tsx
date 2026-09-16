@@ -48,7 +48,7 @@ interface ClienteFormDialogProps {
 
 export function ClienteFormDialog({ open, onOpenChange, clienteAEditar }: ClienteFormDialogProps) {
   const { barbeariaId } = useAuth();
-  const { criarCliente, atualizarCliente, verificarDuplicidade } = useClientes(barbeariaId);
+  const { cadastrarClienteComConta, atualizarCliente, verificarDuplicidade } = useClientes(barbeariaId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   
@@ -97,8 +97,22 @@ export function ClienteFormDialog({ open, onOpenChange, clienteAEditar }: Client
         await atualizarCliente({ id: clienteAEditar.id, updates: payload });
         toast.success('Cliente atualizado com sucesso!');
       } else {
-        await criarCliente(payload);
-        toast.success('Cliente cadastrado com sucesso!');
+        // O cadastro passa pela função do banco, que vincula o cliente a uma
+        // conta existente quando o e-mail já pertence a um usuário do sistema
+        const resultado = await cadastrarClienteComConta({
+          barbeariaId: payload.barbearia_id,
+          nome: payload.nome,
+          email: payload.email,
+          telefone: payload.telefone,
+          dataNascimento: payload.data_nascimento,
+          observacoes: payload.observacoes,
+        });
+
+        toast.success(
+          resultado.contaVinculada
+            ? 'Cliente cadastrado e vinculado à conta existente!'
+            : 'Cliente cadastrado com sucesso!'
+        );
       }
       onOpenChange(false);
     } catch (err: any) {
@@ -213,6 +227,11 @@ export function ClienteFormDialog({ open, onOpenChange, clienteAEditar }: Client
                         <Input placeholder="email@exemplo.com" type="email" {...field} />
                       </FormControl>
                       <FormMessage />
+                      {!clienteAEditar && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Se já existir uma conta com este e-mail, o cliente será vinculado a ela.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />

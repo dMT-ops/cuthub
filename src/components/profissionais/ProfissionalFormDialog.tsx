@@ -48,7 +48,7 @@ interface ProfissionalFormDialogProps {
 
 export function ProfissionalFormDialog({ open, onOpenChange, profissionalAEditar }: ProfissionalFormDialogProps) {
   const { barbeariaId } = useAuth();
-  const { criarProfissional, atualizarProfissional } = useProfissionais(barbeariaId);
+  const { cadastrarProfissionalComConta, atualizarProfissional } = useProfissionais(barbeariaId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -113,8 +113,23 @@ export function ProfissionalFormDialog({ open, onOpenChange, profissionalAEditar
         await atualizarProfissional({ id: profissionalAEditar.id, updates: payload });
         toast.success('Profissional atualizado com sucesso!');
       } else {
-        await criarProfissional(payload);
-        toast.success('Profissional cadastrado com sucesso!');
+        // O cadastro passa pela função do banco, que vincula o profissional a
+        // uma conta existente quando o e-mail já pertence a um usuário do sistema
+        const resultado = await cadastrarProfissionalComConta({
+          barbeariaId: payload.barbearia_id,
+          nome: payload.nome,
+          email: payload.email,
+          telefone: payload.telefone,
+          especialidade: payload.especialidade,
+          bio: payload.bio,
+          comissaoPercentual: payload.comissao_percentual,
+        });
+
+        toast.success(
+          resultado.contaVinculada
+            ? 'Profissional cadastrado e vinculado à conta existente!'
+            : 'Profissional cadastrado com sucesso!'
+        );
       }
       onOpenChange(false);
     } catch (err: any) {
@@ -218,6 +233,11 @@ export function ProfissionalFormDialog({ open, onOpenChange, profissionalAEditar
                       <Input placeholder="email@exemplo.com" type="email" {...field} />
                     </FormControl>
                     <FormMessage />
+                    {!profissionalAEditar && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Se já existir uma conta com este e-mail, o profissional será vinculado a ela.
+                      </p>
+                    )}
                   </FormItem>
                 )}
               />

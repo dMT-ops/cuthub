@@ -559,9 +559,45 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cadastrar_cliente_com_conta: {
+        Args: {
+          p_barbearia_id: string
+          p_data_nascimento?: string
+          p_email?: string
+          p_nome: string
+          p_observacoes?: string
+          p_telefone?: string
+        }
+        Returns: {
+          cliente_id: string
+          conta_vinculada: boolean
+          usuario_id: string
+        }[]
+      }
+      cadastrar_profissional_com_conta: {
+        Args: {
+          p_barbearia_id: string
+          p_bio?: string
+          p_comissao_percentual?: number
+          p_email?: string
+          p_especialidade?: string
+          p_nome: string
+          p_telefone?: string
+        }
+        Returns: {
+          conta_vinculada: boolean
+          profissional_id: string
+          usuario_id: string
+        }[]
+      }
+      checar_acesso_barbearia: {
+        Args: { p_barbearia_id: string }
+        Returns: undefined
+      }
       criar_barbearia_e_vincular: { Args: { p_nome: string }; Returns: string }
       get_barbearia_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
+      perfil_por_email: { Args: { p_email: string }; Returns: string }
     }
     Enums: {
       categoria_lancamento:
@@ -755,7 +791,7 @@ export const Constants = {
   },
 } as const
 
-  
+// Aliases de conveniência usados pelo projeto (mantidos manualmente)
 export type Cliente = Database['public']['Tables']['cliente']['Row'];  
 export type ClienteInsert = Database['public']['Tables']['cliente']['Insert'];  
 export type Profissional = Database['public']['Tables']['profissional']['Row'];  

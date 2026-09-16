@@ -71,6 +71,45 @@ export const profissionaisService = {
     return data;
   },
 
+  /**
+   * Cadastra o profissional vinculando-o a uma conta existente, quando o e-mail
+   * informado já pertencer a um usuário do sistema.
+   *
+   * Mesmo mecanismo do cadastro de clientes: o vínculo em
+   * `profissional.usuario_id` é o que permitirá, no futuro, a área logada do
+   * barbeiro enxergar a própria agenda.
+   */
+  async cadastrarComConta(dados: {
+    barbeariaId: string;
+    nome: string;
+    email?: string | null;
+    telefone?: string | null;
+    especialidade?: string | null;
+    bio?: string | null;
+    comissaoPercentual?: number;
+  }): Promise<{ profissionalId: string; usuarioId: string | null; contaVinculada: boolean }> {
+    const { data, error } = await supabase.rpc('cadastrar_profissional_com_conta', {
+      p_barbearia_id: dados.barbeariaId,
+      p_nome: dados.nome,
+      p_email: dados.email ?? undefined,
+      p_telefone: dados.telefone ?? undefined,
+      p_especialidade: dados.especialidade ?? undefined,
+      p_bio: dados.bio ?? undefined,
+      p_comissao_percentual: dados.comissaoPercentual,
+    });
+
+    if (error) throw new Error(`Falha ao cadastrar profissional: ${error.message}`);
+
+    const linha = data?.[0];
+    if (!linha) throw new Error('O banco não retornou o profissional cadastrado.');
+
+    return {
+      profissionalId: linha.profissional_id,
+      usuarioId: linha.usuario_id,
+      contaVinculada: linha.conta_vinculada,
+    };
+  },
+
   async criarProfissional(profissional: ProfissionalInsert): Promise<Profissional> {
     const { data, error } = await supabase
       .from('profissional')

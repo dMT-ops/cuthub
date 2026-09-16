@@ -6,7 +6,8 @@ import type { Database } from '@/types/database.types';
 
 type ConfiguracaoBarbearia = Database['public']['Tables']['configuracao_barbearia']['Row'];
 
-const PIXELS_PER_MINUTE = 1.5; // 1 hora = 90px de altura para dar espaço respirável
+// 1 hora = 54px: cabe a jornada inteira na tela sem rolagem, mantendo legibilidade
+const PIXELS_PER_MINUTE = 0.9;
 
 interface CalendarViewProps {
   currentDate: Date;
@@ -102,11 +103,13 @@ export default function CalendarView({ onAppointmentClick, agendamentos, configu
                     const topPos = Math.max(0, diffMinutes * PIXELS_PER_MINUTE);
                     const heightPos = duracaoMinutos * PIXELS_PER_MINUTE;
                     const statusColor = CLASSES_STATUS[agendamento.status];
+                    // Atendimentos curtos não comportam três linhas de texto
+                    const compacto = heightPos < 44;
 
                     return (
                       <div 
                         key={agendamento.id}
-                        className={`absolute left-1 right-1 rounded-md border-l-4 p-2 text-xs overflow-hidden cursor-pointer hover:brightness-95 transition-all shadow-sm ${statusColor}`}
+                        className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-0.5 text-[11px] leading-tight overflow-hidden cursor-pointer hover:brightness-95 transition-all shadow-sm ${statusColor}`}
                         style={{
                           top: `${topPos}px`,
                           height: `${heightPos}px`,
@@ -115,7 +118,7 @@ export default function CalendarView({ onAppointmentClick, agendamentos, configu
                       >
                         <div className="font-semibold truncate">{agendamento.cliente?.nome || 'Anônimo'}</div>
                         <div className="truncate opacity-80">{nomes}</div>
-                        <div className="font-medium mt-1">{formatarMoeda(precoTotal)}</div>
+                        {!compacto && <div className="font-medium">{formatarMoeda(precoTotal)}</div>}
                       </div>
                     );
                   })}

@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Clock, Phone, Scissors, User } from 'lucide-react';
+import { Clock, Phone, Scissors, Trash2, User } from 'lucide-react';
 
 import {
   Sheet,
@@ -11,6 +11,17 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
 import type { Database } from '@/types/database.types';
 import { CLASSES_STATUS, ROTULO_STATUS, resumirAgendamento } from '@/lib/agendamento';
@@ -24,6 +35,8 @@ interface AppointmentDetailsDrawerProps {
   agendamento: AgendamentoComDetalhes | null;
   onUpdateStatus: (id: string, novoStatus: StatusAgendamento) => Promise<void>;
   onCancelar: (id: string) => Promise<void>;
+  /** Exclusão definitiva: remove o registro do banco, sem histórico */
+  onExcluir: (id: string) => Promise<void>;
   isSalvando?: boolean;
 }
 
@@ -43,6 +56,7 @@ export function AppointmentDetailsDrawer({
   agendamento,
   onUpdateStatus,
   onCancelar,
+  onExcluir,
   isSalvando,
 }: AppointmentDetailsDrawerProps) {
   if (!agendamento) return null;
@@ -180,6 +194,41 @@ export function AppointmentDetailsDrawer({
                 Cancelar agendamento
               </Button>
             )}
+
+            <Separator />
+
+            {/* Cancelar preserva o histórico; excluir apaga o registro de vez */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={isSalvando}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir agendamento
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir este agendamento?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O registro será apagado do banco junto com os serviços vinculados.
+                    Esta ação é irreversível e o atendimento deixa de contar em qualquer
+                    histórico ou relatório. Para manter o registro, use "Cancelar agendamento".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => onExcluir(agendamento.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Excluir definitivamente
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </section>
         </div>
       </SheetContent>

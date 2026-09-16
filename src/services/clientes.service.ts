@@ -132,6 +132,43 @@ export const clientesService = {
     return { telefoneDuplicado, emailDuplicado };
   },
 
+  /**
+   * Cadastra o cliente vinculando-o a uma conta existente, quando o e-mail
+   * informado já pertencer a um usuário do sistema.
+   *
+   * A checagem acontece no banco (função SECURITY DEFINER), porque `auth.users`
+   * não é legível pelo frontend. É esse vínculo (`cliente.usuario_id`) que a
+   * futura área do cliente vai usar para listar as barbearias dele.
+   */
+  async cadastrarComConta(dados: {
+    barbeariaId: string;
+    nome: string;
+    email?: string | null;
+    telefone?: string | null;
+    dataNascimento?: string | null;
+    observacoes?: string | null;
+  }): Promise<{ clienteId: string; usuarioId: string | null; contaVinculada: boolean }> {
+    const { data, error } = await supabase.rpc('cadastrar_cliente_com_conta', {
+      p_barbearia_id: dados.barbeariaId,
+      p_nome: dados.nome,
+      p_email: dados.email ?? undefined,
+      p_telefone: dados.telefone ?? undefined,
+      p_data_nascimento: dados.dataNascimento ?? undefined,
+      p_observacoes: dados.observacoes ?? undefined,
+    });
+
+    if (error) throw new Error(`Falha ao cadastrar cliente: ${error.message}`);
+
+    const linha = data?.[0];
+    if (!linha) throw new Error('O banco não retornou o cliente cadastrado.');
+
+    return {
+      clienteId: linha.cliente_id,
+      usuarioId: linha.usuario_id,
+      contaVinculada: linha.conta_vinculada,
+    };
+  },
+
   async criarCliente(cliente: ClienteInsert): Promise<Cliente> {
     const { data, error } = await supabase
       .from('cliente')

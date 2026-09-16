@@ -42,12 +42,46 @@ export default function MonthlyView({ currentDate, onDateClick, agendamentos }: 
     return newCounts;
   }, [agendamentos]);
 
-  // Função para determinar a cor do Heatmap
-  const getHeatmapColor = (count: number) => {
-    if (count === 0) return 'bg-transparent hover:bg-muted/50';
-    if (count <= 2) return 'bg-primary/20 hover:bg-primary/30';
-    if (count <= 5) return 'bg-primary/60 hover:bg-primary/70';
-    return 'bg-primary hover:bg-primary/90 shadow-md';
+  /**
+   * Referência de volume do mês: média e limiar de "dia cheio".
+   *
+   * Só a média não serve como corte. Com 0,7 agendamento/dia, qualquer dia com
+   * um único atendimento já ficaria acima dela e a faixa intermediária
+   * desapareceria. Por isso o limiar é média + 1 desvio padrão (nunca menor
+   * que 2), o que mantém as três faixas significativas mesmo em meses fracos.
+   *
+   * Considera apenas os dias do mês exibido — os dias de preenchimento das
+   * semanas vizinhas distorceriam a referência.
+   */
+  const { media, limiarAlto } = useMemo(() => {
+    const diasDoMes = eachDayOfInterval({
+      start: startOfMonth(currentDate),
+      end: endOfMonth(currentDate),
+    });
+    if (diasDoMes.length === 0) return { media: 0, limiarAlto: 1 };
+
+    const valores = diasDoMes.map((dia) => counts[format(dia, 'yyyy-MM-dd')] || 0);
+    const media = valores.reduce((a, b) => a + b, 0) / valores.length;
+    const variancia = valores.reduce((soma, v) => soma + (v - media) ** 2, 0) / valores.length;
+    const desvio = Math.sqrt(variancia);
+
+    return { media, limiarAlto: Math.max(2, media + desvio) };
+  }, [counts, currentDate]);
+
+  /**
+   * Cor do dia por volume: vermelho sem movimento, amarelo dentro do esperado,
+   * verde nos dias mais cheios que o normal do mês.
+   */
+  const corPorVolume = (count: number) => {
+    if (count === 0) return 'bg-red-500/10 hover:bg-red-500/20';
+    if (count >= limiarAlto) return 'bg-green-500/20 hover:bg-green-500/30';
+    return 'bg-yellow-500/20 hover:bg-yellow-500/30';
+  };
+
+  const corDaBarra = (count: number) => {
+    if (count === 0) return 'bg-red-500/30';
+    if (count >= limiarAlto) return 'bg-green-500/70';
+    return 'bg-yellow-500/70';
   };
 
   return (
@@ -73,9 +107,8 @@ export default function MonthlyView({ currentDate, onDateClick, agendamentos }: 
               onClick={() => onDateClick(day)}
               className={cn(
                 "min-h-[100px] border-b border-r p-2 flex flex-col cursor-pointer transition-all relative group",
-                !isCurrentMonth && "bg-muted/10 opacity-50",
-                today && "ring-2 ring-primary ring-inset z-10",
-                "hover:bg-muted/30"
+                isCurrentMonth ? corPorVolume(count) : "bg-muted/10 opacity-50",
+                today && "ring-2 ring-primary ring-inset z-10"
               )}
             >
               <div className="flex justify-between items-start mb-2">
@@ -96,17 +129,33 @@ export default function MonthlyView({ currentDate, onDateClick, agendamentos }: 
               <div className="flex-1 w-full flex items-end">
                 {count > 0 && (
                   <div 
-                    className={cn(
-                      "w-full h-8 rounded-md transition-colors",
-                      getHeatmapColor(count)
-                    )}
-                    title={`${count} agendamentos`}
+                    className={cn("w-full h-2 rounded-full transition-colors", corDaBarra(count))}
+                    title={`${count} agendamento(s)`}
                   />
                 )}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Legenda das cores por volume */}
+      <div className="flex flex-wrap items-center gap-4 border-t bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-green-500/70" aria-hidden="true" />
+          Dia cheio ({Math.ceil(limiarAlto)}+ agendamentos)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" aria-hidden="true" />
+          Movimento normal
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500/40" aria-hidden="true" />
+          Sem agendamentos
+        </span>
+        <span className="ml-auto">
+          Média do mês: <strong className="text-foreground">{media.toFixed(1)}</strong> por dia
+        </span>
       </div>
     </div>
   );

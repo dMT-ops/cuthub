@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { CalendarClock, DollarSign, Scissors, TrendingUp, Users } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
+import { ProximoAgendamentoPorBarbeiro } from '@/components/dashboard/ProximoAgendamentoPorBarbeiro';
 import { resumirAgendamento } from '@/lib/agendamento';
 import { formatarMoeda } from '@/lib/utils';
 
@@ -18,6 +19,7 @@ const FaturamentoChart = lazy(() =>
 
 export default function DashboardHome() {
   const { barbeariaId } = useAuth();
+  const navigate = useNavigate();
   const {
     indicadores,
     faturamentoDiario,
@@ -50,6 +52,7 @@ export default function DashboardHome() {
           isLoading={isLoading}
           valor={formatarMoeda(indicadores?.faturamentoHoje ?? 0)}
           detalhe={variacao}
+          destino="/dashboard/financeiro"
         />
 
         <IndicadorCard
@@ -58,6 +61,7 @@ export default function DashboardHome() {
           isLoading={isLoading}
           valor={String(indicadores?.atendimentosConcluidosHoje ?? 0)}
           detalhe={`${indicadores?.atendimentosRestantesHoje ?? 0} ainda na agenda de hoje`}
+          destino="/dashboard/agenda"
         />
 
         <IndicadorCard
@@ -66,6 +70,7 @@ export default function DashboardHome() {
           isLoading={isLoading}
           valor={`+${indicadores?.novosClientes7Dias ?? 0}`}
           detalhe="Cadastrados nos últimos 7 dias"
+          destino="/dashboard/clientes"
         />
 
         <IndicadorCard
@@ -78,6 +83,7 @@ export default function DashboardHome() {
               ? `${indicadores.retorno.clientesQueVoltaram} de ${indicadores.retorno.clientesNoPeriodo} clientes voltaram em 90 dias`
               : 'Sem atendimentos concluídos nos últimos 90 dias'
           }
+          destino="/dashboard/clientes"
         />
       </div>
 
@@ -94,7 +100,10 @@ export default function DashboardHome() {
               <Skeleton className="h-[240px] w-full" />
             ) : (
               <Suspense fallback={<Skeleton className="h-[240px] w-full" />}>
-                <FaturamentoChart dados={faturamentoDiario} />
+                <FaturamentoChart
+                  dados={faturamentoDiario}
+                  onPontoClick={() => navigate('/dashboard/financeiro')}
+                />
               </Suspense>
             )}
           </CardContent>
@@ -152,6 +161,12 @@ export default function DashboardHome() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-7">
+        <div className="lg:col-span-4">
+          <ProximoAgendamentoPorBarbeiro />
+        </div>
+      </div>
     </div>
   );
 }
@@ -172,15 +187,40 @@ function IndicadorCard({
   valor,
   detalhe,
   isLoading,
+  destino,
 }: {
   titulo: string;
   icone: React.ReactNode;
   valor: string;
   detalhe: string;
   isLoading: boolean;
+  /** Rota aberta ao clicar no cartão; sem ela o cartão é apenas informativo */
+  destino?: string;
 }) {
+  const navigate = useNavigate();
+  const clicavel = !!destino && !isLoading;
+
   return (
-    <Card>
+    <Card
+      onClick={clicavel ? () => navigate(destino) : undefined}
+      onKeyDown={
+        clicavel
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate(destino);
+              }
+            }
+          : undefined
+      }
+      role={clicavel ? 'link' : undefined}
+      tabIndex={clicavel ? 0 : undefined}
+      className={
+        clicavel
+          ? 'cursor-pointer transition-all hover:border-primary/30 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          : undefined
+      }
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{titulo}</CardTitle>
         {icone}

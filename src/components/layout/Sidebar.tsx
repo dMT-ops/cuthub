@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Menu, Pin, PinOff, LogOut } from 'lucide-react';
+import { Menu, Pin, PinOff, LogOut, Scissors } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
 import { useSidebarState } from '@/hooks/useSidebarState';
 import { navigationItems } from './navigation.config';
 import { SidebarItem } from './SidebarItem';
@@ -10,6 +11,9 @@ import { Button } from '@/components/ui/button';
 
 export function Sidebar(props: ReturnType<typeof useSidebarState>) {
   const { user, signOut } = useAuth();
+  const { barbearia } = useBarbeariaAtual();
+  // Enquanto a barbearia carrega, o nome do produto evita um cabeçalho vazio
+  const tituloBarbearia = barbearia?.nome ?? 'CutHub';
   const {
     isPinned,
     isMobile,
@@ -34,7 +38,7 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0 flex flex-col">
           <SheetHeader className="p-6 border-b text-left">
-            <SheetTitle className="text-2xl font-bold">CutHub</SheetTitle>
+            <SheetTitle className="text-2xl font-bold">{tituloBarbearia}</SheetTitle>
             <p className="text-xs text-muted-foreground mt-1">Gestão de Barbearias</p>
           </SheetHeader>
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto" aria-label="Menu Principal Mobile">
@@ -86,12 +90,23 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
       `}
     >
       <div className="p-4 border-b flex items-center h-[73px] box-border relative">
-        {/* Title area fades in/out */}
+        {/* Expandido: nome da barbearia logada. Recolhido: a tesoura mantém a
+            identidade visual no lugar do título, que não caberia em 64px. */}
         <div className={`overflow-hidden transition-all duration-200 ease-in-out motion-reduce:transition-none ${isExpanded ? 'w-full opacity-100' : 'w-0 opacity-0'}`}>
-          <h1 className="text-xl font-bold text-foreground whitespace-nowrap">CutHub</h1>
+          <h1 className="text-xl font-bold text-foreground whitespace-nowrap truncate pr-8" title={tituloBarbearia}>
+            {tituloBarbearia}
+          </h1>
         </div>
-        
-        {/* Ícone fixo quando recolhido (opcional, para dar identidade visual, mas no req só pede ícones. Deixamos o titulo sumir e botamos o PIN) */}
+
+        {!isExpanded && (
+          <div
+            className="absolute inset-0 flex items-center justify-center text-primary"
+            aria-hidden="true"
+          >
+            <Scissors size={24} />
+          </div>
+        )}
+
         {isExpanded && (
           <Button
             variant="ghost"

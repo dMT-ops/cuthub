@@ -14,7 +14,8 @@ interface WeeklyViewProps {
   configuracao?: ConfiguracaoBarbearia | null;
 }
 
-const PIXELS_PER_MINUTE = 1.5; // Ajuste para altura dos slots
+// Mesma densidade da visão de dia: 1 hora = 54px
+const PIXELS_PER_MINUTE = 0.9;
 
 export default function WeeklyView({ currentDate, onAppointmentClick, agendamentos, configuracao }: WeeklyViewProps) {
   // Calcula os dias da semana (começando no domingo = 0)
@@ -101,7 +102,7 @@ export default function WeeklyView({ currentDate, onAppointmentClick, agendament
                     return (
                       <div 
                         key={agendamento.id}
-                        className={`absolute left-0.5 right-0.5 rounded border-l-2 p-1 text-[10px] sm:text-xs overflow-hidden cursor-pointer hover:brightness-95 transition-all shadow-sm ${statusColor}`}
+                        className={`absolute left-0.5 right-0.5 rounded border-l-2 px-1 py-0.5 text-[10px] leading-tight overflow-hidden cursor-pointer hover:brightness-95 transition-all shadow-sm ${statusColor}`}
                         style={{
                           top: `${topPos}px`,
                           height: `${heightPos}px`,

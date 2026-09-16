@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { 
   format, 
+  isValid, parseISO,
   addDays, subDays, 
   addWeeks, subWeeks, 
   addMonths, subMonths, 
@@ -41,6 +42,7 @@ import {
   DropdownMenuCheckboxItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useProfissionais } from '@/hooks/useProfissionais';
@@ -56,12 +58,21 @@ type ViewMode = 'calendar' | 'weekly' | 'monthly' | 'yearly' | 'list' | 'kanban'
 
 export default function AgendaHome() {
   const { barbeariaId } = useAuth();
+  // A Dashboard abre a agenda já posicionada: ?data=YYYY-MM-DD&agendamento=<id>
+  const [searchParams] = useSearchParams();
+  const dataInicial = searchParams.get('data');
+  const agendamentoInicial = searchParams.get('agendamento');
+
   const [view, setView] = useState<ViewMode>('calendar');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (!dataInicial) return new Date();
+    const parsed = parseISO(dataInicial);
+    return isValid(parsed) ? parsed : new Date();
+  });
   
   // Modais e Drawers
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(agendamentoInicial);
 
   // Filtros
   const [busca, setBusca] = useState('');
@@ -93,6 +104,8 @@ export default function AgendaHome() {
     isAtualizando,
     cancelarAgendamento,
     isCancelando,
+    excluirAgendamento,
+    isExcluindo,
   } = useAgendamentos(barbeariaId, dateRange.start, dateRange.end);
 
   const handlePrevDate = () => {
@@ -157,6 +170,16 @@ export default function AgendaHome() {
       setSelectedAppointmentId(null);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao atualizar o status do agendamento');
+    }
+  };
+
+  const handleExcluir = async (id: string) => {
+    try {
+      await excluirAgendamento(id);
+      toast.success('Agendamento excluído.');
+      setSelectedAppointmentId(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao excluir o agendamento');
     }
   };
 
@@ -459,7 +482,8 @@ export default function AgendaHome() {
         agendamento={agendamentoSelecionado}
         onUpdateStatus={handleUpdateStatus}
         onCancelar={handleCancelar}
-        isSalvando={isAtualizando || isCancelando}
+        onExcluir={handleExcluir}
+        isSalvando={isAtualizando || isCancelando || isExcluindo}
       />
     </div>
   );
