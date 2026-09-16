@@ -1,64 +1,31 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 import { format, parseISO, setHours, setMinutes, differenceInMinutes, startOfWeek, addDays, isSameDay, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { CLASSES_STATUS, resumirAgendamento } from '@/lib/agendamento';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
+import type { Database } from '@/types/database.types';
+
+type ConfiguracaoBarbearia = Database['public']['Tables']['configuracao_barbearia']['Row'];
 
 interface WeeklyViewProps {
   currentDate: Date;
   onAppointmentClick: (id: string) => void;
-  profissionalId?: string | null;
+  agendamentos: AgendamentoComDetalhes[];
+  configuracao?: ConfiguracaoBarbearia | null;
 }
 
-// Configurações da grade de horários
-const START_HOUR = 8;
-const END_HOUR = 20;
 const PIXELS_PER_MINUTE = 1.5; // Ajuste para altura dos slots
 
-export default function WeeklyView({ currentDate, onAppointmentClick, profissionalId }: WeeklyViewProps) {
-  const [agendamentos, setAgendamentos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
+export default function WeeklyView({ currentDate, onAppointmentClick, agendamentos, configuracao }: WeeklyViewProps) {
   // Calcula os dias da semana (começando no domingo = 0)
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // 1 = Segunda
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => START_HOUR + i);
 
-  useEffect(() => {
-    async function fetchAgenda() {
-      setLoading(true);
-      const startStr = format(weekDays[0], 'yyyy-MM-dd');
-      const endStr = format(weekDays[6], 'yyyy-MM-dd');
-      
-      let query = supabase
-        .from('agendamento')
-        .select(`
-          id, status, data_hora,
-          cliente:cliente_id(nome),
-          servico:servico_id(nome, duracao, preco),
-          profissional:profissional_id(nome)
-        `)
-        .gte('data_hora', startStr)
-        .lte('data_hora', endStr + 'T23:59:59');
-
-      if (profissionalId) {
-        query = query.eq('profissional_id', profissionalId);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data) {
-        setAgendamentos(data);
-      }
-      setLoading(false);
-    }
-
-    fetchAgenda();
-  }, [currentDate, profissionalId]);
-
-  if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Carregando semana...</div>;
-  }
+  // Horários configuráveis
+  const START_HOUR = configuracao?.horario_abertura ? parseInt(configuracao.horario_abertura.split(':')[0], 10) : 8;
+  const END_HOUR = configuracao?.horario_fechamento ? parseInt(configuracao.horario_fechamento.split(':')[0], 10) : 20;
+  
+  const hours = Array.from({ length: Math.max(1, END_HOUR - START_HOUR + 1) }).map((_, i) => START_HOUR + i);
 
   return (
     <div className="flex flex-col h-full bg-card rounded-lg overflow-hidden shadow-sm border">
@@ -125,13 +92,11 @@ export default function WeeklyView({ currentDate, onAppointmentClick, profission
                     const baseDate = setMinutes(setHours(data, START_HOUR), 0);
                     const diffMinutes = differenceInMinutes(data, baseDate);
                     
-                    const topPos = Math.max(0, diffMinutes * PIXELS_PER_MINUTE);
-                    const heightPos = agendamento.servico.duracao * PIXELS_PER_MINUTE;
+                    const { nomes, duracaoMinutos } = resumirAgendamento(agendamento);
 
-                    let statusColor = 'bg-primary/20 border-primary text-amber-900 dark:text-primary';
-                    if (agendamento.status === 'confirmado') statusColor = 'bg-blue-500/20 border-blue-500 text-blue-700 dark:text-blue-300';
-                    if (agendamento.status === 'concluido') statusColor = 'bg-green-500/20 border-green-500 text-green-700 dark:text-green-300';
-                    if (agendamento.status === 'cancelado') statusColor = 'bg-red-500/20 border-red-500 text-red-700 dark:text-red-300 opacity-60';
+                    const topPos = Math.max(0, diffMinutes * PIXELS_PER_MINUTE);
+                    const heightPos = duracaoMinutos * PIXELS_PER_MINUTE;
+                    const statusColor = CLASSES_STATUS[agendamento.status];
 
                     return (
                       <div 
@@ -144,7 +109,7 @@ export default function WeeklyView({ currentDate, onAppointmentClick, profission
                         onClick={() => onAppointmentClick(agendamento.id)}
                       >
                         <div className="font-semibold truncate">{agendamento.cliente?.nome || 'Anônimo'}</div>
-                        <div className="truncate opacity-80 hidden sm:block">{agendamento.servico.nome}</div>
+                        <div className="truncate opacity-80 hidden sm:block">{nomes}</div>
                       </div>
                     );
                   })}

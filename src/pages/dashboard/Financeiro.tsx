@@ -1,8 +1,199 @@
+import { useMemo, useState } from 'react';
+import { addMonths, endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { ArrowDownCircle, ArrowUpCircle, ChevronLeft, ChevronRight, Plus, Scale } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useAtendimentosAReceber, useFinanceiro } from '@/hooks/useFinanceiro';
+import { LancamentosTable } from '@/components/financeiro/LancamentosTable';
+import { LancamentoFormDialog } from '@/components/financeiro/LancamentoFormDialog';
+import { AtendimentosAReceber } from '@/components/financeiro/AtendimentosAReceber';
+import { CATEGORIAS_LANCAMENTO, ROTULO_CATEGORIA } from '@/lib/financeiro';
+import { formatarMoeda } from '@/lib/utils';
+import type { Database } from '@/types/database.types';
+
+type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
+type CategoriaLancamento = Database['public']['Enums']['categoria_lancamento'];
+
 export default function Financeiro() {
+  const { barbeariaId } = useAuth();
+
+  const [mesReferencia, setMesReferencia] = useState(() => new Date());
+  const [tipo, setTipo] = useState<'todos' | TipoLancamento>('todos');
+  const [categoria, setCategoria] = useState<'todas' | CategoriaLancamento>('todas');
+  const [formOpen, setFormOpen] = useState(false);
+
+  const periodo = useMemo(
+    () => ({
+      inicio: startOfMonth(mesReferencia).toISOString(),
+      fim: endOfMonth(mesReferencia).toISOString(),
+    }),
+    [mesReferencia]
+  );
+
+  const filtros = useMemo(
+    () => ({
+      ...periodo,
+      ...(tipo !== 'todos' ? { tipo } : {}),
+      ...(categoria !== 'todas' ? { categoria } : {}),
+    }),
+    [periodo, tipo, categoria]
+  );
+
+  const { lancamentos, resumo, isLoading, isError, error } = useFinanceiro(barbeariaId, filtros);
+  const { atendimentos, isLoading: carregandoAtendimentos } = useAtendimentosAReceber(
+    barbeariaId,
+    periodo.inicio,
+    periodo.fim
+  );
+
   return (
-    <div className="space-y-4">
-      <h3 className="text-xl font-bold">Financeiro</h3>
-      <p className="text-muted-foreground">O módulo completo Financeiro será implementado em breve.</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
+        <Button onClick={() => setFormOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
+        </Button>
+      </div>
+
+      {/* Período */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center rounded-md border bg-background">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-r-none"
+            onClick={() => setMesReferencia(subMonths(mesReferencia, 1))}
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft size={16} />
+          </Button>
+          <button
+            className="px-4 text-sm font-medium capitalize w-44 hover:text-primary transition-colors"
+            onClick={() => setMesReferencia(new Date())}
+            title="Voltar para o mês atual"
+          >
+            {format(mesReferencia, "MMMM 'de' yyyy", { locale: ptBR })}
+          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-l-none"
+            onClick={() => setMesReferencia(addMonths(mesReferencia, 1))}
+            aria-label="Próximo mês"
+          >
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+
+        <Select value={tipo} onValueChange={(v) => setTipo(v as typeof tipo)}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="entrada">Entradas</SelectItem>
+            <SelectItem value="saida">Saídas</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={categoria} onValueChange={(v) => setCategoria(v as typeof categoria)}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas as categorias</SelectItem>
+            {CATEGORIAS_LANCAMENTO.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {ROTULO_CATEGORIA[cat]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Resumo do período */}
+      <div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Resumo do mês inteiro — os filtros de tipo e categoria afetam apenas a listagem abaixo.
+        </p>
+        <div className="grid gap-4 md:grid-cols-3">
+          <ResumoCard
+            titulo="Entradas"
+            valor={resumo?.entradas}
+            isLoading={isLoading}
+            icone={<ArrowUpCircle className="h-4 w-4" />}
+            cor="text-green-600 dark:text-green-400"
+          />
+          <ResumoCard
+            titulo="Saídas"
+            valor={resumo?.saidas}
+            isLoading={isLoading}
+            icone={<ArrowDownCircle className="h-4 w-4" />}
+            cor="text-red-600 dark:text-red-400"
+          />
+          <ResumoCard
+            titulo="Saldo"
+            valor={resumo?.saldo}
+            isLoading={isLoading}
+            icone={<Scale className="h-4 w-4" />}
+            cor={(resumo?.saldo ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'}
+            destaque
+          />
+        </div>
+      </div>
+
+      <AtendimentosAReceber
+        atendimentos={atendimentos}
+        isLoading={carregandoAtendimentos}
+        periodo={periodo}
+      />
+
+      {isError ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-card p-12 text-center">
+          <h3 className="mb-1 text-lg font-semibold">Não foi possível carregar o financeiro</h3>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {(error as Error)?.message || 'Erro desconhecido ao consultar os lançamentos.'}
+          </p>
+        </div>
+      ) : (
+        <LancamentosTable lancamentos={lancamentos} isLoading={isLoading} />
+      )}
+
+      <LancamentoFormDialog open={formOpen} onOpenChange={setFormOpen} />
+    </div>
+  );
+}
+
+function ResumoCard({
+  titulo,
+  valor,
+  isLoading,
+  icone,
+  cor,
+  destaque,
+}: {
+  titulo: string;
+  valor?: number;
+  isLoading: boolean;
+  icone: React.ReactNode;
+  cor: string;
+  destaque?: boolean;
+}) {
+  return (
+    <div className={`rounded-lg border bg-card p-4 shadow-sm ${destaque ? 'border-l-4 border-l-primary' : ''}`}>
+      <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+        <span className={cor}>{icone}</span>
+        {titulo}
+      </p>
+      {isLoading ? (
+        <Skeleton className="mt-2 h-8 w-32" />
+      ) : (
+        <p className={`mt-2 text-2xl font-bold ${cor}`}>{formatarMoeda(valor ?? 0)}</p>
+      )}
     </div>
   );
 }

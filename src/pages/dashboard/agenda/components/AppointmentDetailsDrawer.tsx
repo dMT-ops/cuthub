@@ -1,140 +1,186 @@
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetDescription 
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Clock, Phone, Scissors, User } from 'lucide-react';
+
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
+import type { Database } from '@/types/database.types';
+import { CLASSES_STATUS, ROTULO_STATUS, resumirAgendamento } from '@/lib/agendamento';
+import { formatarMoeda } from '@/lib/utils';
+
+type StatusAgendamento = Database['public']['Enums']['status_agendamento'];
 
 interface AppointmentDetailsDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  agendamento: any; // We'll refine this type
-  onUpdateStatus: (id: string, newStatus: string) => Promise<void>;
+  agendamento: AgendamentoComDetalhes | null;
+  onUpdateStatus: (id: string, novoStatus: StatusAgendamento) => Promise<void>;
+  onCancelar: (id: string) => Promise<void>;
+  isSalvando?: boolean;
 }
 
-export function AppointmentDetailsDrawer({ 
-  open, 
-  onOpenChange, 
+/** Transições oferecidas a partir do status atual */
+const PROXIMOS_STATUS: Record<StatusAgendamento, StatusAgendamento[]> = {
+  pendente: ['confirmado', 'em_atendimento', 'faltou'],
+  confirmado: ['em_atendimento', 'concluido', 'faltou'],
+  em_atendimento: ['concluido'],
+  concluido: [],
+  cancelado: ['pendente'],
+  faltou: ['pendente'],
+};
+
+export function AppointmentDetailsDrawer({
+  open,
+  onOpenChange,
   agendamento,
-  onUpdateStatus
+  onUpdateStatus,
+  onCancelar,
+  isSalvando,
 }: AppointmentDetailsDrawerProps) {
   if (!agendamento) return null;
+
+  const { precoTotal, duracaoMinutos } = resumirAgendamento(agendamento);
+  const inicio = new Date(agendamento.data_hora);
+  const fim = new Date(agendamento.data_hora_fim);
+  const transicoes = PROXIMOS_STATUS[agendamento.status] ?? [];
+  const podeCancelar = agendamento.status !== 'cancelado' && agendamento.status !== 'concluido';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader className="mb-6">
-          <SheetTitle className="text-xl">Detalhes do Agendamento</SheetTitle>
-          <SheetDescription>
-            Informações e ações rápidas
+          <div className="flex items-center justify-between gap-2">
+            <SheetTitle className="text-xl">Detalhes do Agendamento</SheetTitle>
+            <span
+              className={`inline-flex items-center rounded-full border-l-4 px-2.5 py-0.5 text-xs font-semibold ${CLASSES_STATUS[agendamento.status]}`}
+            >
+              {ROTULO_STATUS[agendamento.status]}
+            </span>
+          </div>
+          <SheetDescription className="capitalize">
+            {format(inicio, "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
           </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-6">
-          {/* Cliente Info */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-1">Cliente</h3>
+          {/* Cliente */}
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Cliente</h3>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                {agendamento.cliente?.nome?.charAt(0) || "A"}
+                {agendamento.cliente?.nome?.charAt(0)?.toUpperCase() || <User className="h-4 w-4" />}
               </div>
               <div>
-                <p className="font-semibold text-foreground text-lg">{agendamento.cliente?.nome || "Cliente não informado"}</p>
-                <p className="text-xs text-muted-foreground">Adicionado em {format(new Date(agendamento.data_hora), "dd/MM/yyyy")}</p>
+                <p className="font-semibold text-foreground">
+                  {agendamento.cliente?.nome || 'Cliente não informado'}
+                </p>
+                {agendamento.cliente?.telefone && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Phone className="h-3 w-3" />
+                    {agendamento.cliente.telefone}
+                  </p>
+                )}
               </div>
             </div>
-          </div>
+          </section>
 
-          <hr />
+          <Separator />
 
-          {/* Dados do Agendamento */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Serviço</h3>
-              <p className="font-medium">{agendamento.servico?.nome}</p>
+          {/* Serviços */}
+          <section className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              {agendamento.agendamento_servico.length > 1 ? 'Serviços' : 'Serviço'}
+            </h3>
+            <ul className="space-y-1">
+              {agendamento.agendamento_servico.map((item, i) => (
+                <li key={item.servico?.id ?? i} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
+                    {item.servico?.nome ?? 'Serviço removido do catálogo'}
+                  </span>
+                  <span className="font-medium">{formatarMoeda(Number(item.preco_cobrado))}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center justify-between border-t pt-2 text-sm">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-semibold text-primary">{formatarMoeda(precoTotal)}</span>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* Dados do atendimento */}
+          <section className="grid grid-cols-2 gap-4">
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-1">Profissional</h3>
               <p className="font-medium">{agendamento.profissional?.nome || 'Não atribuído'}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Data e Hora</h3>
-              <p className="font-medium capitalize">
-                {format(new Date(agendamento.data_hora), "dd MMM, HH:mm", { locale: ptBR })}
+              <h3 className="text-sm font-medium text-muted-foreground mb-1">Duração</h3>
+              <p className="font-medium flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                {duracaoMinutos} min
               </p>
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Duração</h3>
-              <p className="font-medium">{agendamento.servico?.duracao} min</p>
+            <div className="col-span-2">
+              <h3 className="text-sm font-medium text-muted-foreground mb-1">Janela</h3>
+              <p className="font-medium">
+                {format(inicio, 'HH:mm')} — {format(fim, 'HH:mm')}
+              </p>
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Valor</h3>
-              <p className="font-medium text-primary">R$ {agendamento.servico?.preco?.toFixed(2)}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Status Atual</h3>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize
-                ${agendamento.status === 'pendente' ? 'bg-primary/20 text-primary-foreground' : ''}
-                ${agendamento.status === 'confirmado' ? 'bg-blue-500/20 text-blue-500' : ''}
-                ${agendamento.status === 'concluido' ? 'bg-green-500/20 text-green-500' : ''}
-                ${agendamento.status === 'cancelado' ? 'bg-red-500/20 text-red-500' : ''}
-              `}>
-                {agendamento.status}
-              </span>
-            </div>
-          </div>
+            {agendamento.observacoes && (
+              <div className="col-span-2">
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Observações</h3>
+                <p className="text-sm whitespace-pre-wrap">{agendamento.observacoes}</p>
+              </div>
+            )}
+          </section>
 
-          <hr />
+          <Separator />
 
           {/* Ações */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Ações Rápidas</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                className="w-full text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
-                onClick={() => onUpdateStatus(agendamento.id, 'confirmado')}
-                disabled={agendamento.status === 'confirmado'}
-              >
-                Confirmar
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full text-green-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                onClick={() => onUpdateStatus(agendamento.id, 'concluido')}
-                disabled={agendamento.status === 'concluido'}
-              >
-                Concluir
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
+          <section className="space-y-3 pb-6">
+            <h3 className="text-sm font-medium text-muted-foreground">Mudar status</h3>
+            {transicoes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este agendamento está concluído e não aceita novas transições.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {transicoes.map((status) => (
+                  <Button
+                    key={status}
+                    variant="outline"
+                    className="w-full"
+                    disabled={isSalvando}
+                    onClick={() => onUpdateStatus(agendamento.id, status)}
+                  >
+                    {ROTULO_STATUS[status]}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {podeCancelar && (
+              <Button
+                variant="destructive"
                 className="w-full"
-                onClick={() => onUpdateStatus(agendamento.id, 'pendente')}
-                disabled={agendamento.status === 'pendente'}
+                disabled={isSalvando}
+                onClick={() => onCancelar(agendamento.id)}
               >
-                Tornar Pendente
+                Cancelar agendamento
               </Button>
-              <Button 
-                variant="outline" 
-                className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                onClick={() => onUpdateStatus(agendamento.id, 'cancelado')}
-                disabled={agendamento.status === 'cancelado'}
-              >
-                Cancelar (Falta)
-              </Button>
-            </div>
-            
-            <Button variant="secondary" className="w-full mt-4">
-              Editar Agendamento (Reagendar)
-            </Button>
-          </div>
+            )}
+          </section>
         </div>
       </SheetContent>
     </Sheet>

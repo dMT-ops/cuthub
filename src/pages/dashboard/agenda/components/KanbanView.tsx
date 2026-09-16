@@ -8,7 +8,6 @@ import {
   useSensors,
   useDroppable
 } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy, 
@@ -16,25 +15,22 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
+import { resumirAgendamento } from '@/lib/agendamento';
+import { formatarMoeda } from '@/lib/utils';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
+import type { Database } from '@/types/database.types';
 
-// Types
-type Agendamento = {
-  id: string;
-  status: 'pendente' | 'confirmado' | 'concluido' | 'cancelado';
-  data_hora: string;
-  cliente: { nome: string };
-  profissional: { nome: string };
-  servico: { nome: string; preco: number };
-};
+type StatusAgendamento = Database['public']['Enums']['status_agendamento'];
 
-const COLUMNS = [
+// O array derivado do enum, com títulos amigáveis
+const COLUMNS: { id: StatusAgendamento; title: string }[] = [
   { id: 'pendente', title: 'Pendente' },
   { id: 'confirmado', title: 'Confirmado' },
+  { id: 'em_atendimento', title: 'Em Atendimento' },
   { id: 'concluido', title: 'Concluído' },
+  { id: 'faltou', title: 'Faltou' },
   { id: 'cancelado', title: 'Cancelado' },
-] as const;
+];
 
 // Droppable Column Component
 function DroppableColumn({ id, children }: { id: string, children: React.ReactNode }) {
@@ -47,7 +43,7 @@ function DroppableColumn({ id, children }: { id: string, children: React.ReactNo
 }
 
 // Sortable Item Component
-function SortableItem({ item }: { item: Agendamento }) {
+function SortableItem({ item }: { item: AgendamentoComDetalhes }) {
   const {
     attributes,
     listeners,
@@ -63,18 +59,21 @@ function SortableItem({ item }: { item: Agendamento }) {
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const { nomes, precoTotal } = resumirAgendamento(item);
+
   let statusColor = 'border-l-primary bg-background';
   if (item.status === 'confirmado') statusColor = 'border-l-blue-500 bg-blue-500/5';
   if (item.status === 'concluido') statusColor = 'border-l-green-500 bg-green-500/5';
-  if (item.status === 'cancelado') statusColor = 'border-l-red-500 bg-red-500/5 opacity-70';
+  if (item.status === 'cancelado' || item.status === 'faltou') statusColor = 'border-l-red-500 bg-red-500/5 opacity-70';
+  if (item.status === 'em_atendimento') statusColor = 'border-l-orange-500 bg-orange-500/5';
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing mb-3 touch-none">
       <Card className={`p-3 shadow-sm border-l-4 hover:shadow-md transition-all ${statusColor}`}>
         <div className="font-semibold text-sm truncate">{item.cliente?.nome || 'Cliente Anônimo'}</div>
         <div className="text-xs text-muted-foreground mt-1 flex justify-between">
-          <span>{item.servico?.nome || 'Serviço'}</span>
-          <span className="font-medium text-foreground">R$ {item.servico?.preco || 0}</span>
+          <span className="truncate">{nomes}</span>
+          <span className="font-medium text-foreground whitespace-nowrap">{formatarMoeda(precoTotal)}</span>
         </div>
         <div className="text-xs font-medium text-primary mt-2 pt-2 border-t flex justify-between">
           <span>{new Date(item.data_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -85,69 +84,19 @@ function SortableItem({ item }: { item: Agendamento }) {
   );
 }
 
-export default function KanbanView({ currentDate, profissionalId }: { currentDate?: Date, profissionalId?: string | null }) {
-  const [items, setItems] = useState<Agendamento[]>([]);
-  const [loading, setLoading] = useState(true);
+interface KanbanViewProps {
+  agendamentos: AgendamentoComDetalhes[];
+  onStatusChange: (id: string, newStatus: StatusAgendamento) => void;
+}
 
+export default function KanbanView({ agendamentos, onStatusChange }: KanbanViewProps) {
+  const [items, setItems] = useState<AgendamentoComDetalhes[]>(agendamentos);
+  const [activeOriginalStatus, setActiveOriginalStatus] = useState<string | null>(null);
+
+  // Sincronizar prop com estado local quando mudar de fora
   useEffect(() => {
-    fetchAgendamentos();
-  }, [currentDate, profissionalId]);
-
-  async function fetchAgendamentos() {
-    try {
-      let query = supabase
-        .from('agendamento')
-        .select(`
-          id, status, data_hora,
-          cliente ( nome ),
-          profissional ( nome ),
-          agendamento_servico (
-            preco_cobrado,
-            servico ( nome )
-          )
-        `)
-        .order('data_hora', { ascending: true });
-        
-      if (currentDate) {
-        // Se temos data, filtra para o dia
-        const start = new Date(currentDate);
-        start.setHours(0,0,0,0);
-        const end = new Date(currentDate);
-        end.setHours(23,59,59,999);
-        
-        query = query
-          .gte('data_hora', start.toISOString())
-          .lte('data_hora', end.toISOString());
-      }
-
-      if (profissionalId) {
-        query = query.eq('profissional_id', profissionalId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      // Transform data to fit the type
-      const formattedData = data.map((d: any) => ({
-        id: d.id,
-        status: d.status,
-        data_hora: d.data_hora,
-        cliente: d.cliente,
-        profissional: d.profissional,
-        servico: {
-          nome: d.agendamento_servico?.[0]?.servico?.nome || 'Corte',
-          preco: d.agendamento_servico?.[0]?.preco_cobrado || 0
-        }
-      }));
-      
-      setItems(formattedData);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }
+    setItems(agendamentos);
+  }, [agendamentos]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -158,14 +107,10 @@ export default function KanbanView({ currentDate, profissionalId }: { currentDat
     useSensor(KeyboardSensor)
   );
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeOriginalStatus, setActiveOriginalStatus] = useState<string | null>(null);
-
   const handleDragStart = (event: any) => {
     const { active } = event;
     const item = items.find(i => i.id === active.id);
     if (item) {
-      setActiveId(active.id as string);
       setActiveOriginalStatus(item.status);
     }
   };
@@ -189,7 +134,7 @@ export default function KanbanView({ currentDate, profissionalId }: { currentDat
       if (overItem) {
         targetStatus = overItem.status;
       } else if (COLUMNS.some(c => c.id === overId)) {
-        targetStatus = overId as Agendamento['status'];
+        targetStatus = overId as StatusAgendamento;
       }
 
       if (activeItem.status !== targetStatus) {
@@ -205,7 +150,6 @@ export default function KanbanView({ currentDate, profissionalId }: { currentDat
     const { active, over } = event;
     
     // Reset dragging states
-    setActiveId(null);
     const originalStatus = activeOriginalStatus;
     setActiveOriginalStatus(null);
     
@@ -219,31 +163,10 @@ export default function KanbanView({ currentDate, profissionalId }: { currentDat
 
     if (originalStatus === newStatus) return;
 
-    // Call Supabase to persist the update
-    const { error } = await supabase
-      .from('agendamento')
-      .update({ status: newStatus })
-      .eq('id', dragActiveId);
-
-    if (error) {
-      console.error('Falha ao atualizar status', error);
-      toast.error('Erro ao mover agendamento.');
-      fetchAgendamentos(); // Revert
-    } else {
-      toast.success(`Movido para ${newStatus}.`);
-      if (newStatus === 'concluido') {
-        toast('Integração Financeira', {
-          description: 'Aqui abririamos o CheckoutModal para confirmar o recebimento.',
-          action: {
-            label: 'Confirmar',
-            onClick: () => console.log('Checkout via toast')
-          }
-        });
-      }
-    }
+    // Dispara a mutação para atualizar. Se falhar, o React Query fará rollback no próximo refetch
+    // ou no onError do onStatusChange se estivesse implementado, mas como o hook recarrega, o sync vai corrigir.
+    onStatusChange(dragActiveId, newStatus);
   };
-
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando quadro...</div>;
 
   return (
     <div className="h-full flex overflow-x-auto p-4 gap-4 bg-muted/10">

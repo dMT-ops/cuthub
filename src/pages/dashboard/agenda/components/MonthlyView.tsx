@@ -1,29 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { 
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
-  getDay, 
   isSameMonth, 
   isToday, 
   format,
   startOfWeek,
   endOfWeek
 } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
 
 interface MonthlyViewProps {
   currentDate: Date;
   onDateClick: (date: Date) => void;
-  profissionalId?: string | null;
+  agendamentos: AgendamentoComDetalhes[];
 }
 
-export default function MonthlyView({ currentDate, onDateClick, profissionalId }: MonthlyViewProps) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-
+export default function MonthlyView({ currentDate, onDateClick, agendamentos }: MonthlyViewProps) {
   // Define os dias que aparecerão no grid (incluindo dias vazios do começo/fim)
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -35,37 +30,17 @@ export default function MonthlyView({ currentDate, onDateClick, profissionalId }
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  useEffect(() => {
-    async function fetchCounts() {
-      setLoading(true);
-      const startStr = format(monthStart, 'yyyy-MM-dd');
-      const endStr = format(monthEnd, 'yyyy-MM-dd');
-      
-      let query = supabase
-        .from('agendamento')
-        .select('data_hora')
-        .gte('data_hora', startStr)
-        .lte('data_hora', endStr + 'T23:59:59');
-
-      if (profissionalId) {
-        query = query.eq('profissional_id', profissionalId);
+  const counts = useMemo(() => {
+    const newCounts: Record<string, number> = {};
+    agendamentos.forEach((ag) => {
+      // consideramos todos, ou só os não cancelados?
+      if (ag.status !== 'cancelado') {
+        const dStr = ag.data_hora.split('T')[0];
+        newCounts[dStr] = (newCounts[dStr] || 0) + 1;
       }
-
-      const { data } = await query;
-      const newCounts: Record<string, number> = {};
-
-      if (data) {
-        data.forEach((ag: any) => {
-          const dStr = ag.data_hora.split('T')[0];
-          newCounts[dStr] = (newCounts[dStr] || 0) + 1;
-        });
-      }
-      
-      setCounts(newCounts);
-      setLoading(false);
-    }
-    fetchCounts();
-  }, [currentDate, profissionalId]);
+    });
+    return newCounts;
+  }, [agendamentos]);
 
   // Função para determinar a cor do Heatmap
   const getHeatmapColor = (count: number) => {
@@ -86,7 +61,7 @@ export default function MonthlyView({ currentDate, onDateClick, profissionalId }
       </div>
       
       <div className="flex-1 grid grid-cols-7 grid-rows-5 lg:grid-rows-6">
-        {days.map((day, idx) => {
+        {days.map((day) => {
           const dateStr = format(day, 'yyyy-MM-dd');
           const count = counts[dateStr] || 0;
           const isCurrentMonth = isSameMonth(day, monthStart);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, 
   LayoutTemplate, 
@@ -16,19 +16,23 @@ import {
   addDays, subDays, 
   addWeeks, subWeeks, 
   addMonths, subMonths, 
-  addYears, subYears 
+  addYears, subYears,
+  startOfDay, endOfDay,
+  startOfWeek, endOfWeek,
+  startOfMonth, endOfMonth,
+  startOfYear, endOfYear
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import CalendarView from './components/CalendarView';
 import KanbanView from './components/KanbanView';
+import ListView from './components/ListView';
 import MonthlyView from './components/MonthlyView';
 import YearlyView from './components/YearlyView';
 import WeeklyView from './components/WeeklyView';
 import { AppointmentDetailsDrawer } from './components/AppointmentDetailsDrawer';
 import { NewAppointmentModal } from './components/NewAppointmentModal';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -37,10 +41,21 @@ import {
   DropdownMenuCheckboxItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useProfissionais } from '@/hooks/useProfissionais';
+import { useAgendamentos } from '@/hooks/useAgendamentos';
+import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
+import { resumirAgendamento } from '@/lib/agendamento';
+import { formatarMoeda } from '@/lib/utils';
+import type { Database } from '@/types/database.types';
+
+type StatusAgendamento = Database['public']['Enums']['status_agendamento'];
 
 type ViewMode = 'calendar' | 'weekly' | 'monthly' | 'yearly' | 'list' | 'kanban';
 
 export default function AgendaHome() {
+  const { barbeariaId } = useAuth();
   const [view, setView] = useState<ViewMode>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -49,24 +64,43 @@ export default function AgendaHome() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
 
   // Filtros
-  const [profissionais, setProfissionais] = useState<{ id: string; nome: string }[]>([]);
+  const [busca, setBusca] = useState('');
   const [selectedProfissionalId, setSelectedProfissionalId] = useState<string | null>(null); // null = Todos
+  const { profissionais } = useProfissionais(barbeariaId, { status: 'ativo' });
+  const { configuracao } = useBarbeariaAtual();
 
-  // Buscar profissionais para o filtro
-  useEffect(() => {
-    async function fetchProfs() {
-      const { data } = await supabase.from('profissional').select('id, nome');
-      if (data) setProfissionais(data);
+  // Calcular Range de Datas baseado na View
+  const dateRange = useMemo(() => {
+    switch (view) {
+      case 'yearly':
+        return { start: startOfYear(currentDate).toISOString(), end: endOfYear(currentDate).toISOString() };
+      case 'monthly':
+        return { start: startOfMonth(currentDate).toISOString(), end: endOfMonth(currentDate).toISOString() };
+      case 'weekly':
+        return { start: startOfWeek(currentDate, { weekStartsOn: 1 }).toISOString(), end: endOfWeek(currentDate, { weekStartsOn: 1 }).toISOString() };
+      default: // calendar, kanban, list
+        return { start: startOfDay(currentDate).toISOString(), end: endOfDay(currentDate).toISOString() };
     }
-    fetchProfs();
-  }, []);
-  
+  }, [view, currentDate]);
+
+  // Buscar Agendamentos Centralizado
+  const {
+    agendamentos,
+    isLoading,
+    isError,
+    error,
+    atualizarStatus,
+    isAtualizando,
+    cancelarAgendamento,
+    isCancelando,
+  } = useAgendamentos(barbeariaId, dateRange.start, dateRange.end);
+
   const handlePrevDate = () => {
     switch (view) {
       case 'yearly': setCurrentDate(subYears(currentDate, 1)); break;
       case 'monthly': setCurrentDate(subMonths(currentDate, 1)); break;
       case 'weekly': setCurrentDate(subWeeks(currentDate, 1)); break;
-      default: setCurrentDate(subDays(currentDate, 1)); break; // calendar, list, kanban
+      default: setCurrentDate(subDays(currentDate, 1)); break;
     }
   };
 
@@ -79,21 +113,60 @@ export default function AgendaHome() {
     }
   };
 
-  // Dados simulados de KPI (Futuramente virão de um useEffect global)
-  const kpis = {
-    total: 12,
-    confirmados: 8,
-    pendentes: 2,
-    concluidos: 2,
-    faturamentoPrevisto: 650.00
+  // Filtrar em memória por profissional e por nome do cliente
+  const filteredAgendamentos = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return agendamentos.filter(a => {
+      if (selectedProfissionalId && a.profissional?.id !== selectedProfissionalId) return false;
+      if (termo && !(a.cliente?.nome || '').toLowerCase().includes(termo)) return false;
+      return true;
+    });
+  }, [agendamentos, selectedProfissionalId, busca]);
+
+  // Calcular KPIs com dados reais
+  const kpis = useMemo(() => {
+    return filteredAgendamentos.reduce(
+      (acc, curr) => {
+        acc.total += 1;
+        if (curr.status === 'confirmado' || curr.status === 'em_atendimento') acc.confirmados += 1;
+        if (curr.status === 'pendente') acc.pendentes += 1;
+        if (curr.status === 'concluido') acc.concluidos += 1;
+        
+        // Faturamento previsto (excluindo cancelados/faltou), somando todos os serviços
+        if (curr.status !== 'cancelado' && curr.status !== 'faltou') {
+          acc.faturamentoPrevisto += resumirAgendamento(curr).precoTotal;
+        }
+        return acc;
+      },
+      { total: 0, confirmados: 0, pendentes: 0, concluidos: 0, faturamentoPrevisto: 0 }
+    );
+  }, [filteredAgendamentos]);
+
+  // Evita NaN% quando o período não tem nenhum agendamento
+  const percentual = (valor: number) => (kpis.total === 0 ? 0 : Math.round((valor / kpis.total) * 100));
+
+  const agendamentoSelecionado = useMemo(
+    () => filteredAgendamentos.find(a => a.id === selectedAppointmentId) ?? null,
+    [filteredAgendamentos, selectedAppointmentId]
+  );
+
+  const handleUpdateStatus = async (id: string, novoStatus: StatusAgendamento) => {
+    try {
+      await atualizarStatus({ id, status: novoStatus });
+      toast.success('Status atualizado.');
+      setSelectedAppointmentId(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar o status do agendamento');
+    }
   };
 
-  const handleUpdateStatus = async (id: string, newStatus: string) => {
-    // Atualização otimista viria aqui
-    const { error } = await supabase.from('agendamento').update({ status: newStatus }).eq('id', id);
-    if (!error) {
-      setSelectedAppointmentId(null); // Fecha o drawer após agir
-      // trigger refetch nos componentes filhos (ideal usar React Query ou Contexto)
+  const handleCancelar = async (id: string) => {
+    try {
+      await cancelarAgendamento({ id, canceladoPorId: 'owner' });
+      toast.success('Agendamento cancelado.');
+      setSelectedAppointmentId(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao cancelar o agendamento');
     }
   };
 
@@ -115,12 +188,12 @@ export default function AgendaHome() {
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium text-muted-foreground">Confirmados</p>
             <span className="text-blue-500 font-medium text-xs bg-blue-500/10 px-2 py-0.5 rounded-full">
-              {Math.round((kpis.confirmados / kpis.total) * 100)}%
+              {percentual(kpis.confirmados)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{kpis.confirmados}</div>
           <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
-            <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(kpis.confirmados / kpis.total) * 100}%` }} />
+            <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${percentual(kpis.confirmados)}%` }} />
           </div>
         </div>
 
@@ -129,12 +202,12 @@ export default function AgendaHome() {
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium text-muted-foreground">Pendentes</p>
             <span className="text-primary font-medium text-xs bg-primary/10 px-2 py-0.5 rounded-full">
-              {Math.round((kpis.pendentes / kpis.total) * 100)}%
+              {percentual(kpis.pendentes)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{kpis.pendentes}</div>
           <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
-            <div className="bg-primary h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(kpis.pendentes / kpis.total) * 100}%` }} />
+            <div className="bg-primary h-1.5 rounded-full transition-all duration-1000" style={{ width: `${percentual(kpis.pendentes)}%` }} />
           </div>
         </div>
 
@@ -143,12 +216,12 @@ export default function AgendaHome() {
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium text-muted-foreground">Concluídos</p>
             <span className="text-green-500 font-medium text-xs bg-green-500/10 px-2 py-0.5 rounded-full">
-              {Math.round((kpis.concluidos / kpis.total) * 100)}%
+              {percentual(kpis.concluidos)}%
             </span>
           </div>
           <div className="text-2xl font-bold">{kpis.concluidos}</div>
           <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
-            <div className="bg-green-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(kpis.concluidos / kpis.total) * 100}%` }} />
+            <div className="bg-green-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${percentual(kpis.concluidos)}%` }} />
           </div>
         </div>
 
@@ -156,7 +229,7 @@ export default function AgendaHome() {
         <div className="bg-card border-l-4 border-l-primary rounded-lg p-4 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
           <p className="text-sm font-medium text-muted-foreground">Faturamento Previsto</p>
           <div className="mt-2 text-2xl font-bold text-foreground">
-            R$ {kpis.faturamentoPrevisto.toFixed(2)}
+            {formatarMoeda(kpis.faturamentoPrevisto)}
           </div>
         </div>
       </div>
@@ -199,6 +272,8 @@ export default function AgendaHome() {
             <input 
               type="text" 
               placeholder="Buscar cliente..." 
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
               className="h-9 w-64 rounded-md border bg-background pl-9 pr-4 text-sm outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -304,42 +379,70 @@ export default function AgendaHome() {
       <div className="flex flex-1 overflow-hidden">
         {/* Main View Area */}
         <div className="flex-1 overflow-hidden bg-card border rounded-lg flex flex-col shadow-sm">
-          {view === 'calendar' && (
-            <CalendarView 
-              currentDate={currentDate} 
-              onAppointmentClick={(id) => setSelectedAppointmentId(id)}
-              profissionalId={selectedProfissionalId}
-            />
+          {isError ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+              <p className="font-semibold">Não foi possível carregar a agenda</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {(error as Error)?.message || 'Erro desconhecido ao consultar os agendamentos.'}
+              </p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+              Carregando agenda...
+            </div>
+          ) : (
+            <>
+              {view === 'calendar' && (
+                <CalendarView 
+                  currentDate={currentDate} 
+                  onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+                  agendamentos={filteredAgendamentos}
+                  configuracao={configuracao}
+                />
+              )}
+              {view === 'monthly' && (
+                <MonthlyView 
+                  currentDate={currentDate} 
+                  onDateClick={(date) => {
+                    setCurrentDate(date);
+                    setView('calendar');
+                  }} 
+                  agendamentos={filteredAgendamentos}
+                />
+              )}
+              {view === 'yearly' && (
+                <YearlyView 
+                  currentDate={currentDate} 
+                  onDateClick={(date) => {
+                    setCurrentDate(date);
+                    setView('calendar');
+                  }}
+                  agendamentos={filteredAgendamentos}
+                />
+              )}
+              {view === 'weekly' && (
+                <WeeklyView 
+                  currentDate={currentDate}
+                  onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+                  agendamentos={filteredAgendamentos}
+                  configuracao={configuracao}
+                />
+              )}
+              {view === 'kanban' && (
+                <KanbanView 
+                  agendamentos={filteredAgendamentos} 
+                  onStatusChange={handleUpdateStatus}
+                />
+              )}
+              {view === 'list' && (
+                <ListView 
+                  agendamentos={filteredAgendamentos} 
+                  onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+                />
+              )}
+            </>
           )}
-          {view === 'monthly' && (
-            <MonthlyView 
-              currentDate={currentDate} 
-              onDateClick={(date) => {
-                setCurrentDate(date);
-                setView('calendar');
-              }} 
-              profissionalId={selectedProfissionalId}
-            />
-          )}
-          {view === 'yearly' && (
-            <YearlyView 
-              currentDate={currentDate} 
-              onDateClick={(date) => {
-                setCurrentDate(date);
-                setView('calendar');
-              }}
-              profissionalId={selectedProfissionalId}
-            />
-          )}
-          {view === 'weekly' && (
-            <WeeklyView 
-              currentDate={currentDate}
-              onAppointmentClick={(id) => setSelectedAppointmentId(id)}
-              profissionalId={selectedProfissionalId}
-            />
-          )}
-          {view === 'kanban' && <KanbanView currentDate={currentDate} profissionalId={selectedProfissionalId} />}
-          {view === 'list' && <div className="p-8 text-center text-muted-foreground">Visão de Lista em construção</div>}
         </div>
       </div>
 
@@ -350,22 +453,13 @@ export default function AgendaHome() {
         selectedDate={currentDate}
       />
       
-      {/* Drawer de Detalhes será montado aqui para manter a performance, buscaremos os dados do agendamento específico ou passaremos inteiro via Context/State */}
-      {/* OBS: Temporariamente passaremos um objeto fake para demonstrar, mas você o conectaria ao 'agendamentos.find(id)' */}
       <AppointmentDetailsDrawer
-        open={!!selectedAppointmentId}
+        open={!!agendamentoSelecionado}
         onOpenChange={(open) => !open && setSelectedAppointmentId(null)}
-        agendamento={
-          selectedAppointmentId ? {
-            id: selectedAppointmentId,
-            status: 'pendente',
-            data_hora: new Date().toISOString(),
-            cliente: { nome: 'Cliente Demonstração' },
-            profissional: { nome: 'João Barber' },
-            servico: { nome: 'Corte Degradê', preco: 45.0, duracao: 45 }
-          } : null
-        }
+        agendamento={agendamentoSelecionado}
         onUpdateStatus={handleUpdateStatus}
+        onCancelar={handleCancelar}
+        isSalvando={isAtualizando || isCancelando}
       />
     </div>
   );

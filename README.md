@@ -15,19 +15,25 @@ Este é o MVP do Cuthub, uma aplicação SPA usando Vite, React, e Tailwind/shad
    npx supabase start
    ```
 
-2. As migrações (`00001_initial_schema.sql`) e o `seed.sql` rodarão automaticamente, criando o banco de dados, ativando RLS e inserindo o usuário Admin.
+2. As migrações em `supabase/migrations/` rodarão automaticamente, criando o banco de dados, ativando RLS e inserindo os dados de desenvolvimento (`00008_seed_desenvolvimento.sql`).
 
-3. Instale as dependências e rode o frontend:
+3. Crie um arquivo `.env.local` na raiz com as credenciais que o `npx supabase status` imprimiu:
+   ```
+   VITE_SUPABASE_URL=http://127.0.0.1:54321
+   VITE_SUPABASE_ANON_KEY=<ANON_KEY do supabase status>
+   ```
+   Sem essas variáveis o app falha na inicialização com mensagem explícita — não há fallback silencioso.
+
+4. Instale as dependências e rode o frontend:
    ```bash
    npm install
    npm run dev
    ```
 
-## Credenciais do Admin
+## Contas de desenvolvimento
 
-Foi criado um script de Seed (`supabase/seed.sql`) que insere automaticamente a conta Admin Supremo no Auth do Supabase:
+O seed cria três contas (`admin@cuthub.com`, `ownera@cuthub.com`, `ownerb@cuthub.com`), sendo as duas últimas donas de barbearias distintas — é esse par que permite testar o isolamento por RLS.
 
-- **E-mail**: `admin@cuthub.com`
-- **Senha**: `admin123`
+**Atenção:** o seed insere essas linhas em `auth.users` com apenas `id` e `email`. Sem senha e sem registro em `auth.identities`, o login não funciona (o GoTrue responde `Database error querying schema`). Até que exista um script de seed de desenvolvimento que trate o Auth corretamente, é preciso completar esses registros manualmente no banco local. Senhas de desenvolvimento **não devem** ser gravadas em migrations, que rodam em todos os ambientes.
 
-Use essas credenciais na tela de Login inicial para acessar o sistema. Módulos futuros podem ser copiados do modelo construído na página `Clientes.tsx`.
+Módulos futuros podem seguir o modelo das páginas `Clientes.tsx` (tabela + paginação) ou `Servicos.tsx` (grid + filtros).

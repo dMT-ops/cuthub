@@ -1,0 +1,135 @@
+import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/database.types';
+
+export type HorarioTrabalho = Database['public']['Tables']['horario_trabalho']['Row'];
+export type HorarioTrabalhoInsert = Database['public']['Tables']['horario_trabalho']['Insert'];
+
+export const horariosService = {
+  async obterJornada(profissionalId: string): Promise<HorarioTrabalho[]> {
+    const { data, error } = await supabase
+      .from('horario_trabalho')
+      .select('*')
+      .eq('profissional_id', profissionalId)
+      .order('dia_semana')
+      .order('hora_inicio');
+
+    if (error) throw new Error(`Falha ao obter jornada: ${error.message}`);
+    return data || [];
+  },
+
+  async salvarJornada(
+    barbeariaId: string,
+    profissionalId: string,
+    faixasAtuais: HorarioTrabalho[],
+    novasFaixas: Array<Omit<HorarioTrabalhoInsert, 'id' | 'barbearia_id' | 'profissional_id'>>
+  ): Promise<void> {
+    // Montar listas para as três operações (diff por ID e valores)
+    const faixasAntigasMap = new Map(faixasAtuais.map(f => [f.id, f]));
+    
+    // Como novasFaixas vêm da UI, as que já existiam podem ter um "id" na estrutura se passarmos adiante,
+    // mas a tipagem Omit indica que não. Vamos supor que na UI passaremos { id?: string, dia_semana, hora_inicio, hora_fim, ativo }
+    
+    const idsParaDeletar: string[] = [];
+    const faixasParaInserir: HorarioTrabalhoInsert[] = [];
+    const faixasParaAtualizar: Partial<HorarioTrabalho>[] = [];
+
+    const idsNaNovaJornada = new Set<string>();
+
+    for (const nova of novasFaixas as any[]) {
+      if (nova.id && faixasAntigasMap.has(nova.id)) {
+        idsNaNovaJornada.add(nova.id);
+        const antiga = faixasAntigasMap.get(nova.id)!;
+        
+        // Verifica se mudou algo
+        if (
+          antiga.dia_semana !== nova.dia_semana ||
+          antiga.hora_inicio !== nova.hora_inicio ||
+          antiga.hora_fim !== nova.hora_fim ||
+          antiga.ativo !== nova.ativo
+        ) {
+          faixasParaAtualizar.push({
+            id: nova.id,
+            dia_semana: nova.dia_semana,
+            hora_inicio: nova.hora_inicio,
+            hora_fim: nova.hora_fim,
+            ativo: nova.ativo
+          });
+        }
+      } else {
+        // Inserir nova faixa
+        faixasParaInserir.push({
+          barbearia_id: barbeariaId,
+          profissional_id: profissionalId,
+          dia_semana: nova.dia_semana,
+          hora_inicio: nova.hora_inicio,
+          hora_fim: nova.hora_fim,
+          ativo: nova.ativo
+        });
+      }
+    }
+
+    // O que estava nas antigas e não está nas novas, deletamos
+    faixasAtuais.forEach(antiga => {
+      if (!idsNaNovaJornada.has(antiga.id)) {
+        idsParaDeletar.push(antiga.id);
+      }
+    });
+
+    // Validar sobreposições na aplicação (mesmo dia)
+    const faixasFinais = [
+      ...faixasParaInserir,
+      ...faixasAtuais.filter(a => idsNaNovaJornada.has(a.id)).map(a => {
+        const update = faixasParaAtualizar.find(u => u.id === a.id);
+        return update ? { ...a, ...update } : a;
+      })
+    ];
+
+    for (let dia = 0; dia <= 6; dia++) {
+      const faixasDoDia = faixasFinais
+        .filter(f => f.dia_semana === dia && f.ativo)
+        .sort((a, b) => (a.hora_inicio as string).localeCompare(b.hora_inicio as string));
+      
+      for (let i = 0; i < faixasDoDia.length - 1; i++) {
+        const f1 = faixasDoDia[i];
+        const f2 = faixasDoDia[i+1];
+        if ((f1.hora_fim as string) > (f2.hora_inicio as string)) {
+          throw new Error(`Sobreposição detectada no dia ${dia}. Faixa 1 termina às ${f1.hora_fim} e Faixa 2 começa às ${f2.hora_inicio}.`);
+        }
+      }
+    }
+
+    // Executar operações em paralelo (Update é por array ou um a um. Supabase suporta upsert de array).
+    const promises: any[] = [];
+
+    if (idsParaDeletar.length > 0) {
+      promises.push(
+        supabase.from('horario_trabalho').delete().in('id', idsParaDeletar).then(res => res)
+      );
+    }
+
+    if (faixasParaInserir.length > 0) {
+      promises.push(
+        supabase.from('horario_trabalho').insert(faixasParaInserir).then(res => res)
+      );
+    }
+
+    if (faixasParaAtualizar.length > 0) {
+      promises.push(
+        supabase.from('horario_trabalho').upsert(
+          faixasParaAtualizar.map(f => ({
+            ...faixasAntigasMap.get(f.id!),
+            ...f
+          })) as HorarioTrabalhoInsert[]
+        ).then(res => res)
+      );
+    }
+
+    if (promises.length > 0) {
+      const results = await Promise.all(promises);
+      const errors = results.filter((r: any) => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Falha parcial ao salvar jornada. Um ou mais registros não puderam ser alterados.`);
+      }
+    }
+  }
+};

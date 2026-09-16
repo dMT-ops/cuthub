@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { 
   startOfYear, 
   endOfYear, 
@@ -6,7 +6,6 @@ import {
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
-  getDay, 
   isSameMonth, 
   isToday, 
   format,
@@ -14,52 +13,31 @@ import {
   endOfWeek
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import type { AgendamentoComDetalhes } from '@/services/agendamentos.service';
 
 interface YearlyViewProps {
   currentDate: Date;
   onDateClick: (date: Date) => void;
-  profissionalId?: string | null;
+  agendamentos: AgendamentoComDetalhes[];
 }
 
-export default function YearlyView({ currentDate, onDateClick, profissionalId }: YearlyViewProps) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  
+export default function YearlyView({ currentDate, onDateClick, agendamentos }: YearlyViewProps) {
   const yearStart = startOfYear(currentDate);
   const yearEnd = endOfYear(currentDate);
   const months = eachMonthOfInterval({ start: yearStart, end: yearEnd });
   const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-  useEffect(() => {
-    async function fetchCounts() {
-      const startStr = format(yearStart, 'yyyy-MM-dd');
-      const endStr = format(yearEnd, 'yyyy-MM-dd');
-      
-      let query = supabase
-        .from('agendamento')
-        .select('data_hora')
-        .gte('data_hora', startStr)
-        .lte('data_hora', endStr + 'T23:59:59');
-
-      if (profissionalId) {
-        query = query.eq('profissional_id', profissionalId);
+  const counts = useMemo(() => {
+    const newCounts: Record<string, number> = {};
+    agendamentos.forEach((ag) => {
+      if (ag.status !== 'cancelado') {
+        const dStr = ag.data_hora.split('T')[0];
+        newCounts[dStr] = (newCounts[dStr] || 0) + 1;
       }
-
-      const { data } = await query;
-      const newCounts: Record<string, number> = {};
-
-      if (data) {
-        data.forEach((ag: any) => {
-          const dStr = ag.data_hora.split('T')[0];
-          newCounts[dStr] = (newCounts[dStr] || 0) + 1;
-        });
-      }
-      
-      setCounts(newCounts);
-    }
-    fetchCounts();
-  }, [currentDate, profissionalId]);
+    });
+    return newCounts;
+  }, [agendamentos]);
 
   const getHeatmapColor = (count: number) => {
     if (count === 0) return 'text-foreground hover:bg-muted';

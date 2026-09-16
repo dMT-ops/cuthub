@@ -28,43 +28,37 @@ export default function Cadastro() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            nome: nomeUsuario,
+            tipo: tipoConta === 'barbearia' ? 'owner' : 'cliente',
+          }
+        }
       });
 
       if (authError) throw authError;
       
-      const userId = authData.user?.id;
-      if (!userId) throw new Error('Falha ao obter ID do usuário.');
-
-      // 2. Se for barbearia, criar barbearia primeiro
-      let barbeariaId = null;
-      if (tipoConta === 'barbearia') {
-        const { data: barbeariaData, error: barbeariaError } = await supabase
-          .from('barbearia')
-          .insert([{ nome: nomeBarbearia }])
-          .select()
-          .single();
-          
-        if (barbeariaError) throw barbeariaError;
-        barbeariaId = barbeariaData.id;
+      const session = authData.session;
+      if (!session) {
+        throw new Error('Cadastro realizado. Verifique seu e-mail para confirmar a conta.');
       }
 
-      // 3. Criar usuario_perfil
-      const { error: perfilError } = await supabase
-        .from('usuario_perfil')
-        .insert([{
-          id: userId,
-          tipo: tipoConta === 'barbearia' ? 'owner' : 'cliente',
-          nome: nomeUsuario,
-          barbearia_id: barbeariaId
-        }]);
-
-      if (perfilError) throw perfilError;
+      // 2. Se for barbearia, invocar a RPC para criar e vincular (via service)
+      if (tipoConta === 'barbearia') {
+        const { barbeariaService } = await import('@/services/barbearia.service');
+        await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
+      }
 
       // Sucesso! Redirecionar para dashboard
       navigate('/dashboard');
       
     } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro durante o cadastro.');
+      // Traduzir erro comum de email já em uso
+      if (err.message.includes('User already registered')) {
+        setError('Este e-mail já está cadastrado.');
+      } else {
+        setError(err.message || 'Ocorreu um erro durante o cadastro.');
+      }
     } finally {
       setLoading(false);
     }
