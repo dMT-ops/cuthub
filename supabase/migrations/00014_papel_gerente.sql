@@ -1,0 +1,25 @@
+-- =============================================================================
+-- 00014 — NOVO PAPEL: gerente
+-- =============================================================================
+-- Esta migration faz UMA coisa só, e isso é proposital.
+--
+-- POR QUE ELA ESTÁ SOZINHA
+-- O Postgres recusa usar um valor de enum recém-criado dentro da mesma
+-- transação que o criou. Verificado neste banco (PostgreSQL 17.6):
+--
+--   BEGIN;
+--   ALTER TYPE tipo_usuario ADD VALUE 'gerente';
+--   SELECT 'gerente'::tipo_usuario;
+--   -- ERROR: unsafe use of new value "gerente" of enum type tipo_usuario
+--   -- HINT:  New enum values must be committed before they can be used.
+--
+-- Como cada arquivo de migration roda na sua própria transação, separar o
+-- ADD VALUE do resto da Fase 2 é o que permite que a 00015 use o valor. Juntar
+-- as duas faria a migration falhar no meio, com metade da fase aplicada.
+--
+-- Ou seja: NÃO junte este arquivo com a 00015 "para organizar".
+--
+-- O papel em si (o que o gerente pode e não pode fazer) está na 00015.
+-- =============================================================================
+
+ALTER TYPE tipo_usuario ADD VALUE IF NOT EXISTS 'gerente';
