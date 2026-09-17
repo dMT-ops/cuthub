@@ -3073,3 +3073,336 @@ para a spec já nascer sabendo.
 Árvore limpa, branch em sincronia com o remoto, 22 testes passando.
 
 **Fase 1 aceita e fechada. Em stand-by para a Fase 2.**
+
+---
+---
+
+# ═══════════════════════════════════════════════════════
+# FASE 2 — FUNDAÇÃO DE PERMISSÃO E MARCA
+# Plano: `plano-fases-fundacao-ate-visao-cliente.md`
+# ═══════════════════════════════════════════════════════
+
+---
+
+## [OPUS 4.6] 2026-09-17 11:47 — Início da Fase 2: Investigação e Decisão do Chefe
+
+### CONTEXTO
+
+A Fase 1 foi validada visualmente pelo Chefe e está oficialmente concluída.
+Iniciamos agora a **Fase 2 — Fundação de permissão e marca**.
+
+Esta fase tem duas frentes:
+1. **Multi-proprietário**: Sistema de papéis ordenado (`owner` e `gerente`), permitindo cadastrar novos gestores na aba Configurações.
+2. **Temas / marca**: Customização de cores, logo, banner e descrição da barbearia (também em Configurações), que servirá de base para a visão do cliente na Fase 4.
+
+### ANÁLISE INICIAL DO ARQUITETO
+
+Lendo o schema (`00001_initial_schema.sql`):
+- A relação usuário ↔ barbearia já é 1:N no banco. `usuario_perfil` possui o campo `barbearia_id`. Não precisamos de uma tabela associativa (N:M) se um usuário só pode gerenciar uma barbearia.
+- Para suportar papéis, basta adicionar `'gerente'` ao enum `tipo_usuario`.
+- **O gargalo é o RLS**: atualmente, as políticas de segurança verificam apenas `barbearia_id = get_barbearia_do_usuario()`. Isso significa que, por padrão, se criarmos um `gerente` e dermos a ele o `barbearia_id`, ele herda acesso TOTAL a tudo (como se fosse um `owner`).
+
+---
+
+### INVESTIGAÇÃO PENDENTE PARA O ENGENHEIRO (OPUS 5)
+
+Antes de eu fechar a especificação, preciso que você faça a seguinte investigação no banco/código:
+
+**INVESTIGAÇÃO 1 — Impacto do novo papel `gerente` no RLS e no AuthContext:**
+Mapeie exatamente quais tabelas e componentes precisarão de alteração para que o `gerente`:
+- **Possa:** ler/escrever agendamentos, clientes, serviços e acessar o financeiro.
+- **Não possa:** alterar `configuracao_barbearia` (ou só alterar partes não críticas? Confirme como está a tabela), alterar dados da `barbearia`, e principalmente, **não possa cadastrar, editar ou remover usuários** em `usuario_perfil`.
+- Confirme se a função `get_barbearia_do_usuario()` ou o `AuthContext` precisarão ser expandidos para devolver o `tipo_usuario` de forma fácil para as políticas RLS e para o front-end (ex: `podeGerenciarUsuarios`).
+
+**INVESTIGAÇÃO 2 — Assets da Marca (Fase 2b):**
+Para logo e banner, precisaremos de um novo bucket no Storage (ex: `barbearia_assets`). Verifique se a infra de upload usada para os serviços (`storage.service.ts`) é genérica o suficiente para ser reutilizada aqui sem dor de cabeça, ou se precisaremos ajustar algo.
+
+---
+
+### PERGUNTA OBRIGATÓRIA PARA O CHEFE
+
+De acordo com o plano, não posso fechar a especificação sem que você tome esta decisão de segurança/negócio:
+
+> **PERGUNTA 1 (Fase 2):** Um proprietário de nível `owner` cadastrado posteriormente pode remover o proprietário original (o primeiro `owner` da barbearia)? 
+
+Opções:
+- **(a) Sim, todos os `owners` têm poder idêntico.** Qualquer `owner` pode remover qualquer outro `owner`. (Mais simples, porém requer confiança total entre sócios).
+- **(b) Não, o criador original é imutável.** Precisaríamos de uma flag tipo `is_fundador` ou impedir a deleção de quem criou a barbearia.
+- **(c) Um owner não pode remover outro owner de jeito nenhum.** Para mudar a sociedade, precisaria acionar o `admin_supremo`.
+
+Por favor, responda a PERGUNTA 1. Assim que Opus 5 terminar a investigação e eu tiver sua resposta, gero a ordem de execução da Fase 2.
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 2: investigações 1 e 2
+
+### CONTEXTO
+
+As duas investigações estão fechadas. Tudo abaixo foi lido do catálogo do
+Postgres e do código real; os testes de escrita rodaram em transação revertida.
+**Nada foi alterado.**
+
+A PERGUNTA 1 é do Chefe — não opino sobre ela, mas no fim registro um dado
+técnico que muda o custo das três opções.
+
+---
+
+## INVESTIGAÇÃO 1 — impacto do papel `gerente`
+
+### 1.1 A boa notícia: 8 das 11 tabelas não precisam de mudança nenhuma
+
+Oito tabelas têm **exatamente a mesma** policy `FOR ALL`:
+
+```sql
+USING (barbearia_id = get_barbearia_do_usuario() OR is_admin_supremo())
+```
+
+`agendamento`, `agendamento_servico` (via `EXISTS` no pai), `cliente`,
+`servico`, `profissional`, `horario_trabalho`, `bloqueio` e
+`lancamento_financeiro`.
+
+Essas são **precisamente** as que o `gerente` deve poder ler e escrever. Um
+`gerente` com `barbearia_id` preenchido herda o acesso certo **sem uma linha de
+SQL nova**. O "acesso total por herança" que você apontou como gargalo só é
+problema nas **três** restantes.
+
+### 1.2 As três tabelas a restringir — e uma delas está quase vazia
+
+Você pediu para eu confirmar como está a `configuracao_barbearia` e se dá para
+separar partes críticas de não críticas. **Dá, mas hoje não há o que separar:**
+
+```
+configuracao_barbearia:  barbearia_id | horario_abertura | horario_fechamento | atualizado_em
+barbearia:               id | nome | criado_em
+```
+
+`configuracao_barbearia` é **só o horário de funcionamento**. `barbearia` é **só
+o nome**. Não existe campo crítico e campo não crítico — existe horário e existe
+nome.
+
+Isso muda a pergunta. Hoje a decisão é binária e pequena:
+
+- **`barbearia`**: alterar = renomear a barbearia. Restringir ao `owner` é
+  natural.
+- **`configuracao_barbearia`**: alterar = mudar o horário de abertura/fechamento.
+  **Essa é operação do dia a dia**, e é justamente o tipo de coisa que um gerente
+  faria. Minha leitura é que deveria ser liberada, mas é decisão sua.
+
+**O ponto que importa para a Fase 2b:** a marca (cores, logo, banner, descrição)
+vai aterrissar numa dessas duas tabelas ou numa nova. **É aí que o corte
+crítico/não crítico passa a existir de verdade** — mudar o logo é plausível para
+um gerente; renomear a barbearia não é. Vale já decidir onde a marca mora, porque
+isso define a granularidade da policy.
+
+### 1.3 A descoberta central: hoje **ninguém** consegue gerenciar usuários
+
+`usuario_perfil` tem 3 policies e **nenhuma delas é `FOR ALL`**:
+
+| cmd | qual | with_check |
+|---|---|---|
+| SELECT | `id = auth.uid() OR is_admin_supremo() OR (barbearia_id IS NOT NULL AND barbearia_id = get_barbearia_do_usuario())` | — |
+| INSERT | — | `id = auth.uid() AND tipo <> 'admin_supremo'` |
+| UPDATE | `id = auth.uid() OR is_admin_supremo()` | `is_admin_supremo() OR tipo <> 'admin_supremo'` |
+
+**Não existe policy de DELETE.** Com RLS ligada, ausência de policy = negação
+total.
+
+Testei as três operações que o multi-proprietário exige, como **Owner A**, em
+transação revertida:
+
+```
+UPDATE usuario_perfil SET tipo='owner' WHERE id=<owner B>   -> UPDATE 0
+INSERT INTO usuario_perfil (...) VALUES (<novo gerente>)    -> ERROR: new row violates
+                                                                row-level security policy
+```
+
+E o DELETE, como **`admin_supremo`** (que enxerga os 3 perfis):
+
+```
+SELECT count(*) FROM usuario_perfil  -> 3
+DELETE FROM usuario_perfil WHERE id=<owner B>  -> DELETE 0
+```
+
+**Nem o `admin_supremo` consegue remover um perfil.** Silenciosamente: `DELETE 0`,
+sem erro.
+
+Somando o trigger `proteger_campos_de_autorizacao` (migration `00009`), que
+barra qualquer alteração de `tipo` e de `barbearia_id`, a conclusão é:
+
+> **Cadastrar, promover e remover gestor é impossível por acesso direto à tabela.
+> As três operações da Fase 2a têm de ser RPC `SECURITY DEFINER`.**
+
+Isso não é um obstáculo — é o desenho atual funcionando. E o molde já existe:
+`criar_barbearia_e_vincular` faz exatamente isso, com o escape hatch que o
+próprio trigger prevê:
+
+```sql
+PERFORM set_config('app.vinculo_autorizado', 'on', true);
+UPDATE usuario_perfil SET barbearia_id = ..., tipo = 'owner' WHERE id = auth.uid();
+```
+
+### 1.4 Um mal-entendido a evitar: "vínculo de conta" **não** dá acesso
+
+`cadastrar_profissional_com_conta` e `cadastrar_cliente_com_conta` resolvem o
+e-mail e gravam `usuario_id` **na linha de `profissional`/`cliente`**. Elas
+**nunca tocam** em `usuario_perfil.tipo` nem em `usuario_perfil.barbearia_id`.
+
+Ou seja: o vínculo que já existe é **ligação de dado**, não de autorização. Um
+profissional vinculado continua com o `tipo` que tinha (`cliente`, pelo default
+do trigger) e possivelmente sem barbearia.
+
+`gerente` é de outra natureza: exige escrever na tabela **de autorização**. Não
+dá para reaproveitar as RPCs existentes — a semelhança é só aparente.
+
+### 1.5 O que muda no frontend
+
+**`AuthContext` não precisa ser expandido para ler o papel** — ele já expõe
+`tipo`. `podeGerenciarUsuarios` é derivação, no mesmo molde do `podeOperar` que
+entregamos, com o motivo junto:
+
+```ts
+const podeGerenciarUsuarios = perfil?.tipo === 'owner' || perfil?.tipo === 'admin_supremo';
+```
+
+**Para o RLS, aí sim falta função.** As policies não têm como perguntar "é
+owner?". O caminho natural é um irmão do `is_admin_supremo()` — `is_owner()`,
+`STABLE SECURITY DEFINER SET search_path = public`.
+
+**Armadilha concreta, e é a mais fácil de esquecer:**
+
+```ts
+// src/lib/auth/ProtectedRoute.tsx:16
+const PAPEIS_DO_PAINEL: TipoUsuario[] = ['owner', 'admin_supremo'];
+```
+
+É lista de **permitidos** (decisão da Fase 1, aprovada). **Um `gerente` recém-
+criado é barrado do painel** e vê "Sua conta não tem acesso ao painel de gestão".
+A Fase 2 tem de incluir `'gerente'` aí **e** acrescentar o caso em
+`ProtectedRoute.test.tsx` — senão a feature nasce inacessível.
+
+Também: `podeOperar` no `AuthContext` bloqueia quem não tem `barbearia_id`. O
+`gerente` terá, então passa. Sem mudança.
+
+**Superfície de UI:** `Configuracoes.tsx` hoje **não tem abas** — são três forms
+empilhados (`BarbeariaForm`, `HorarioFuncionamentoForm`, `PerfilForm`). A Fase 2
+acrescenta pelo menos duas seções (gestores e marca). O `tabs.tsx` do shadcn já
+está instalado.
+
+### 1.6 Dois achados colaterais que a Fase 2 deveria absorver
+
+**(a) `get_barbearia_do_usuario()` é `VOLATILE`; `is_admin_supremo()` é `STABLE`.**
+As duas estão em **todas** as policies. `VOLATILE` impede o planner de avaliar a
+função uma vez por query — ela é reavaliada por linha, e a estimativa de
+seletividade fica ruim.
+
+Medido, com `EXPLAIN ANALYZE` sobre `agendamento` (130 linhas) como Owner A, em
+transação revertida onde troquei a volatilidade e desfiz:
+
+| | linhas estimadas | linhas reais | tempo |
+|---|---|---|---|
+| `VOLATILE` (hoje) | 87 | 120 | 3,7 ms |
+| `STABLE` | **123** | 120 | 1,9 ms |
+
+O tempo é uma medida única numa tabela pequena — trate como indício, não prova.
+**O sinal sólido é a estimativa**: 87 → 123 contra 120 reais. Estimativa errada
+em tabela pequena não custa nada; em tabela grande, com join, é o que faz o
+planner escolher o plano errado. Como a Fase 2 vai **acrescentar** funções às
+policies, vale marcar `STABLE` agora e nascer as novas assim.
+
+**(b) O bypass do trigger nunca é desligado.** `criar_barbearia_e_vincular` faz
+`set_config('app.vinculo_autorizado','on',true)` e **não volta para `off`**. Como
+é escopo de transação e o PostgREST usa uma transação por chamada, hoje o raio é
+pequeno. Mas a Fase 2 vai criar mais funções usando esse mesmo bypass, e o dia em
+que uma delas chamar outra — ou o app usar transação explícita — a proteção fica
+desligada para tudo que vier depois. Resetar logo após o UPDATE privilegiado é
+uma linha.
+
+---
+
+## INVESTIGAÇÃO 2 — assets da marca
+
+### 2.1 O TypeScript é reutilizável como está — zero mudanças
+
+`storage.service.ts` já recebe o bucket por parâmetro:
+
+```ts
+upload(bucket: string, barbeariaId: string, file: File)   // path: `${barbeariaId}/${fileName}`
+removerPorUrl(bucket: string, publicUrl: string)          // procura `/public/${bucket}/`
+```
+
+O `upload` monta o caminho com o `barbeariaId` na primeira pasta, que é
+**exatamente** a convenção que as policies de storage exigem
+(`storage.foldername(name)[1] = get_barbearia_do_usuario()`). Reusar o service
+preserva esse invariante de graça.
+
+### 2.2 O SQL **não** é genérico — 4 policies com o bucket no literal
+
+```sql
+bucket_id = 'servicos'   -- nas 4: SELECT público, INSERT, UPDATE, DELETE
+```
+
+Um bucket novo exige as 4 policies duplicadas, **ou** generalizar para
+`bucket_id = ANY (ARRAY['servicos','barbearia_assets'])`. Prefiro a duplicação:
+os dois buckets vão divergir (limite de tamanho, tipos aceitos, quem pode
+escrever), e policy compartilhada obriga a desmembrar depois.
+
+### 2.3 O que precisa ser decidido ao criar o bucket
+
+O `servicos` está assim:
+
+```
+public = true | file_size_limit = 2 MB | allowed_mime_types = {image/jpeg, image/png, image/webp}
+```
+
+Três decisões que não são automáticas:
+
+1. **Tamanho.** 2 MB serve para foto de serviço; **banner de capa costuma passar
+   disso**. Herdar o limite sem pensar dá erro de upload que o usuário não
+   entende.
+2. **SVG para o logo — recomendo não permitir.** O bucket é **público** e SVG é
+   um documento que pode carregar `<script>`. Servido do mesmo domínio, vira
+   vetor de XSS. Se o logo precisar ser vetorial, isso merece tratamento próprio
+   (sanitização ou servir com `Content-Disposition`), não um `allowed_mime_types`
+   mais frouxo.
+3. **Quem escreve.** As policies atuais liberam qualquer usuário **da barbearia**
+   (`get_barbearia_do_usuario()`), sem olhar papel. Se a marca for coisa de
+   `owner`, a policy do bucket novo precisa do `is_owner()` da investigação 1 —
+   caso contrário o gerente edita o logo mesmo que a UI esconda o botão.
+
+**Leitura pública continua correta** para a marca: é justamente o que a Fase 4
+vai exibir ao cliente.
+
+---
+
+## UM DADO TÉCNICO PARA A PERGUNTA 1 DO CHEFE
+
+Não é minha decisão, mas o custo das três opções não é igual, e vale ele saber:
+
+- **`barbearia` não tem coluna de criador.** É `id | nome | criado_em`. Não há
+  como saber hoje quem é o proprietário original.
+- Logo, a opção **(b)** ("o criador original é imutável") **exige coluna nova** —
+  `criado_por` na `barbearia` ou um `is_fundador` no `usuario_perfil` — mais
+  backfill para a barbearia que já existe. As opções **(a)** e **(c)** não exigem
+  schema novo.
+
+Ou seja: (b) é a única que custa migration de estrutura. Se ele escolher (b), é
+melhor que a coluna entre **junto** com o resto da Fase 2, não depois.
+
+---
+
+## RESUMO EXECUTIVO PARA A SPEC
+
+1. **8 tabelas: nada a fazer.** O `gerente` herda o acesso certo.
+2. **3 tabelas a tratar:** `barbearia` (só nome), `configuracao_barbearia` (só
+   horário — sugiro liberar) e `usuario_perfil`.
+3. **Gestão de usuários é 100% RPC `SECURITY DEFINER`.** Por acesso direto é
+   impossível, inclusive DELETE, inclusive para o `admin_supremo`. Provado.
+4. **Falta `is_owner()`** para o RLS. O `AuthContext` já tem `tipo`; só derivar.
+5. **Incluir `'gerente'` em `PAPEIS_DO_PAINEL`** e cobrir com teste, senão o papel
+   novo nasce sem acesso ao painel.
+6. **Storage: TS pronto, SQL exige 4 policies novas** e três decisões de bucket.
+7. **Absorver os dois colaterais:** `STABLE` no `get_barbearia_do_usuario()` e
+   reset do bypass do trigger.
+8. **A opção (b) da PERGUNTA 1 é a única que exige coluna nova.**
+
+Aguardo a ordem de execução.
