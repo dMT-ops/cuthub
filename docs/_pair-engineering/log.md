@@ -4850,3 +4850,437 @@ caminho manual, mas continua sem existir **regressão automatizada de interface*
 se alguém quebrar a aba de Acessos daqui a dois meses, nenhum teste avisa. A
 DESCOBERTA 16 é a evidência: foi preciso um par de olhos no console para achar.
 Não estou pedindo para reabrir agora; registro para quando a discussão voltar.
+
+---
+
+## [CHEFE] 2026-09-17 16:08 — Fase 3 aceita
+
+Fase 3 validada. Catálogo de produtos funcionando, vitrine pública com view
+segura, hotfix do cadastro entregue.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-17 16:08 — Fases 1–3 CONCLUÍDAS. Abertura da Fase 4.
+
+### FECHAMENTO DAS FASES 1–3
+
+O plano de `plano-fases-fundacao-ate-visao-cliente.md` está **100% concluído**:
+
+| Fase | Escopo | Estado |
+|---|---|---|
+| 1 — Fundação de acesso | Landing, redesign login/cadastro, favicon, testes | ✅ |
+| 2 — Permissão e marca | Multi-proprietário, RPCs, marca, bucket, RLS | ✅ |
+| 3 — Operação da barbearia | Catálogo de produtos, view pública, estoque | ✅ |
+
+**Regra de segurança para toda exposição pública daqui para frente** (lição da
+DESCOBERTA da Fase 3): Toda view ou tabela exposta ao `anon` deve receber
+`REVOKE ALL ... FROM PUBLIC, anon, authenticated` antes do `GRANT SELECT`.
+Isso entra como **regra obrigatória** na spec de qualquer fase futura.
+
+---
+---
+
+# ═══════════════════════════════════════════════════════
+# FASE 4 — VISÃO DO CLIENTE
+# Documento: `fase-4-visao-cliente.md`
+# ═══════════════════════════════════════════════════════
+
+---
+
+## [OPUS 4.6] 2026-09-17 16:08 — Fase 4: Perguntas Estratégicas para o Chefe
+
+### CONTEXTO
+
+A Fase 4 é diferente das anteriores. Não é um conjunto de features pontuais —
+é a **experiência inteira** de como um cliente vê e usa o CutHub. O documento
+`fase-4-visao-cliente.md` instrui explicitamente a não gerar especificação
+técnica até que as perguntas estratégicas estejam respondidas.
+
+As dependências obrigatórias (Fase 2: marca/RLS e Fase 3: vitrine de produtos)
+já estão entregues. A Fase 3 inclusive já criou a `produto_publico` com a view
+segura que a visão do cliente vai consumir.
+
+### REQUISITOS JÁ CONHECIDOS (do documento)
+
+- Modal de promoções (visão cliente)
+- Página de promoções (visão cliente)
+- Botão de "repetir último agendamento"
+- Favoritar agendamentos
+
+*(Lista não fechada — mais itens podem vir da conversa abaixo.)*
+
+---
+
+### 🔴 AÇÃO EXIGIDA: 5 PERGUNTAS ESTRATÉGICAS PARA O CHEFE
+
+Chefe, estas não são perguntas técnicas — são **decisões de produto** que definem
+a arquitetura inteira da visão do cliente. Preciso das suas respostas para
+desenhar a spec.
+
+**PERGUNTA 1 — Identidade visual:**
+A visão do cliente tem um visual próprio do CutHub (neutro, igual para todos),
+**ou** reflete o tema/marca de cada barbearia (cores, logo, banner da Fase 2)
+quando o cliente está navegando no contexto de uma barbearia específica?
+
+**PERGUNTA 2 — Estrutura de navegação:**
+Como as telas do cliente se conectam? Existe um "dashboard" do cliente (com
+barbearias favoritas, histórico de agendamentos, promoções), ou são seções
+separadas? Como você imagina a experiência?
+
+**PERGUNTA 3 — Acesso à barbearia:**
+O cliente entra em uma **página dedicada por barbearia** (tipo um "perfil
+público" com a marca configurada na Fase 2), ou tudo acontece dentro de uma
+interface genérica do CutHub sem página própria por barbearia?
+
+**PERGUNTA 4 — Semântica de "favoritar":**
+Favoritar é sobre **a barbearia** (ex: "minhas barbearias"), sobre uma
+**combinação de serviço+barbeiro** (ex: "corte com o João"), ou sobre um
+**agendamento específico** do histórico como atalho de repetição?
+
+**PERGUNTA 5 — Vitrine de produtos (já respondida parcialmente):**
+Você já disse que a vitrine é visível ao cliente (cardápio online). Confirmo:
+o cliente **apenas visualiza** os produtos da barbearia, sem nenhuma ação de
+compra, carrinho ou pedido — correto? (Conforme a decisão do plano: "sem
+carrinho, sem checkout, sem pagamento pelo site".)
+
+---
+
+Responda essas perguntas aqui ou no chat, e eu desenho a arquitetura da Fase 4
+para você validar antes de passar ao engenheiro.
+
+---
+
+## [CHEFE] 2026-09-17 16:16 — Respostas às 5 Perguntas Estratégicas
+
+**Pergunta 1 — Identidade visual:**
+Toda a personalização que o dono da barbearia definiu. (= a visão do cliente
+reflete a marca da barbearia: cores, logo, banner.)
+
+**Pergunta 2 — Estrutura de navegação:**
+Não sei responder. Pergunte ao outro (Opus 5) na log.
+
+**Pergunta 3 — Acesso à barbearia:**
+Cada barbearia tem o seu perfil público próprio.
+
+**Pergunta 4 — Semântica de "favoritar":**
+Tudo. O cliente tem que ter essa opção em tudo: barbearia, serviço+barbeiro
+e agendamento (como atalho de repetição).
+
+**Pergunta 5 — Vitrine de produtos:**
+Por enquanto será somente vitrine para testarmos se a visualização está correta.
+(Confirmado: sem carrinho, sem checkout, sem pagamento.)
+
+---
+
+## [OPUS 4.6] 2026-09-17 16:16 — Análise das Respostas e Delegação ao Engenheiro
+
+### O QUE ESTÁ DEFINIDO
+
+| Decisão | Resposta |
+|---|---|
+| Visual do cliente | Reflete a marca da barbearia (cores, logo, banner) |
+| Perfil público | Cada barbearia tem página própria |
+| Favoritar | Abrangente: barbearia, serviço+barbeiro, agendamento |
+| Vitrine | Somente visualização, sem ação de compra |
+
+### O QUE FALTA: NAVEGAÇÃO
+
+O Chefe delegou a **Pergunta 2** para o Engenheiro (Opus 5). Concordo com essa
+delegação — é uma pergunta que se beneficia de investigação técnica sobre o que
+já existe e como melhor organizar.
+
+---
+
+### INVESTIGAÇÃO + PROPOSTA PENDENTE PARA O ENGENHEIRO (OPUS 5)
+
+Opus 5, o Chefe não sabe como quer a navegação do cliente e pediu sua opinião.
+Preciso que você faça o seguinte:
+
+**INVESTIGAÇÃO 1 — Estado atual da experiência do cliente:**
+1. Mapeie o que acontece hoje quando um usuário com `tipo = 'cliente'` faz login.
+   Qual tela ele vê? (Sabemos que o `ProtectedRoute` barra — mas mapeie o fluxo
+   completo.)
+2. Existe alguma rota pública hoje que já sirva como base (ex: a landing)?
+3. Como o cliente descobre uma barbearia? Existe busca, lista, link direto?
+
+**INVESTIGAÇÃO 2 — Dados disponíveis para a visão do cliente:**
+1. Que dados o cliente já consegue ler via RLS hoje? (views públicas, policies
+   com `anon`, etc.)
+2. Que tabelas/views precisariam de novas policies para que o cliente autenticado
+   veja seus próprios agendamentos, histórico, etc.?
+3. Para "favoritar" — existe alguma tabela de relação cliente↔barbearia hoje?
+
+**PROPOSTA — Arquitetura de navegação do cliente:**
+Com base na investigação, proponha uma estrutura de navegação para a visão do
+cliente. Considere que:
+- O cliente tem perfil público de barbearia (com marca).
+- Pode favoritar barbearias, serviços e agendamentos.
+- Pode ver a vitrine de produtos.
+- Pode ver promoções.
+- Pode repetir agendamentos.
+- Pode ver seu histórico.
+
+Sugira a estrutura de rotas e telas, com justificativa. O Chefe e eu avaliaremos
+sua proposta antes de gerar a spec final.
+
+---
+
+**Chefe:** Mande `/log` no terminal para o engenheiro investigar e propor a
+navegação.
+
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 4: investigações e proposta de navegação
+
+### CONTEXTO
+
+O Chefe delegou a PERGUNTA 2 (navegação) para mim. Abaixo estão as duas
+investigações e a proposta. **Nada foi implementado** — os testes de escrita
+rodaram em transação revertida.
+
+---
+
+## INVESTIGAÇÃO 1 — o estado atual da experiência do cliente
+
+### 1.1 O que acontece quando um `cliente` faz login
+
+Fluxo completo, lido no código:
+
+1. `Login.tsx:30` faz `navigate('/dashboard')` — **fixo, sem olhar o papel**.
+2. `ProtectedRoute` carrega o perfil e chega na lista de permitidos:
+   `['owner', 'gerente', 'admin_supremo']`.
+3. `cliente` não está na lista → cai na barreira **"Área ainda não disponível"**,
+   com o texto "Sua conta é de cliente..." e um botão **Sair**.
+
+Ou seja: **o cliente entra e a única ação que o produto oferece a ele é sair.**
+Isso é honesto (foi o que construímos na Fase 1 para não deixá-lo num painel
+vazio), mas é o fim da linha.
+
+**Consequência direta para a Fase 4:** o `navigate('/dashboard')` do login vira
+um problema no minuto em que existir área do cliente. Ele precisa passar a
+decidir o destino pelo papel. É mudança em `Login.tsx` **e** no `ProtectedRoute`,
+com caso novo em `ProtectedRoute.test.tsx`.
+
+### 1.2 Rotas públicas que já existem
+
+Três: `/` (landing), `/login`, `/cadastro`. O catch-all manda tudo para `/`.
+
+A landing serve de base **de estilo**, não de estrutura: ela é institucional do
+CutHub e não conhece barbearia nenhuma.
+
+### 1.3 Como o cliente descobre uma barbearia hoje
+
+**Não descobre.** Não existe busca, lista, diretório nem link. Não há rota que
+receba uma barbearia como parâmetro. E a tabela `barbearia` tem quatro colunas —
+`id, nome, criado_em, criado_por` — **sem slug**, então nem URL amigável existe.
+
+---
+
+## INVESTIGAÇÃO 2 — que dados o cliente alcança
+
+### 2.1 A descoberta que define a fase: **o cliente não vê nada**
+
+Montei o cenário realista em transação revertida: criei uma conta `cliente`,
+vinculei a um registro de `cliente` que **tem 5 agendamentos** (o "renan"), e
+consultei como ele.
+
+```
+cliente_vinculado | tem_agendamentos
+------------------+------------------
+ renan            |                5
+```
+
+Logado como essa conta:
+
+| o cliente tenta ver | resultado |
+|---|---|
+| **os próprios agendamentos** | **0** |
+| o próprio registro em `cliente` | **0** |
+| serviços da barbearia | **0** |
+| profissionais | **0** |
+| a barbearia e a **marca** dela | **0** e **0** |
+| `usuario_perfil` dele mesmo | 1 — só isso |
+| **vitrine de produtos** (`produto_publico`) | **1** |
+
+**A única coisa que um cliente enxerga hoje é a vitrine de produtos da Fase 3.**
+Tudo o mais que a Fase 4 precisa exibir é invisível para ele.
+
+**A causa é estrutural, não um esquecimento.** Todas as policies são da forma
+`barbearia_id = get_barbearia_do_usuario()`. O cliente tem `barbearia_id` nulo,
+então a comparação nunca é verdadeira. **O modelo de permissão do projeto inteiro
+assume que todo ator pertence a uma barbearia** — e o cliente, por definição, não
+pertence.
+
+Isso significa que a Fase 4 **não é uma fase de telas**. É uma fase que acrescenta
+um segundo eixo ao modelo de segurança: hoje existe "quem opera a barbearia";
+falta "quem é cliente dela" e "o que é público".
+
+### 2.2 O que precisa de policy nova
+
+Dois grupos, com naturezas diferentes:
+
+**(a) Público, sem login — para o perfil da barbearia.** Precisa de view curada,
+uma para cada coisa que o perfil exibe: identidade da barbearia (nome + marca),
+serviços e profissionais. O `produto_publico` já é o molde.
+
+**Atenção a um campo:** `profissional` guarda `comissao_percentual`, `email`,
+`telefone` e `usuario_id`. **Nenhum desses pode aparecer num perfil público.** É
+o mesmo tipo de vazamento que a `quantidade` seria na vitrine — e a lição da Fase
+3 vale igual: policy é por linha, então a proteção tem de ser o recorte de
+colunas da view.
+
+**(b) Autenticado, para o próprio cliente — o histórico.** Precisa de uma policy
+nova em `agendamento` num eixo que ainda não existe:
+
+```sql
+EXISTS (SELECT 1 FROM cliente c
+        WHERE c.id = agendamento.cliente_id AND c.usuario_id = auth.uid())
+```
+
+O vínculo `cliente.usuario_id` **já existe** desde a migration `00012` (cadastro
+com vínculo de conta) — mas **nenhuma policy o usa hoje**. Ele foi criado como
+ligação de dado e nunca virou ligação de autorização. A Fase 4 é onde isso muda.
+O mesmo raciocínio vale para `agendamento_servico`, que hoje se apoia no
+`agendamento` pai.
+
+### 2.3 Favoritar e promoções: não existe nada
+
+```
+tabelas com 'favorit' ou 'promo' no nome:  0
+```
+
+As duas são construção do zero. Como o Chefe respondeu "tudo" para favoritar
+(barbearia, serviço+barbeiro e agendamento), são três alvos distintos — ver a
+proposta abaixo.
+
+---
+
+## PROPOSTA — arquitetura de navegação da visão do cliente
+
+### O princípio que organiza tudo: **são dois contextos, não um**
+
+A resposta do Chefe à PERGUNTA 1 (o visual reflete a marca da barbearia) tem uma
+consequência que decide a estrutura: **um cliente que favoritou três barbearias
+não pode ter três marcas ao mesmo tempo na tela.** Quando ele está olhando o
+próprio histórico, não existe *uma* barbearia da qual herdar cor e logo.
+
+Logo, existem dois contextos visuais distintos, e a navegação deve deixá-los
+separados:
+
+| contexto | identidade | o que vive nele |
+|---|---|---|
+| **Barbearia** | marca da barbearia (Fase 2) | perfil público, serviços, vitrine, promoções, agendar |
+| **CutHub** | marca neutra do produto | conta do cliente: histórico, favoritos, promoções agregadas |
+
+Misturar os dois criaria a pergunta "de quem é a cor desta tela?" em toda
+página — e essa pergunta não tem resposta na área pessoal.
+
+### Estrutura de rotas proposta
+
+```
+PÚBLICO — sem login
+  /                          landing institucional          [já existe]
+  /b/:slug                   perfil da barbearia            [marca da barbearia]
+  /b/:slug/servicos          catálogo com preço e duração
+  /b/:slug/produtos          vitrine (consome produto_publico)
+  /b/:slug/promocoes         promoções da barbearia
+  /b/:slug/agendar           inicia agendamento -> pede login se não houver
+
+CLIENTE AUTENTICADO — marca CutHub
+  /minha-conta               visão geral: próximo agendamento, atalhos
+  /minha-conta/agendamentos  histórico + "repetir"
+  /minha-conta/favoritos     barbearias, serviço+barbeiro, agendamentos
+  /minha-conta/promocoes     promoções das barbearias favoritas
+  /minha-conta/perfil        dados da conta
+```
+
+### Por que `/b/:slug` e não `/barbearia/:uuid`
+
+1. **UUID em URL é enumerável e feio.** O perfil público é o que a barbearia vai
+   colar na bio do Instagram; `cuthub.com/b/barbearia-do-joao` funciona como
+   endereço, um UUID não.
+2. **Exige uma coluna nova** — `barbearia.slug`, UNIQUE, gerada a partir do nome
+   no cadastro. É pequena, mas precisa estar na spec, junto da decisão do que
+   fazer quando dois nomes colidirem.
+3. O prefixo `/b/` curto evita colisão com rotas futuras do produto e deixa claro
+   que dali para baixo o contexto é de uma barbearia.
+
+### Por que o perfil público **não** exige login
+
+Se o cliente precisar se cadastrar antes de ver preços e serviços, o perfil
+público deixa de ser divulgação e vira portão. O caminho natural é: ele chega
+pelo link, olha, decide, e **só então** o login aparece — no momento de agendar.
+Isso também casa com o que já construímos: a conta de cliente criada no
+`/cadastro` hoje não tem para onde ir; com a Fase 4 ela passa a ter.
+
+### Favoritar: três alvos, uma tabela
+
+O Chefe respondeu "tudo". Os três alvos têm a mesma forma — *este cliente marcou
+aquilo* — então proponho **uma tabela com tipo**, em vez de três tabelas:
+
+```
+favorito: id | usuario_id | tipo ('barbearia'|'servico_profissional'|'agendamento')
+          | barbearia_id | servico_id | profissional_id | agendamento_id | criado_em
+```
+
+Com um CHECK garantindo que as colunas preenchidas correspondem ao `tipo`. A
+alternativa (três tabelas) duplica policy, hook e tela três vezes para o mesmo
+comportamento.
+
+**Um detalhe que vale decidir junto:** favorito é do `usuario_id` (a conta) ou do
+`cliente_id` (o registro naquela barbearia)? Proponho **`usuario_id`**: a mesma
+pessoa é um registro `cliente` diferente em cada barbearia, e "minhas barbearias
+favoritas" só faz sentido acima desse recorte.
+
+### "Repetir último agendamento": o ponto onde a proposta encosta na realidade
+
+É o requisito mais simples de descrever e o mais delicado de implementar, porque
+repetir um agendamento **não é copiar uma linha**. O agendamento original tem
+data, hora e profissional; repetir exige escolher um horário novo, e o horário
+depende da jornada do profissional, dos bloqueios e do constraint de
+sobreposição — tudo já implementado no `disponibilidade.service`.
+
+Minha leitura: "repetir" deve **pré-preencher** o fluxo de agendamento (mesma
+barbearia, mesmo profissional, mesmos serviços) e levar o cliente à escolha de
+horário, não criar o agendamento direto. Criar direto produziria um "não foi
+possível" logo depois do clique, que é exatamente o tipo de falha que viemos
+evitando.
+
+### O que muda no que já existe
+
+| arquivo | mudança |
+|---|---|
+| `Login.tsx:30` | `navigate('/dashboard')` fixo passa a decidir pelo papel |
+| `ProtectedRoute.tsx` | ganha o eixo do cliente; hoje ele só barra |
+| `ProtectedRoute.test.tsx` | caso novo: `cliente` vai para `/minha-conta`, não para a barreira |
+| `App.tsx` | dois blocos de rota novos |
+
+---
+
+### RESUMO DO QUE A SPEC PRECISA COBRIR
+
+1. **Coluna `slug`** em `barbearia`, UNIQUE, com backfill e regra de colisão.
+2. **Views públicas** para identidade+marca, serviços e profissionais — cada uma
+   com `REVOKE ALL` antes do `GRANT SELECT`, e **sem** `comissao_percentual`,
+   `email`, `telefone` nem `usuario_id` do profissional.
+3. **Policy nova em `agendamento`** pelo eixo `cliente.usuario_id = auth.uid()`,
+   e o equivalente em `agendamento_servico`.
+4. **Tabela `favorito`** com tipo e CHECK.
+5. **Tabela de promoções** — ainda não existe e não foi desenhada em lugar nenhum.
+6. **Roteamento por papel no login** e o eixo do cliente no `ProtectedRoute`.
+
+---
+
+### UMA PERGUNTA QUE SOBROU, E É DO CHEFE
+
+**Como o cliente chega a uma barbearia?** Minha proposta assume **link direto** —
+a barbearia divulga o próprio endereço. A alternativa é um **diretório público**
+(`/barbearias`, com busca).
+
+Não decidi porque não é detalhe de implementação: um diretório transforma o
+CutHub em vitrine de marketplace, com as perguntas que vêm junto — quem aparece
+primeiro, o que acontece com barbearia sem marca configurada, e se toda barbearia
+cadastrada aceita estar num catálogo público. **Recomendo link direto nesta
+fase**, e o diretório como decisão própria depois de existir perfil para listar.
