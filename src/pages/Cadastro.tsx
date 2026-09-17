@@ -5,10 +5,14 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+
+type TipoConta = 'barbearia' | 'cliente';
 
 export default function Cadastro() {
   const navigate = useNavigate();
+  const [tipoConta, setTipoConta] = useState<TipoConta>('barbearia');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nomeUsuario, setNomeUsuario] = useState('');
@@ -17,6 +21,8 @@ export default function Cadastro() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
+
+  const ehBarbearia = tipoConta === 'barbearia';
 
   const handleCadastro = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +37,7 @@ export default function Cadastro() {
         options: {
           data: {
             nome: nomeUsuario,
-            tipo: 'owner',
+            tipo: ehBarbearia ? 'owner' : 'cliente',
           }
         }
       });
@@ -48,9 +54,14 @@ export default function Cadastro() {
         return;
       }
 
-      // 2. Criar a barbearia e vincular o perfil recém-criado a ela
-      const { barbeariaService } = await import('@/services/barbearia.service');
-      await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
+      // 2. Só a conta de barbearia cria e vincula a barbearia. A conta de
+      // cliente fica sem `barbearia_id` de propósito: é assim que ela pode
+      // depois receber acesso a uma barbearia pelo "Conceder acesso" das
+      // Configurações, que recusa quem já pertence a alguma.
+      if (ehBarbearia) {
+        const { barbeariaService } = await import('@/services/barbearia.service');
+        await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
+      }
 
       // Sucesso! Redirecionar para dashboard
       navigate('/dashboard');
@@ -83,7 +94,7 @@ export default function Cadastro() {
           <p className="mt-3 text-sm">
             Enviamos um link de confirmação para{' '}
             <span className="font-medium">{email}</span>. Confirme o endereço e
-            entre para terminar de configurar a barbearia.
+            entre para terminar de configurar a conta.
           </p>
         </div>
       </AuthLayout>
@@ -93,22 +104,45 @@ export default function Cadastro() {
   return (
     <AuthLayout
       titulo="Criar conta"
-      descricao="Cadastre sua barbearia e comece a usar o CutHub."
+      descricao={
+        ehBarbearia
+          ? 'Cadastre sua barbearia e comece a usar o CutHub.'
+          : 'Crie sua conta pessoal para receber acesso de uma barbearia.'
+      }
       rodape={
-        <div className="space-y-4">
-          <p>
-            Já tem uma conta?{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Faça login
-            </Link>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            É cliente de uma barbearia? Peça o cadastro diretamente a ela — a área
-            do cliente ainda não está disponível.
-          </p>
-        </div>
+        <p>
+          Já tem uma conta?{' '}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Faça login
+          </Link>
+        </p>
       }
     >
+      <Tabs
+        value={tipoConta}
+        onValueChange={(v) => {
+          setTipoConta(v as TipoConta);
+          setError('');
+        }}
+        className="mb-6"
+      >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="barbearia">Sou barbearia</TabsTrigger>
+          <TabsTrigger value="cliente">Sou cliente</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {!ehBarbearia && (
+        // Ser honesto aqui é o ponto: a conta de cliente é criada de verdade,
+        // mas ainda não existe área do cliente, e o painel de gestão barra o
+        // papel. Sem este aviso a pessoa se cadastra e bate numa porta fechada
+        // sem entender por quê.
+        <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+          A área do cliente ainda não está disponível. Esta conta serve para a
+          sua barbearia conceder acesso a você em Configurações → Acessos.
+        </div>
+      )}
+
       <form onSubmit={handleCadastro} className="space-y-4">
         {error && (
           <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
@@ -127,16 +161,18 @@ export default function Cadastro() {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="nomeBarbearia">Nome da Barbearia</Label>
-          <Input
-            id="nomeBarbearia"
-            placeholder="Barbearia do João"
-            value={nomeBarbearia}
-            onChange={(e) => setNomeBarbearia(e.target.value)}
-            required
-          />
-        </div>
+        {ehBarbearia && (
+          <div className="space-y-2">
+            <Label htmlFor="nomeBarbearia">Nome da Barbearia</Label>
+            <Input
+              id="nomeBarbearia"
+              placeholder="Barbearia do João"
+              value={nomeBarbearia}
+              onChange={(e) => setNomeBarbearia(e.target.value)}
+              required
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>
