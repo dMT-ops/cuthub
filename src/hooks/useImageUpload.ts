@@ -5,11 +5,27 @@ import { toast } from 'sonner';
 
 interface UseImageUploadOptions {
   bucket: string;
+  /**
+   * Teto em bytes, para casar com o limite do bucket.
+   *
+   * Era fixo em 2 MB, que é o limite do bucket `servicos`. O bucket
+   * `barbearia_assets` aceita 5 MB para comportar banner, e sem este parâmetro
+   * o cliente recusaria um arquivo que o servidor aceitaria — erro que o
+   * usuário não teria como entender. O default mantém o comportamento antigo.
+   */
+  maxBytes?: number;
   onSuccess?: (url: string) => void;
   onError?: (error: Error) => void;
 }
 
-export function useImageUpload({ bucket, onSuccess, onError }: UseImageUploadOptions) {
+const DOIS_MB = 2 * 1024 * 1024;
+
+export function useImageUpload({
+  bucket,
+  maxBytes = DOIS_MB,
+  onSuccess,
+  onError,
+}: UseImageUploadOptions) {
   const { barbeariaId } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -21,8 +37,9 @@ export function useImageUpload({ bucket, onSuccess, onError }: UseImageUploadOpt
     }
 
     // Validações básicas no cliente
-    if (file.size > 2 * 1024 * 1024) {
-      const error = new Error('Imagem maior que 2 MB');
+    if (file.size > maxBytes) {
+      const megas = Math.round((maxBytes / (1024 * 1024)) * 10) / 10;
+      const error = new Error(`Imagem maior que ${megas} MB`);
       if (onError) onError(error);
       else toast.error(error.message);
       return null;
