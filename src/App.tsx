@@ -18,6 +18,7 @@ import AgendaHome from './pages/dashboard/agenda/AgendaHome';
 import Clientes from './pages/dashboard/Clientes';
 import Profissionais from './pages/dashboard/Profissionais';
 import Servicos from './pages/dashboard/Servicos';
+import Produtos from './pages/dashboard/Produtos';
 import Financeiro from './pages/dashboard/Financeiro';
 import Configuracoes from './pages/dashboard/Configuracoes';
 
@@ -42,6 +43,7 @@ function App() {
                   <Route path="clientes" element={<Clientes />} />
                   <Route path="profissionais" element={<Profissionais />} />
                   <Route path="servicos" element={<Servicos />} />
+                  <Route path="produtos" element={<Produtos />} />
                   <Route path="financeiro" element={<Financeiro />} />
                   <Route path="configuracoes" element={<Configuracoes />} />
                 </Route>

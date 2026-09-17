@@ -5,7 +5,8 @@ import {
   Scissors, 
   DollarSign, 
   Settings,
-  Tag
+  Tag,
+  ShoppingBag
 } from 'lucide-react';
 
 export const navigationItems = [
@@ -14,6 +15,7 @@ export const navigationItems = [
   { label: 'Clientes',      icon: Users,           path: '/dashboard/clientes' },
   { label: 'Profissionais', icon: Scissors,        path: '/dashboard/profissionais' },
   { label: 'Serviços',      icon: Tag,             path: '/dashboard/servicos' },
+  { label: 'Produtos',      icon: ShoppingBag,     path: '/dashboard/produtos' },
   { label: 'Financeiro',    icon: DollarSign,      path: '/dashboard/financeiro' },
   { label: 'Configurações', icon: Settings,        path: '/dashboard/configuracoes' },
 ] as const;

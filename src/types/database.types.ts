@@ -429,6 +429,56 @@ export type Database = {
           },
         ]
       }
+      produto: {
+        Row: {
+          atualizado_em: string | null
+          barbearia_id: string
+          criado_em: string | null
+          descricao: string | null
+          id: string
+          imagem_url: string | null
+          nome: string
+          ordem: number
+          preco: number
+          quantidade: number
+          status: Database["public"]["Enums"]["status_registro"] | null
+        }
+        Insert: {
+          atualizado_em?: string | null
+          barbearia_id: string
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          imagem_url?: string | null
+          nome: string
+          ordem?: number
+          preco: number
+          quantidade?: number
+          status?: Database["public"]["Enums"]["status_registro"] | null
+        }
+        Update: {
+          atualizado_em?: string | null
+          barbearia_id?: string
+          criado_em?: string | null
+          descricao?: string | null
+          id?: string
+          imagem_url?: string | null
+          nome?: string
+          ordem?: number
+          preco?: number
+          quantidade?: number
+          status?: Database["public"]["Enums"]["status_registro"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produto_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profissional: {
         Row: {
           atualizado_em: string | null
@@ -579,7 +629,44 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      produto_publico: {
+        Row: {
+          barbearia_id: string | null
+          descricao: string | null
+          id: string | null
+          imagem_url: string | null
+          nome: string | null
+          ordem: number | null
+          preco: number | null
+        }
+        Insert: {
+          barbearia_id?: string | null
+          descricao?: string | null
+          id?: string | null
+          imagem_url?: string | null
+          nome?: string | null
+          ordem?: number | null
+          preco?: number | null
+        }
+        Update: {
+          barbearia_id?: string | null
+          descricao?: string | null
+          id?: string | null
+          imagem_url?: string | null
+          nome?: string | null
+          ordem?: number | null
+          preco?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produto_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       adicionar_gestor: {
