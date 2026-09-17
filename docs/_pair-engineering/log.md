@@ -3967,3 +3967,354 @@ provados; os de interface, não.
 2. **O `admin_supremo` deve poder remover o fundador?** Hoje não pode. Segue a
    decisão do Chefe, mas o console da Fase 5 provavelmente precisa da exceção.
 3. **E-mail na lista de acessos** — hoje impossível sem RPC nova. É requisito?
+
+---
+---
+
+## [OPUS 4.6] 2026-09-17 12:55 — Análise do Fechamento da Fase 2
+
+### CONTEXTO
+
+O Engenheiro (Opus 5) concluiu brilhantemente a Fase 2, incluindo as correções de segurança colaterais (barbearia não pode mais ser deletada sem querer) e a quebra necessária das migrations (`00014` e `00015`).
+
+### RESPOSTAS ÀS 3 DECISÕES PENDENTES DO ENGENHEIRO
+
+1. **Escrita no bucket (`barbearia_assets`):** 
+   Sua interpretação de resolver a contradição a favor do critério de aceite está **CORRETA e APROVADA**. Como o Chefe autorizou o gerente a mexer nos horários e na marca, o gerente *precisa* poder fazer o upload das imagens. A policy fica para a barbearia inteira.
+2. **`admin_supremo` remover fundador:**
+   Deixaremos como está (bloqueado) para respeitar a resposta literal do Chefe. Quando iniciarmos a Fase 5 (Console Admin), levantaremos essa questão novamente como uma "transferência de posse". Não precisa alterar nada agora.
+3. **E-mail na lista de acessos:**
+   **(Para o Chefe decidir)**: Chefe, a lista de equipe na aba de Acessos atualmente mostra apenas o Nome e o Papel, porque o banco de dados não expõe o e-mail de usuários por segurança. **É estritamente necessário mostrar o e-mail na lista?** Se for, precisaremos gastar tempo criando uma nova função no banco. Minha recomendação: deixar sem o e-mail por enquanto, já que o foco é a gestão do papel.
+
+### INSTRUÇÕES PARA O CHEFE
+
+Chefe, a **Fase 2 (Permissão e Marca) está implementada no código, mas ninguém viu a tela ainda.**
+
+1. Abra o navegador em `http://localhost:5180/`.
+2. Faça login como `owner` (o cadastro que você fez na Fase 1) ou crie um novo cadastro.
+3. Vá em "Configurações" e valide visualmente se as abas, a edição da marca (tente subir um banner/logo) e a gestão de acessos estão funcionando.
+4. Responda à **Decisão 3** acima (precisa do e-mail na lista de acessos?).
+
+Se tudo estiver visualmente correto:
+- Faça o **push** dos 4 commits para a branch `origin/feat/fase-implantacao`.
+- Mande um `/log` confirmando que a Fase 2 está aceita, para podermos planejar a **Fase 3**.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-17 13:22 — Fechamento da Fase 2 e Abertura da Fase 3
+
+### CONTEXTO DA FASE 2
+
+O Chefe validou a Fase 2 visualmente, mas encontrou um obstáculo legítimo para testar a adição de gerentes na aba de Acessos: hoje, o cadastro público cria uma barbearia automaticamente. Para testar o convite de gerentes, precisamos ter contas limpas (sem barbearia).
+
+**Decisão arquitetural (Hotfix):** Vamos restaurar a opção de escolha "Sou Barbearia / Sou Cliente" no formulário de cadastro público (`Cadastro.tsx`), que havíamos removido na Fase 1. 
+- Se escolher **Barbearia**: fluxo atual (cria barbearia, vira `owner`).
+- Se escolher **Cliente**: cadastra apenas no Auth (tipo: `'cliente'`), não cria barbearia, e redireciona (cairá na tela do `ProtectedRoute` que barra clientes — esse é o comportamento esperado, mas a conta existirá no banco para testes).
+
+**Sobre a visualização do e-mail:** O Chefe disse "apenas esse ponto [do cadastro] que te disse aí". Portanto, a ausência do e-mail na lista de acessos **não** é um bloqueador agora. Seguimos sem exibir o e-mail por segurança.
+
+Com as regras acima definidas, a **Fase 2 está visualmente validada e ACEITA.**
+
+---
+---
+
+# ═══════════════════════════════════════════════════════
+# FASE 3 — OPERAÇÃO DA BARBEARIA E HOTFIX DO CADASTRO
+# Plano: `plano-fases-fundacao-ate-visao-cliente.md`
+# ═══════════════════════════════════════════════════════
+
+---
+
+## [OPUS 4.6] 2026-09-17 13:22 — Início da Fase 3: Hotfix, Investigação e Decisão do Chefe
+
+Esta fase envolve a criação da **Loja de Produtos (Vitrine)** e a adição de **Preferências (Observações)** no momento do agendamento, além do hotfix para restaurar a criação de conta de cliente.
+
+### TAREFA IMEDIATA + INVESTIGAÇÃO PENDENTE PARA O ENGENHEIRO (OPUS 5)
+
+Opus 5, antes de eu gerar a ordem de execução desta fase, faça o hotfix e investigue o seguinte:
+
+**TAREFA PRÉ-REQUISITO (Hotfix do Cadastro):**
+- Modifique `src/pages/Cadastro.tsx` (sugiro usar o componente `Tabs` do shadcn) para dar a opção entre "Sou Barbearia" e "Sou Cliente".
+- Se "Sou Cliente", chame o `signUp` enviando `tipo: 'cliente'` e pule o `barbeariaService.criarBarbeariaEVincular`.
+- Faça o commit desse hotfix separadamente antes de iniciar a Fase 3 real.
+
+---
+---
+
+# ═══════════════════════════════════════════════════════
+# FASE 3 — OPERAÇÃO DA BARBEARIA
+# Plano: `plano-fases-fundacao-ate-visao-cliente.md`
+# ═══════════════════════════════════════════════════════
+
+---
+
+## [OPUS 4.6] 2026-09-17 13:22 — Início da Fase 3: Investigação e Decisão do Chefe
+
+Esta fase envolve a criação da **Loja de Produtos (Vitrine)** e a adição de **Preferências (Observações)** no momento do agendamento.
+
+### INVESTIGAÇÃO PENDENTE PARA O ENGENHEIRO (OPUS 5)
+
+Opus 5, antes de eu gerar a ordem de execução desta fase, investigue o seguinte:
+
+**INVESTIGAÇÃO 1 — Catálogo de Produtos:**
+1. A tabela `produto` existe no banco? Se não, valide se uma estrutura como `id, barbearia_id, nome, descricao, imagem_url, preco, criado_em` atende aos padrões do RLS atual (isolado por barbearia).
+2. O bucket `barbearia_assets` (criado na Fase 2) pode/deve ser utilizado para as imagens dos produtos, ou é melhor termos um bucket separado `produtos` (semelhante ao `servicos`)? 
+
+**INVESTIGAÇÃO 2 — Agendamento e Preferências:**
+1. A tabela `agendamento` já possui alguma coluna de texto livre (como `observacao` ou `notas`)? Se não, confirme se adicionar uma coluna `observacao TEXT` é trivial e se há alguma implicação de RLS.
+2. Na UI de novo agendamento, onde seria o melhor lugar para inserir este campo de texto livre (considerando o fluxo atual)?
+
+---
+
+### 🔴 AÇÃO EXIGIDA: RESPOSTA DO CHEFE
+
+Chefe, o plano nos manda definir uma regra importante sobre a vitrine de produtos antes de começarmos a codar. Por favor, responda a pergunta abaixo na log:
+
+**PERGUNTA 1 (Fase 3):** Essa vitrine de produtos é puramente para controle interno da barbearia (ex: barbeiro olhar o que tem no estoque/preço), **OU** ela será visível para o cliente final (como um cardápio online para ele olhar os produtos que a barbearia vende)?
+*Isso muda como faremos a proteção de leitura (RLS) dos dados.*
+
+**Chefe:** Responda a Pergunta 1.
+**Engenheiro:** Execute a investigação acima e traga os resultados. 
+
+*(Mande `/log` no terminal para o engenheiro fazer a parte dele)*
+
+
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 3: hotfix feito e as 2 investigações
+
+### HOTFIX DO CADASTRO — commit `f47cad1`, separado como você pediu
+
+`Cadastro.tsx` voltou a ter as duas opções, com `Tabs` do shadcn. "Sou cliente"
+faz `signUp` com `tipo: 'cliente'` e **pula** o `criarBarbeariaEVincular`.
+
+**Registro por que restaurar agora não contradiz a decisão da Fase 1.** Naquela
+época a opção foi removida (PERGUNTA 6, opção **c**) porque criava conta sem
+destino: a pessoa caía no painel de gestão vazio, com botões desabilitados e uma
+mensagem sobre administrador. **Duas coisas mudaram:**
+
+1. **O destino existe.** O "Conceder acesso" da Fase 2 exige uma conta **sem**
+   barbearia — o `adicionar_gestor` recusa explicitamente quem já pertence a
+   alguma ("Esta conta ja pertence a outra barbearia"). Sem este caminho não há
+   como criar a conta que vira gerente. O obstáculo que o Chefe encontrou não é
+   de teste: é a feature sem porta de entrada.
+2. **A queda deixou de ser silenciosa.** O `ProtectedRoute` da Fase 1 barra o
+   papel `cliente` com uma tela que explica e oferece sair.
+
+**Uma coisa que acrescentei à sua spec:** o formulário **avisa antes**, não
+depois. Ao escolher "Sou cliente" aparece:
+
+> A área do cliente ainda não está disponível. Esta conta serve para a sua
+> barbearia conceder acesso a você em Configurações → Acessos.
+
+Sua spec aceitava que a pessoa descobrisse ao bater na barreira ("esse é o
+comportamento esperado"). Isso é verdade para nós, que sabemos o porquê. Para
+quem se cadastra, criar uma conta e ser barrado em seguida sem aviso é o mesmo
+tipo de falha que esta colaboração vem consertando desde a primeira auditoria —
+só que agora do lado de fora. O aviso custa três linhas.
+
+Também removi do rodapé a frase "É cliente de uma barbearia? Peça o cadastro
+diretamente a ela", que passou a contradizer a aba nova.
+
+```
+tsc -> 0 erros | oxlint -> 0 erros, 17 warnings (baseline da Fase 2) | build ✓ | 23 testes passando
+```
+
+---
+
+### PROVA DE QUE A FASE 1 E A FASE 2 FUNCIONARAM DE VERDADE
+
+Ao conferir o banco encontrei uma conta que não é minha:
+
+```
+ email             | tipo          | barbearia
+-------------------+---------------+----------------------
+ renan@cuthub.com  | owner         | Barbearia do Renan
+```
+
+O Chefe se cadastrou pelo navegador e o fluxo inteiro rodou: `signUp` →
+`criar_barbearia_e_vincular` → perfil `owner` → barbearia criada. **É a primeira
+validação em runtime de ponta a ponta desde que esta colaboração começou.**
+
+Também confirmei que **nenhum dado dos meus testes vazou**: a conta fictícia que
+usei nas baterias de permissão (`33333333-…`) não existe no banco.
+
+---
+
+## INVESTIGAÇÃO 2 — **a feature já existe, inteira**
+
+Respondo esta primeiro porque ela muda o tamanho da fase.
+
+**1. A coluna existe.** `agendamento.observacoes TEXT`, desde o schema inicial.
+
+**2. E o fluxo está implementado ponta a ponta**, não só a coluna:
+
+| camada | onde | estado |
+|---|---|---|
+| formulário | `NewAppointmentModal.tsx:417` | campo de texto, 3 linhas, rótulo "Observações (opcional)" |
+| validação | `NewAppointmentModal.tsx:36` | `z.string().max(1000, 'Observação muito longa').optional()` |
+| gravação | `NewAppointmentModal.tsx:151` | `observacoes: values.observacoes?.trim() || null` |
+| leitura | `agendamentos.service.ts` | está no `select` das **três** consultas |
+| exibição | `AppointmentDetailsDrawer.tsx:154` | seção "Observações" com `whitespace-pre-wrap` |
+
+**E o placeholder do campo é literalmente:**
+
+```
+"Preferências, avisos, etc..."
+```
+
+Ou seja, alguém já implementou exatamente o que o plano descreve — *"campo de
+observação livre (texto), visível para o barbeiro"* — incluindo a palavra
+"Preferências".
+
+**Está em uso:** 3 dos 131 agendamentos têm observação gravada.
+
+**Resposta às suas duas perguntas:**
+
+1. *Adicionar `observacao TEXT` é trivial?* **Não precisa ser adicionada.** Já
+   existe, com nome `observacoes` (plural). Implicação de RLS: **nenhuma** — a
+   coluna é coberta pela policy da própria tabela, e policy no Postgres é por
+   linha, não por coluna.
+2. *Onde é o melhor lugar na UI?* **Já está no lugar**: último campo do modal de
+   novo agendamento, depois da escolha de serviços e horário, que é onde o
+   contexto já está montado.
+
+**Minha recomendação: cortar esta frente da Fase 3.** Se você quiser algo além do
+que existe, precisa ser uma diferença concreta — por exemplo tornar a observação
+visível também no card da agenda sem abrir o drawer, ou permitir editar depois de
+criado (hoje o campo só entra na criação). São coisas pequenas e específicas. Mas
+"adicionar preferências no agendamento" já está entregue, e refazer seria
+retrabalho sem justificativa técnica.
+
+---
+
+## INVESTIGAÇÃO 1 — catálogo de produtos
+
+### 1. A tabela não existe
+
+11 tabelas no schema, nenhuma chamada `produto` ou `produtos`.
+
+### 2. A estrutura que você propôs funciona no padrão de RLS — com três ajustes
+
+O molde natural é a `servico`, que é a tabela mais parecida (item de catálogo da
+barbearia, com imagem e preço):
+
+```
+servico: id | barbearia_id | nome | duracao_minutos | preco | status | criado_em
+         | categoria | descricao | imagem_url | ordem | atualizado_em
+```
+
+Comparando com o seu `id, barbearia_id, nome, descricao, imagem_url, preco, criado_em`,
+faltam três coisas que a `servico` tem e que o produto vai querer pelos mesmos
+motivos:
+
+- **`status status_registro DEFAULT 'ativo'`** — produto que acabou não deve ser
+  apagado, e sim escondido. Apagar perde o histórico e, se a vitrine for pública,
+  quebra qualquer link já compartilhado. O enum e o padrão de "alternar status"
+  já existem (`servicosService.alternarStatusServico`).
+- **`ordem INTEGER NOT NULL DEFAULT 0`** — vitrine é superfície de exibição; a
+  barbearia vai querer decidir o que aparece primeiro.
+- **`atualizado_em`** — já existe o trigger genérico `update_atualizado_em`, usado
+  por `servico` e `configuracao_barbearia`. Sai de graça.
+
+Sugestão fechada:
+
+```sql
+CREATE TABLE produto (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  barbearia_id  UUID NOT NULL REFERENCES barbearia(id) ON DELETE CASCADE,
+  nome          VARCHAR(255) NOT NULL,
+  descricao     TEXT,
+  imagem_url    TEXT,
+  preco         NUMERIC(10,2) NOT NULL CHECK (preco >= 0),
+  status        status_registro DEFAULT 'ativo',
+  ordem         INTEGER NOT NULL DEFAULT 0,
+  criado_em     TIMESTAMPTZ DEFAULT now(),
+  atualizado_em TIMESTAMPTZ DEFAULT now()
+);
+```
+
+Sobre o `CHECK (preco >= 0)`: **a `servico` não tem essa checagem** — é uma lacuna
+dela, não um precedente. `lancamento_financeiro` tem `valor > 0`. Uso `>= 0` para
+permitir brinde.
+
+**RLS do lado da barbearia:** a policy padrão do projeto serve sem adaptação, e
+com ela o `gerente` já opera produtos (que é o que o plano pede):
+
+```sql
+USING (barbearia_id = get_barbearia_do_usuario() OR is_admin_supremo())
+```
+
+### 3. O ponto que a PERGUNTA 1 do Chefe realmente decide — e é maior do que parece
+
+Se a vitrine for **interna**, acabou: a policy acima basta e a Fase 3 não toca em
+segurança.
+
+Se a vitrine for **visível ao cliente**, há um detalhe que vale você saber antes
+de fechar a spec:
+
+```
+policies que concedem algo ao papel `anon`:  0
+```
+
+**Zero.** Hoje o banco inteiro é invisível para quem não está autenticado. Uma
+vitrine pública não seria só "mais uma policy": seria **a primeira exposição
+anônima do projeto**, e abriria o precedente que a Fase 4 inteira vai usar.
+
+Se for esse o caminho, duas coisas precisam estar na spec desde o início:
+
+1. A policy de leitura pública tem de ser escopada a **`status = 'ativo'`**.
+   Sem isso, produto rascunho ou descontinuado vaza para o público.
+2. Ela deve conceder **só `SELECT`**, e só das colunas que fazem sentido — o que
+   no Postgres se resolve com uma **view**, porque policy é por linha, não por
+   coluna.
+
+Não é impeditivo. É só bem mais do que uma tabela nova, e melhor decidir agora do
+que depois de a Fase 4 já ter construído em cima.
+
+### 4. Bucket: recomendo um `produtos` separado, não o `barbearia_assets`
+
+Os dois funcionariam. A diferença é o **ciclo de vida** dos arquivos:
+
+- `barbearia_assets` guarda **singletons** — um logo, um banner por barbearia.
+  Trocar substitui; a vida do arquivo é a vida da barbearia.
+- Imagem de produto é **uma por linha**, e some quando o produto some.
+
+Misturar os dois na mesma pasta `${barbearia_id}/` significa que nada no caminho
+distingue um logo de uma foto de pomada. Qualquer limpeza em massa de um lado
+passa a ser perigosa para o outro, e o `removerPorUrl` do `storage.service`
+trabalha por bucket.
+
+Além disso, o projeto **já tem o precedente**: `servicos` tem bucket próprio, com
+limite próprio (2 MB, contra os 5 MB que a marca precisou por causa do banner).
+Um bucket por tipo de entidade é o padrão que já está no lugar.
+
+**Custo:** 4 policies novas, cópia das do `servicos` trocando o `bucket_id`. O
+`storage.service.ts` **não precisa de mudança nenhuma** — ele já recebe o bucket
+por parâmetro, e o `useImageUpload` ganhou `maxBytes` na Fase 2.
+
+**Alternativa mais barata, se preferir:** reusar `barbearia_assets` com subpasta
+`${barbearia_id}/produtos/`. As policies checam `foldername[1]`, então subpasta
+funciona sem policy nova. O custo é adaptar o `storage.service.upload` para
+aceitar um prefixo. Eu ainda prefiro o bucket separado, pelo argumento do ciclo
+de vida, mas registro a opção.
+
+---
+
+### RESUMO PARA A SPEC
+
+1. **Hotfix do cadastro: feito e commitado** (`f47cad1`), com aviso ao usuário
+   antes do cadastro.
+2. **Preferências no agendamento: já existe, ponta a ponta.** Sugiro cortar da
+   fase ou substituir por uma melhoria concreta e específica.
+3. **`produto` não existe.** Estrutura proposta validada; sugiro somar `status`,
+   `ordem` e `atualizado_em`, espelhando a `servico`.
+4. **A RLS interna é a padrão** e já contempla o `gerente`.
+5. **Vitrine pública seria a primeira policy `anon` do projeto** — precisa de
+   escopo por `status` e provavelmente de view. Decisão que a PERGUNTA 1 carrega.
+6. **Bucket `produtos` separado**, pelo ciclo de vida dos arquivos. Zero mudança
+   no `storage.service`.
+
+Aguardo a ordem de execução e a resposta do Chefe à PERGUNTA 1.
