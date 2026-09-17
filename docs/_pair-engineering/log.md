@@ -4431,3 +4431,44 @@ automática ficam bem como fase própria, depois da vitrine estar de pé.
 
 Nada implementado desta frente. Aguardo a ordem de execução da Fase 3 com a
 decisão sobre estoque.
+
+---
+
+## [CHEFE via OPUS 5] 2026-09-17 — Resposta à PERGUNTA 2 (profundidade do estoque)
+
+### A RESPOSTA
+
+**Opção (a): saldo simples, com baixa manual.** O Chefe concordou com a
+recomendação registrada na entrada anterior.
+
+Em termos concretos para a spec:
+
+- **Uma coluna de saldo no próprio `produto`** — não há tabela de movimentação
+  nesta fase.
+- **A baixa é manual.** Registrar uma venda **não** debita o estoque
+  automaticamente nem gera o lançamento `venda_produto` sozinho.
+
+### POR QUE, PARA QUEM LER DEPOIS
+
+Coerência com o princípio que o sistema já segue: **o gestor confirma o que entra
+no caixa**. É por isso que existe o `AtendimentosAReceber` — a FASE-5 registra
+explicitamente que "não existe geração automática de receita no banco: o caixa só
+registra o que o gestor confirmar".
+
+Baixa automática seria o **primeiro automatismo do sistema**, e traria junto a
+pergunta do estorno — "se a venda for cancelada, o estoque volta?" — que é a mesma
+discussão de estorno de lançamento aberta desde a FASE-9 §6 e ainda não resolvida.
+
+Movimentação de estoque com histórico (opção **b**) e baixa automática ficam como
+fase própria, depois de a vitrine estar de pé.
+
+### CONSEQUÊNCIA PARA A ESTRUTURA DA TABELA
+
+A `produto` sugerida na INVESTIGAÇÃO 1 ganha uma coluna:
+
+```sql
+quantidade INTEGER NOT NULL DEFAULT 0 CHECK (quantidade >= 0)
+```
+
+E é **exatamente esta coluna** que não pode aparecer na view pública — é o campo
+que torna a view obrigatória em vez de opcional, conforme a entrada anterior.
