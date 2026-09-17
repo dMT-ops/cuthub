@@ -2229,3 +2229,118 @@ mas ninguém viu a tela. A diferença em relação às baterias anteriores é qu
 `Cadastro.tsx:40-42` lança mensagem de sucesso como erro quando a confirmação de
 e-mail está ligada. Invisível hoje, garantido no dia da implantação. Precisa de
 decisão de produto: tela de "confira seu e-mail" em vez de caixa vermelha.
+
+---
+
+## [OPUS 5] 2026-09-17 — Itens 9 e 10: checklist fechado, branch no GitHub
+
+### ITEM 9 — `.gitattributes` (commit `4b0224e`)
+
+Criado com `* text=auto` mais as extensões binárias explícitas.
+
+**A normalização custou zero linhas.** Rodei `git add --renormalize .` depois de
+criar o arquivo e **nenhum arquivo versionado mudou**. O motivo: o índice já
+guardava tudo em LF, porque o `core.autocrlf=true` de quem commitou fazia a
+conversão na entrada. Os terminadores mistos existiam só na **árvore de
+trabalho**, não no que está versionado.
+
+O ganho, então, não é arrumar o passado — é parar de depender da configuração
+local de cada máquina. Hoje o comportamento correto acontece por acidente de
+configuração; com o arquivo, está descrito no repositório.
+
+---
+
+### ITEM 10 — Push feito, e duas surpresas no remoto
+
+```
+To https://github.com/dMT-ops/cuthub.git
+   9425c38..4b0224e  feat/fase-implantacao -> feat/fase-implantacao
+```
+
+Confirmado: `HEAD` local e `origin/feat/fase-implantacao` são **o mesmo commit**
+(`4b0224e`), e o histórico completo até o `1f2a753` (Initial commit) está
+alcançável pelo remoto. **O trabalho não vive mais só nesta máquina.**
+
+Duas coisas que encontrei ao verificar, e que não são minhas para decidir:
+
+**1. `master` não existe mais no GitHub.** `git ls-remote --heads origin`
+devolve **uma única branch**, `feat/fase-implantacao`. O `origin/master` que
+aparecia aqui era uma referência local defasada — o `git fetch` inclusive
+falhava com `couldn't find remote ref refs/heads/master`.
+
+Nada foi perdido: `1f2a753` continua alcançável porque é ancestral da nossa
+branch. Mas hoje **o repositório não tem branch principal**, e o `origin/HEAD`
+ficou pendurado. Se a intenção é ter `master` como base de PR, ela precisa ser
+recriada (ou a branch padrão do GitHub apontada para outra coisa). **Não fiz nada
+a respeito** — é decisão do Chefe.
+
+**2. O clone estava configurado para buscar só uma branch.** O refspec era:
+
+```
++refs/heads/master:refs/remotes/origin/master
+```
+
+Ou seja, um clone `--single-branch`. Era por isso que, mesmo depois do push bem
+sucedido, `origin/feat/fase-implantacao` não aparecia localmente e qualquer
+`git fetch` quebrava. Corrigi para o padrão
+(`+refs/heads/*:refs/remotes/origin/*`) e rodei `fetch --prune`. É configuração
+local, reversível, e sem isso o `fetch` continuaria quebrado para qualquer
+branch nova.
+
+---
+
+### PROCESSOS VITE ÓRFÃOS — limpos
+
+Autorizado pelo Chefe. Antes de encerrar, confirmei que os quatro eram mesmo
+restos de sessões antigas (início em 15/09 e 16/09) e que o ativo era outro:
+
+| porta | PID | início | ação |
+|---|---|---|---|
+| 5174 | 38212 | 15/09 20:34 | encerrado |
+| 5178 | 7260 | 15/09 22:14 | encerrado |
+| 5179 | 30184 | 15/09 23:09 | encerrado |
+| 5181 | 4504 | 16/09 14:03 | encerrado |
+| **5180** | **26892** | 15/09 23:24 | **mantido** |
+
+Depois: só a 5180 escutando, respondendo `HTTP 200`.
+
+---
+
+### CHECKLIST DE FECHAMENTO — COMPLETO
+
+| # | item | estado |
+|---|---|---|
+| 1 | padronização dos 5 hooks | ✅ `ff03dd9` |
+| 2 | guard da Jornada | ✅ `ff03dd9` |
+| 3 | cadastro sem opção cliente | ✅ `2323caf` |
+| 4 | roteamento por papel | ✅ `2323caf` |
+| 5 | `obterPerfil` + perfil exigido + retry | ✅ `2323caf` |
+| 6 | `podeOperar` centralizado | ✅ `2323caf` |
+| 7 | Vitest + Testing Library (17 testes) | ✅ `2323caf` |
+| 8 | pendências da FASE-9 | ✅ `2323caf` |
+| 9 | `.gitattributes` | ✅ `4b0224e` |
+| 10 | commit e push | ✅ no GitHub |
+
+Árvore limpa, branch rastreando o remoto, nada pendente.
+
+---
+
+### O QUE FICA ABERTO PARA A NOVA FASE
+
+Nenhum destes bloqueia começar:
+
+1. **`master` não existe no remoto** — decisão do Chefe (recriar ou adotar outra
+   branch base).
+2. **`Cadastro.tsx:40-42`** lança mensagem de sucesso como erro quando a
+   confirmação de e-mail estiver ligada. Invisível hoje, certo no dia da
+   implantação. Precisa de decisão de produto.
+3. **Validação em runtime** — continua sem ninguém ter aberto o navegador depois
+   das mudanças de hoje. A diferença é que agora existem 17 testes automatizados
+   cobrindo exatamente os caminhos alterados, e eles provaram pegar as
+   regressões. O que falta é confirmação visual das cinco telas novas do
+   `ProtectedRoute`.
+4. **Tooltip** (`SidebarItem.tsx:47`) — adiado por decisão do Chefe.
+5. Pendências antigas da FASE-9: estorno, comissão, UI de bloqueios,
+   reagendamento, code splitting.
+
+**Pronto para a nova fase.**
