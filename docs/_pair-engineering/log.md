@@ -4705,3 +4705,148 @@ fases sem fechar do meu lado.
    unidade — um controle rápido na linha seria bem mais direto. Não fiz porque a
    spec pedia o ajuste no formulário e eu não quis ampliar escopo por conta
    própria. Se quiser, é pequeno.
+
+---
+
+## [OPUS 5] 2026-09-17 — VALIDAÇÃO EM RUNTIME: o critério que atravessou todas as fases finalmente fechou
+
+### CONTEXTO
+
+O Chefe reiniciou o Chrome e a extensão conectou. **Pela primeira vez desde o
+início desta colaboração eu consegui abrir o navegador**, e usei isso para fechar
+os critérios visuais das Fases 1, 2 e 3 que estavam acumulados em aberto.
+
+Diagnóstico que resolveu: `list_connected_browsers` devolvia `[]`, ou seja,
+nenhuma extensão conectada à conta — não era permissão de site nem aba errada. O
+que faltava era reiniciar o Chrome por completo depois de instalar.
+
+---
+
+### O QUE FOI VISTO E CONFIRMADO
+
+| fase | tela | resultado |
+|---|---|---|
+| F1.2 | Login redesenhado | split-screen, painel de marca à esquerda, tema escuro, "Voltar para o início" |
+| F1.1 | Landing (pelo link de voltar) | acessível |
+| — | Login funcional | `ownera@cuthub.com` entra e cai na Dashboard |
+| F2.4 | Configurações em abas | as quatro abas renderizam e alternam |
+| F2.5 | Identidade e marca | campos de logo e banner, cor com amostra, descrição |
+| F2.6 | Acessos | **selo "Fundador" com coroa**, papel "Proprietário", ações desabilitadas na linha dele |
+| F3.2 | Produtos | listagem com nome, preço, **estoque** e **vitrine** |
+| F3.2 | Ocultar/reexibir | badge vai de "Visível" para "Oculto" e volta; toast confirma nos dois sentidos |
+| F3.1 | Upload no bucket `produtos` | **exercido de verdade** (ver abaixo) |
+
+---
+
+### A PROVA QUE MAIS IMPORTAVA — vitrine pública por HTTP real, como anônimo
+
+Isto eu já tinha provado por SQL. Agora está provado pelo caminho que o cliente
+vai usar de fato: PostgREST, com a chave anônima, do lado de fora.
+
+**Com o produto OCULTO:**
+```
+GET /rest/v1/produto_publico  ->  []
+GET /rest/v1/produto          ->  []
+```
+
+**Com o produto VISÍVEL:**
+```json
+[{"id":"f46f6b33-…","barbearia_id":"b1b1b1b1-…","nome":"Pomada modeladora",
+  "descricao":"Pomada modeladora",
+  "imagem_url":"http://127.0.0.1:54321/storage/v1/object/public/produtos/b1b1b1b1-…/dcdecbb0-….jpg",
+  "preco":40.00,"ordem":1}]
+```
+
+**Sem `quantidade`.** E pedindo a coluna explicitamente:
+```
+GET /rest/v1/produto_publico?select=nome,quantidade
+{"code":"42703","message":"column produto_publico.quantidade does not exist"}
+```
+
+**E o REVOKE segurando por HTTP também:**
+```
+POST /rest/v1/produto_publico
+{"code":"42501","message":"permission denied for view produto_publico"}
+```
+
+Ou seja: o furo que encontrei na validação por SQL está fechado **no caminho
+real**, não só no banco. E a `imagem_url` confirma que o upload foi para o bucket
+`produtos`, com o `barbearia_id` como primeira pasta — exatamente a convenção que
+as policies exigem. **O critério "imagem salva no bucket dedicado" deixou de ser
+'configurado mas não exercido'.**
+
+Observação: o produto "Pomada modeladora" foi cadastrado pelo Chefe enquanto eu
+trabalhava. Eu o ocultei e reexibi para testar, e **deixei como estava**: ativo,
+estoque 5. Conferido no banco ao final.
+
+---
+
+### DESCOBERTA 16 — um erro que só o navegador pegava, e era meu
+
+Ao ler o console na aba de Acessos:
+
+```
+In HTML, <div> cannot be a descendant of <p>. This will cause a hydration error.
+  <p className="flex items-center gap-2 font-medium">
+    <span>
+    <Badge variant="secondary">
+      <div className="inline-flex items-center rounded-md border …">
+```
+
+**Causa:** o `Badge` do shadcn renderiza um `<div>`, e eu o coloquei dentro de um
+`<p>` no `AcessosSection`. HTML inválido, com aviso de hidratação do React.
+
+**Nada disso aparecia em `tsc`, em `oxlint`, nos 23 testes ou no build.** É
+exatamente a classe de defeito que justificava a insistência em abrir o
+navegador: ferramenta estática não valida aninhamento de HTML, e o teste do
+Testing Library renderiza sem reclamar.
+
+Corrigido: `<p>` virou `<div>`, com o porquê comentado no código. Console limpo
+depois (limpei o histórico e revisitei a aba para não confundir mensagem antiga
+com mensagem nova).
+
+---
+
+### UMA FALHA DE TESTE QUE VI UMA VEZ E NÃO REPRODUZI
+
+Logo após o fix acima, uma rodada de `npm test` deu:
+
+```
+Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 22 passed (23)
+```
+
+**Rodei mais cinco vezes e todas passaram 23/23.** Não consegui capturar qual
+teste era — a saída seguinte já veio limpa. A hipótese mais provável é o vitest
+ter pego o arquivo no meio da escrita, já que a rodada foi imediatamente depois
+da edição do `AcessosSection.tsx`.
+
+**Registro em vez de ignorar.** Não vou afirmar que está tudo bem: vi uma falha,
+não reproduzi, e não sei a causa. Se aparecer de novo, começa com esta pista.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test (6 rodadas)                    -> 23/23 em cinco; 22/23 em uma, não reproduzida
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros
+npx oxlint                              -> 0 erros, 17 warnings (baseline)
+npm run build                           -> ✓ built
+banco                                   -> Pomada modeladora | estoque 5 | ativo
+```
+
+---
+
+### O QUE MUDA DAQUI PARA FRENTE
+
+A validação visual deixa de ser lição de casa do Chefe e passa a ser parte do meu
+trabalho. Nas próximas fases eu fecho os critérios de interface junto com os de
+banco, no mesmo ciclo.
+
+Isso também reabre a **PERGUNTA 9** sob outra luz: o Playwright foi adiado "para
+quando houver ambiente de homologação". Com a extensão conectada eu cubro o
+caminho manual, mas continua sem existir **regressão automatizada de interface** —
+se alguém quebrar a aba de Acessos daqui a dois meses, nenhum teste avisa. A
+DESCOBERTA 16 é a evidência: foi preciso um par de olhos no console para achar.
+Não estou pedindo para reabrir agora; registro para quando a discussão voltar.

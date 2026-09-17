@@ -134,7 +134,10 @@ export function AcessosSection({ fundadorId }: AcessosSectionProps) {
                 return (
                   <li key={gestor.id} className="flex flex-wrap items-center gap-3 p-4">
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-2 font-medium">
+                      {/* div, e nao p: o Badge do shadcn renderiza um <div>, e
+                          <div> dentro de <p> e HTML invalido -- o React acusa
+                          "cannot be a descendant" no console. */}
+                      <div className="flex items-center gap-2 font-medium">
                         <span className="truncate">{gestor.nome}</span>
                         {ehFundador && (
                           <Badge variant="secondary" className="shrink-0 gap-1">
@@ -147,7 +150,7 @@ export function AcessosSection({ fundadorId }: AcessosSectionProps) {
                             Você
                           </Badge>
                         )}
-                      </p>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {ROTULO_PAPEL[gestor.tipo] ?? gestor.tipo}
                       </p>
