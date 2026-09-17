@@ -115,10 +115,16 @@ export const financeiroService = {
         .lte('data_hora', fim)
         .order('data_hora', { ascending: false }),
 
+      // Só a receita de atendimento marca o agendamento como já lançado. Sem este
+      // filtro, um lançamento de comissão (que aponta para o mesmo agendamento)
+      // tiraria o atendimento da lista e a receita nunca seria registrada.
+      // Mesmo escopo do índice lancamento_atendimento_unico_por_agendamento (00013).
       supabase
         .from('lancamento_financeiro')
         .select('agendamento_id')
         .eq('barbearia_id', barbeariaId)
+        .eq('tipo', 'entrada')
+        .eq('categoria', 'atendimento')
         .not('agendamento_id', 'is', null),
     ]);
 

@@ -80,6 +80,7 @@ export default function Clientes() {
         }}
         onNew={() => handleOpenForm()}
         onRetry={handleRetry}
+        podeCadastrar={!!barbeariaId}
       />
 
       <ClienteFormDialog

@@ -28,7 +28,10 @@ export function AtendimentosAReceber({ atendimentos, isLoading, periodo }: Atend
   const [registrandoId, setRegistrandoId] = useState<string | null>(null);
 
   const registrar = async (atendimento: AtendimentoAReceber) => {
-    if (!barbeariaId) return;
+    if (!barbeariaId) {
+      toast.error('Barbearia não identificada.');
+      return;
+    }
     setRegistrandoId(atendimento.agendamentoId);
     try {
       await criarLancamento({

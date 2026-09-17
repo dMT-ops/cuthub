@@ -76,6 +76,7 @@ export default function Profissionais() {
         }}
         onNew={() => handleOpenForm()}
         onRetry={handleRetry}
+        podeCadastrar={!!barbeariaId}
       />
 
       <ProfissionalFormDialog

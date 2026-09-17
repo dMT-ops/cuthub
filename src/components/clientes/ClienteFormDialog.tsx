@@ -124,7 +124,10 @@ export function ClienteFormDialog({ open, onOpenChange, clienteAEditar }: Client
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!barbeariaId) return;
+    if (!barbeariaId) {
+      toast.error('Barbearia não identificada.');
+      return;
+    }
     setIsSubmitting(true);
     setFormError('');
 

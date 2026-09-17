@@ -25,6 +25,8 @@ interface ProfissionaisTableProps {
   onEdit: (profissional: any) => void;
   onNew: () => void;
   onRetry: () => void;
+  /** Falso quando o usuário não está vinculado a uma barbearia (admin_supremo). */
+  podeCadastrar?: boolean;
 }
 
 export function ProfissionaisTable({
@@ -43,7 +45,8 @@ export function ProfissionaisTable({
   onDetail,
   onEdit,
   onNew,
-  onRetry
+  onRetry,
+  podeCadastrar = true
 }: ProfissionaisTableProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
@@ -90,11 +93,18 @@ export function ProfissionaisTable({
           </Select>
         </div>
 
-        {/* Cadastro sempre acessível: antes o gatilho só existia no estado vazio */}
-        <Button onClick={onNew} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Profissional
-        </Button>
+        {/* Cadastro sempre acessível: antes o gatilho só existia no estado vazio.
+            O span carrega o title porque o Button desabilitado tem pointer-events-none
+            e engoliria o tooltip nativo. */}
+        <span
+          className="w-full sm:w-auto"
+          title={podeCadastrar ? undefined : 'Admin não opera dentro de uma barbearia específica'}
+        >
+          <Button onClick={onNew} disabled={!podeCadastrar} className="w-full">
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Profissional
+          </Button>
+        </span>
       </div>
 
       {/* Container da Tabela com Rolagem Horizontal para Responsividade */}
