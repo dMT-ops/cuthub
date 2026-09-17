@@ -31,6 +31,14 @@ interface AuthContextType {
   podeOperar: boolean;
   /** Por que não pode operar — texto pronto para exibir. `null` quando pode. */
   motivoBloqueio: string | null;
+  /**
+   * Se este usuário pode administrar quem tem acesso à barbearia.
+   *
+   * Mais estreito que `podeOperar`: o `gerente` opera o dia a dia mas não
+   * mexe em acessos. Espelha o que as RPCs de gestão exigem no banco, para a
+   * UI não oferecer um botão que o servidor vai recusar.
+   */
+  podeGerenciarUsuarios: boolean;
   signOut: () => Promise<void>;
   /** Relê o perfil do banco — usado após o próprio usuário editar seus dados */
   recarregarPerfil: () => Promise<void>;
@@ -122,6 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const barbeariaId = perfil?.barbearia_id ?? null;
   const tipo = perfil?.tipo ?? null;
 
+  const podeGerenciarUsuarios = perfil?.tipo === 'owner' || perfil?.tipo === 'admin_supremo';
+
   const { podeOperar, motivoBloqueio } = useMemo(() => {
     if (!perfil) {
       return { podeOperar: false, motivoBloqueio: 'Seu perfil não foi carregado.' };
@@ -150,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         erroPerfil,
         podeOperar,
         motivoBloqueio,
+        podeGerenciarUsuarios,
         signOut,
         recarregarPerfil,
       }}

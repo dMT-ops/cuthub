@@ -8,12 +8,13 @@ type TipoUsuario = Database['public']['Enums']['tipo_usuario'];
 /**
  * Quem entra no painel de gestão.
  *
- * É uma lista de permitidos, não de barrados: `tipo_usuario` tem quatro
+ * É uma lista de permitidos, não de barrados: `tipo_usuario` tem cinco
  * valores e nem `cliente` nem `profissional` têm área própria ainda. Barrar
  * nominalmente só `cliente` deixaria `profissional` entrar por omissão, e
- * qualquer papel novo no enum passaria a nascer com acesso total.
+ * qualquer papel novo no enum passaria a nascer com acesso total — foi o que
+ * obrigou a incluir `gerente` aqui de forma explícita na Fase 2.
  */
-const PAPEIS_DO_PAINEL: TipoUsuario[] = ['owner', 'admin_supremo'];
+const PAPEIS_DO_PAINEL: TipoUsuario[] = ['owner', 'gerente', 'admin_supremo'];
 
 /** Explicação em tela cheia para quem não pode seguir, com uma saída. */
 function Barreira({

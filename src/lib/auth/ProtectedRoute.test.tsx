@@ -20,6 +20,7 @@ function estadoBase(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
     erroPerfil: null,
     podeOperar: true,
     motivoBloqueio: null,
+    podeGerenciarUsuarios: true,
     signOut: vi.fn(),
     recarregarPerfil: vi.fn(),
     ...overrides,
@@ -81,6 +82,21 @@ describe('ProtectedRoute', () => {
     renderRota();
     expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
     expect(screen.getByText(/área do cliente ainda não está disponível/i)).toBeInTheDocument();
+  });
+
+  // O gerente entrou na lista de permitidos na Fase 2. Sem isto, a feature de
+  // multi-proprietário nasceria inacessível: o papel existe no banco e o guard
+  // do painel o barraria.
+  it('deixa o gerente entrar no painel', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'gerente', barbearia_id: 'b1', nome: 'Gerente' },
+        tipo: 'gerente',
+        podeGerenciarUsuarios: false,
+      } as never)
+    );
+    renderRota();
+    expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
   // Papel que não é barrado nominalmente em lugar nenhum: a rota usa lista de

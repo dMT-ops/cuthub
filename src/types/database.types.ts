@@ -134,20 +134,31 @@ export type Database = {
       barbearia: {
         Row: {
           criado_em: string | null
+          criado_por: string | null
           id: string
           nome: string
         }
         Insert: {
           criado_em?: string | null
+          criado_por?: string | null
           id?: string
           nome: string
         }
         Update: {
           criado_em?: string | null
+          criado_por?: string | null
           id?: string
           nome?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "barbearia_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bloqueio: {
         Row: {
@@ -257,18 +268,30 @@ export type Database = {
           barbearia_id: string
           horario_abertura: string
           horario_fechamento: string
+          tema_banner_url: string | null
+          tema_cor_primaria: string | null
+          tema_descricao: string | null
+          tema_logo_url: string | null
         }
         Insert: {
           atualizado_em?: string | null
           barbearia_id: string
           horario_abertura?: string
           horario_fechamento?: string
+          tema_banner_url?: string | null
+          tema_cor_primaria?: string | null
+          tema_descricao?: string | null
+          tema_logo_url?: string | null
         }
         Update: {
           atualizado_em?: string | null
           barbearia_id?: string
           horario_abertura?: string
           horario_fechamento?: string
+          tema_banner_url?: string | null
+          tema_cor_primaria?: string | null
+          tema_descricao?: string | null
+          tema_logo_url?: string | null
         }
         Relationships: [
           {
@@ -559,6 +582,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adicionar_gestor: {
+        Args: {
+          p_barbearia_id?: string
+          p_email: string
+          p_nome?: string
+          p_tipo?: Database["public"]["Enums"]["tipo_usuario"]
+        }
+        Returns: string
+      }
+      alterar_papel_gestor: {
+        Args: {
+          p_novo_tipo: Database["public"]["Enums"]["tipo_usuario"]
+          p_usuario_id: string
+        }
+        Returns: undefined
+      }
       cadastrar_cliente_com_conta: {
         Args: {
           p_barbearia_id: string
@@ -594,10 +633,16 @@ export type Database = {
         Args: { p_barbearia_id: string }
         Returns: undefined
       }
+      checar_gestao_de_acesso: {
+        Args: { p_barbearia_id: string }
+        Returns: undefined
+      }
       criar_barbearia_e_vincular: { Args: { p_nome: string }; Returns: string }
       get_barbearia_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
+      is_owner: { Args: never; Returns: boolean }
       perfil_por_email: { Args: { p_email: string }; Returns: string }
+      remover_gestor: { Args: { p_usuario_id: string }; Returns: undefined }
     }
     Enums: {
       categoria_lancamento:
@@ -626,7 +671,12 @@ export type Database = {
         | "faltou"
       status_registro: "ativo" | "inativo"
       tipo_lancamento: "entrada" | "saida"
-      tipo_usuario: "admin_supremo" | "owner" | "cliente" | "profissional"
+      tipo_usuario:
+        | "admin_supremo"
+        | "owner"
+        | "cliente"
+        | "profissional"
+        | "gerente"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -786,10 +836,17 @@ export const Constants = {
       ],
       status_registro: ["ativo", "inativo"],
       tipo_lancamento: ["entrada", "saida"],
-      tipo_usuario: ["admin_supremo", "owner", "cliente", "profissional"],
+      tipo_usuario: [
+        "admin_supremo",
+        "owner",
+        "cliente",
+        "profissional",
+        "gerente",
+      ],
     },
   },
 } as const
+
 
 // Aliases de conveniência usados pelo projeto (mantidos manualmente)
 export type Cliente = Database['public']['Tables']['cliente']['Row'];  
