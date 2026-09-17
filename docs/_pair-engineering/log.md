@@ -2344,3 +2344,597 @@ Nenhum destes bloqueia começar:
    reagendamento, code splitting.
 
 **Pronto para a nova fase.**
+
+---
+---
+
+# ═══════════════════════════════════════════════════════
+# FASE 1 — FUNDAÇÃO DE ACESSO
+# Plano: `plano-fases-fundacao-ate-visao-cliente.md`
+# ═══════════════════════════════════════════════════════
+
+---
+
+## [OPUS 4.6] 2026-09-17 10:24 — Início da Fase 1: Investigação + Ordem de Execução
+
+### CONTEXTO
+
+Novo plano de implementação recebido do Chefe:
+`plano-fases-fundacao-ate-visao-cliente.md` (Fases 1–3) e
+`fase-4-visao-cliente.md` (somente contexto — não executar).
+
+A bateria anterior está **fechada**: checklist de 10 itens completo, branch
+`feat/fase-implantacao` no GitHub (`4b0224e`), árvore limpa, 17 testes passando,
+`tsc` 0 erros, build ✓.
+
+**Fase 1 — Fundação de Acesso** tem dois entregáveis:
+
+1. **Landing page pública** — página institucional/promocional, anterior ao login.
+   Não existe nenhuma hoje. O `/*` redireciona para `/dashboard`.
+2. **Redesign visual do login/cadastro** — UI nova, lógica preservada.
+
+---
+
+### INVESTIGAÇÃO DO ARQUITETO — o que já sei sobre o estado real
+
+Antes de mandar a ordem completa, investiguei o código relevante:
+
+| item | arquivo(s) | estado atual |
+|---|---|---|
+| **Roteamento** | `App.tsx` | 3 rotas: `/login` (público), `/cadastro` (público), `/dashboard/*` (protegido). **Não existe `/` (raiz)**. O catch-all `*` manda tudo para `/dashboard`. |
+| **Login** | `Login.tsx` (88 linhas) | Card simples com shadcn/ui. `signInWithPassword` → redirect para `/dashboard`. Link para `/cadastro`. Sem "esqueci a senha", sem OAuth. |
+| **Cadastro** | `Cadastro.tsx` (147 linhas) | Pós-bateria: só cria conta de barbearia (`tipo: 'owner'`). 4 campos: nome, barbearia, email, senha. **Bug conhecido**: `Cadastro.tsx:40-42` lança sucesso como erro quando confirmação de email está ligada. |
+| **Landing** | — | **Não existe.** Nenhuma página pública institucional. |
+| **Design system** | `index.css`, shadcn/ui, Tailwind 4, lucide-react | Tema escuro/claro com primary amarelo vibrante (`hsl(45, 93%, 47%)`). 21 componentes shadcn instalados. `tailwindcss-animate` disponível. |
+| **Assets** | `public/` | Só `icons.svg`. Sem logo, sem imagens. `favicon.svg` referenciado no `index.html` mas não existe em `public/`. |
+| **SEO** | `index.html` | Mínimo: `<title>CutHub</title>`, sem meta description, sem Open Graph. |
+| **ProtectedRoute** | `ProtectedRoute.tsx` | 5 caminhos: loading → sem sessão → erro perfil → sem perfil → papel sem acesso → `<Outlet />`. Redireciona para `/login` quando sem sessão. |
+
+---
+
+### INVESTIGAÇÃO PENDENTE PARA O ENGENHEIRO
+
+Antes de executar, preciso que o Opus 5 confirme **3 pontos** que não consigo
+verificar daqui e que impactam a spec:
+
+**INVESTIGAÇÃO 1 — favicon e assets:**
+O `index.html:5` referencia `/favicon.svg`, mas `public/` só tem `icons.svg`.
+Confirmar: (a) o favicon existe em outro lugar? (b) `icons.svg` é o favicon com
+outro nome? (c) simplesmente não existe?
+
+**INVESTIGAÇÃO 2 — ProtectedRoute redirect:**
+Quando um usuário não logado acessa `/dashboard`, o `ProtectedRoute` redireciona
+para `/login`. Confirmar: ele preserva a URL de retorno (return URL) para
+redirecionar de volta após login, ou simplesmente manda para `/login` sem
+memória? Isso decide se a landing page precisa de lógica de redirect.
+
+**INVESTIGAÇÃO 3 — `Cadastro.tsx:40-42` (bug conhecido):**
+O engenheiro registrou que lançar sucesso como erro é invisível porque a
+confirmação de email está desligada no stack local. Confirmar: qual é a
+configuração de confirmação de email no Supabase local (`enable_signup` e
+`double_confirm_changes` no `config.toml`)? Isso decide se o fix entra na Fase 1
+(onde estamos mexendo no cadastro) ou fica para a implantação.
+
+---
+
+### ORDEM DE EXECUÇÃO COMPLETA — FASE 1
+
+Após receber as respostas da investigação, o engenheiro deve executar nesta
+ordem. **Nenhuma mudança de lógica de autenticação** — é redesign de UI +
+criação de página nova.
+
+---
+
+#### TAREFA F1.1 — Landing page pública (`/`)
+
+**Objetivo:** Criar uma página institucional/promocional acessível sem login. É a
+primeira coisa que alguém vê ao abrir o CutHub.
+
+**Arquivos envolvidos:**
+- `[NOVO] src/pages/Landing.tsx`
+- `[MODIFICAR] src/App.tsx` — nova rota `/` e ajustar catch-all
+
+**Especificação:**
+
+1. **Rota `/`** (pública) — antes do login. O catch-all `*` deve redirecionar
+   para `/` em vez de `/dashboard` (quem não está logado cai na landing; quem
+   está logado e acessa `/` é redirecionado para `/dashboard` — verificar
+   `user` do `AuthContext` para decidir).
+
+2. **Conteúdo da landing** (mínimo viável — institucional, sem lógica):
+   - **Hero section**: nome "CutHub", tagline (ex.: "Gestão inteligente para sua
+     barbearia"), CTA primário para `/cadastro` e CTA secundário para `/login`.
+   - **Seção de features**: 3–4 cards com ícones lucide descrevendo as
+     funcionalidades (Agenda, Clientes, Financeiro, etc.).
+   - **Footer**: copyright, nome do produto.
+
+3. **Design:**
+   - Usar o design system existente (cores do `index.css`, shadcn, Tailwind).
+   - Modo escuro/claro deve funcionar (usa o `ThemeProvider` que já está no app).
+   - **Visual premium**: gradientes, micro-animações com `tailwindcss-animate`,
+     tipografia expressiva. Não é um wireframe — é a porta de entrada do produto.
+   - Responsivo: funcionar em mobile e desktop.
+
+4. **SEO**: Adicionar `<meta name="description">` e `<meta property="og:title">`
+   no `index.html`.
+
+5. **Sem lógica de autenticação**: a landing não chama nenhum service, não verifica
+   sessão exceto o redirect condicional de `/` → `/dashboard` para quem já está
+   logado.
+
+**Critérios de aceite:**
+- `http://localhost:5180/` renderiza a landing (não logado)
+- `http://localhost:5180/` redireciona para `/dashboard` (logado)
+- Links para `/login` e `/cadastro` funcionam
+- Dark mode funciona
+- Sem erros no console
+- Build + tsc + lint passam
+
+---
+
+#### TAREFA F1.2 — Redesign visual do Login
+
+**Objetivo:** Redesign de UI do login, preservando a lógica intacta.
+
+**Arquivo:** `[MODIFICAR] src/pages/Login.tsx`
+
+**Especificação:**
+
+1. **Preservar toda a lógica existente** — `signInWithPassword`, tratamento de
+   erro, `navigate('/dashboard')`, estados `loading`/`error`. Nenhuma mudança
+   funcional.
+
+2. **Layout split-screen (desktop):**
+   - Lado esquerdo: painel decorativo com a identidade do CutHub (gradiente,
+     tagline, ilustração ou padrão visual). Escondido em mobile.
+   - Lado direito: formulário de login (os mesmos campos).
+
+3. **Visual:**
+   - Consistente com a landing (mesmas cores, mesma tipografia).
+   - Logo/nome "CutHub" visível no topo do formulário.
+   - Link para cadastro mantido.
+   - Link para a landing (`/`) — botão "Voltar" ou logo clicável.
+
+4. **Não adicionar funcionalidades novas** (sem "esqueci a senha", sem OAuth) —
+   o plano diz explicitamente "redesign de UI, não de lógica".
+
+**Critérios de aceite:**
+- Login funciona exatamente como antes
+- Visual novo, split-screen em desktop, stacked em mobile
+- Link de volta para `/` funciona
+- Build + tsc + lint passam
+
+---
+
+#### TAREFA F1.3 — Redesign visual do Cadastro
+
+**Objetivo:** Redesign de UI do cadastro, preservando a lógica intacta.
+
+**Arquivo:** `[MODIFICAR] src/pages/Cadastro.tsx`
+
+**Especificação:**
+
+1. **Preservar toda a lógica existente** — `signUp` com `tipo: 'owner'`,
+   `criarBarbeariaEVincular`, os 4 campos, tradução de "User already
+   registered", a frase sobre cliente no rodapé. Nenhuma mudança funcional.
+
+2. **Mesmo layout split-screen** do login (consistência visual).
+
+3. **Visual:** mesmos princípios do F1.2.
+
+4. **O bug `Cadastro.tsx:40-42`** (sucesso como erro): **corrigir nesta tarefa**
+   se a investigação 3 confirmar que a confirmação de email pode ser ligada. O
+   fix é: em vez de `throw new Error(...)`, criar um estado de sucesso com
+   mensagem orientando o usuário a verificar o email. **Não é mudança de lógica
+   de auth** — é tratamento correto de um retorno que o Supabase já devolve.
+
+**Critérios de aceite:**
+- Cadastro funciona exatamente como antes
+- Visual novo, split-screen
+- Se o fix do bug entrar: estado de sucesso com mensagem verde em vez de caixa
+  vermelha quando `session` é null
+- Build + tsc + lint + testes passam
+
+---
+
+#### TAREFA F1.4 — Favicon e assets mínimos
+
+**Objetivo:** O produto precisa ter um favicon funcional.
+
+**Especificação:**
+
+1. Se `favicon.svg` não existe: criar um simples com as iniciais "CH" ou uma
+   tesoura estilizada usando o amarelo primário.
+2. Atualizar o `index.html` se necessário.
+
+**Critério de aceite:**
+- Aba do navegador mostra o favicon.
+
+---
+
+#### TAREFA F1.5 — Testes
+
+**Objetivo:** Estender a suíte de testes para cobrir os novos caminhos.
+
+**Especificação:**
+
+1. `[NOVO] src/pages/Landing.test.tsx` — testa:
+   - Renderiza sem crash
+   - Contém links para `/login` e `/cadastro`
+   - Redirect para `/dashboard` quando logado (mock do auth)
+
+2. Atualizar testes existentes se o redirect do catch-all mudar.
+
+**Critério de aceite:**
+- Todos os testes passam (novos + os 17 existentes).
+
+---
+
+### ORDEM E COMMITS
+
+Sugiro esta sequência de commits:
+
+1. `feat: landing page pública (F1.1)` — landing + rota + SEO + favicon (F1.4)
+2. `feat: redesign login e cadastro (F1.2 + F1.3)` — redesign visual dos dois
+3. `test: cobertura da Fase 1 (F1.5)` — testes
+
+Se o engenheiro preferir agrupar de outra forma por razões técnicas, pode —
+desde que cada commit seja atômico e o build passe em cada um.
+
+---
+
+### RESTRIÇÕES
+
+- **Não mudar lógica de autenticação** — nem `signUp`, nem `signInWithPassword`,
+  nem o `AuthContext`, nem o `ProtectedRoute`.
+- **Não criar sistema de roteamento por papel** — isso é Fase 2.
+- **Não implementar "esqueci a senha" ou OAuth** — não está no escopo.
+- **Não usar imagens externas (CDN/URL)** — tudo local ou gerado por código (SVG).
+
+---
+
+### SOLICITAÇÃO AO ENGENHEIRO
+
+1. Execute as **3 investigações** acima e registre os resultados na log.
+2. Em seguida, execute as **5 tarefas** (F1.1 a F1.5) na ordem especificada.
+3. Registre o estado final na log com validação completa.
+
+Aguardo as respostas da investigação antes das tarefas — mas se as respostas
+forem triviais (como eu espero), pode seguir direto sem esperar retorno meu.
+A única que pode gerar divergência é a **INVESTIGAÇÃO 3** (bug do cadastro).
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 1: respostas das 3 investigações
+
+### CONTEXTO
+
+Ordem de execução da Fase 1 recebida. Respondo as três investigações antes de
+tocar em código. As três estão fechadas com evidência; **a INVESTIGAÇÃO 3
+confirma a condição que você pôs para o fix entrar nesta fase**, então sigo
+direto para as tarefas, como você autorizou.
+
+---
+
+### INVESTIGAÇÃO 1 — favicon: **(c) não existe** — e o modo como ele falha é o interessante
+
+`public/` tem **um único arquivo**: `icons.svg`. Não há `favicon.svg` em lugar
+nenhum do repositório.
+
+**`icons.svg` não é o favicon com outro nome.** É um sprite SVG de ícones de
+redes sociais, sobra de template do Vite:
+
+```
+id="bluesky-icon"  id="discord-icon"  id="documentation-icon"
+id="github-icon"   id="social-icon"   id="x-icon"
+```
+
+`grep -rn "icons.svg" src/ index.html` → **0 ocorrências**. Ninguém o usa. É
+peso morto, e ele **vai junto para o build** (`dist/icons.svg` existe).
+
+**O detalhe que explica por que ninguém notou:** `/favicon.svg` **não dá 404**.
+O servidor responde:
+
+```
+HTTP/1.1 200 OK
+Content-Type: text/html
+```
+
+```html
+<!doctype html>
+<html lang="en">
+```
+
+É o fallback de SPA devolvendo o `index.html`. O navegador pede um SVG, recebe
+HTML, não consegue interpretar e simplesmente não mostra ícone nenhum — sem erro
+no console, sem 404 na aba de rede. **Uma falha silenciosa clássica**, no mesmo
+espírito das que esta colaboração vem caçando.
+
+Vou criar o favicon na F1.4 e **remover o `icons.svg`** — ele só engorda o build
+e confunde quem abrir a pasta. Se você preferir mantê-lo, é só dizer.
+
+---
+
+### INVESTIGAÇÃO 2 — return URL: **não existe memória nenhuma**
+
+`ProtectedRoute.tsx:58`:
+
+```tsx
+return <Navigate to="/login" replace />;
+```
+
+Sem `state`, sem `useLocation`, sem query string. E o outro lado confirma:
+`Login.tsx` não importa `useLocation` e faz `navigate('/dashboard')` fixo
+(`Login.tsx:30`). **Os dois lados são cegos** — não há para onde voltar porque
+ninguém guarda de onde veio.
+
+Consequência prática: quem tem `/dashboard/financeiro` salvo nos favoritos e não
+está logado é mandado para `/login` e, depois de entrar, cai na Dashboard — nunca
+no Financeiro.
+
+**Para a landing isso simplifica:** não há nada a preservar, então a landing não
+precisa de lógica de redirect além do `/` → `/dashboard` para quem já está
+logado, como sua spec previu. O return URL é uma melhoria real, mas é **mudança
+de lógica de autenticação**, que suas restrições proíbem nesta fase. Fica
+registrado como candidato para depois.
+
+---
+
+### INVESTIGAÇÃO 3 — confirmação de e-mail: **desligada por configuração, e o fix deve entrar**
+
+Evidência em dois níveis.
+
+**Configuração** (`supabase/config.toml:225`, bloco `[auth.email]`):
+
+```toml
+enable_confirmations = false     # linha 225
+double_confirm_changes = true    # linha 223
+enable_signup = true             # linha 220
+```
+
+**Container em execução** (`supabase_auth_cuthub`), que é o que de fato manda:
+
+```
+GOTRUE_MAILER_AUTOCONFIRM=true
+```
+
+Com `MAILER_AUTOCONFIRM=true`, o `signUp` **sempre** devolve sessão. Por isso o
+caminho `if (!session)` de `Cadastro.tsx:40-42` nunca executa hoje.
+
+**Minha leitura: o fix entra na Fase 1.** Sua condição era "se a investigação
+confirmar que a confirmação de e-mail *pode* ser ligada". Ela não só pode como é
+uma **troca de uma linha** (`enable_confirmations = true`) — é a configuração que
+qualquer implantação séria vai querer, e é o padrão do Supabase hospedado. No dia
+em que alguém virar essa chave, **todo cadastro bem-sucedido termina numa caixa
+vermelha de erro** dizendo "Cadastro realizado". O usuário conclui que falhou e
+tenta de novo, aí recebe "Este e-mail já está cadastrado".
+
+**Ressalva honesta:** confirmei a configuração, **não observei o comportamento em
+runtime com a flag ligada** — isso exigiria alterar o `config.toml` e reiniciar o
+stack, o que mexeria no ambiente de todo mundo sem necessidade. A cadeia de
+código é direta o bastante para não deixar dúvida: `authData.session` nulo →
+`throw` → `catch` → `setError` → caixa vermelha.
+
+---
+
+### UMA DIVERGÊNCIA ENTRE DOCUMENTOS, REGISTRADA ANTES DE EXECUTAR
+
+`plano-fases-fundacao-ate-visao-cliente.md`, seção FASE 1, diz:
+
+> O fluxo de dois caminhos (cliente vs. barbearia) já existente deve ser
+> preservado exatamente como funciona hoje
+
+Esse fluxo **não existe mais**: foi removido na bateria anterior por decisão
+explícita do Chefe (RESPOSTA À PERGUNTA 6, opção **c**), porque criava conta de
+cliente sem destino. A sua ordem de execução da F1.3 já reflete o estado atual
+("`signUp` com `tipo: 'owner'`... a frase sobre cliente no rodapé"), então **não
+há conflito no que vou executar** — vou seguir a sua ordem.
+
+Registro porque o documento de plano ficou defasado, e quem o ler daqui a um mês
+vai achar que a Fase 1 regrediu uma decisão. É o mesmo tipo de defasagem que
+corrigimos na FASE-9 §6. Vale uma linha de correção no plano — não mexi nele
+porque é documento do Chefe.
+
+---
+
+### SIGO PARA AS TAREFAS
+
+F1.1 → F1.4 → F1.2 → F1.3 → F1.5, com os commits que você sugeriu. Reporto o
+resultado completo na próxima entrada.
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 1 executada: F1.1 a F1.5
+
+### CONTEXTO
+
+Investigações respondidas na entrada anterior. As cinco tarefas estão feitas, em
+três commits atômicos, na sequência que você sugeriu.
+
+| commit | tarefas |
+|---|---|
+| `1efad76` | F1.1 (landing + rota + SEO) e F1.4 (favicon) |
+| `44a41e5` | F1.2 e F1.3 (redesign de login e cadastro) |
+| `2cb0ab9` | F1.5 (testes) |
+
+---
+
+### F1.1 — Landing pública em `/`
+
+`src/pages/Landing.tsx` (novo) e `src/App.tsx`. Estrutura: header fixo com
+`ThemeToggle` e os dois CTAs, hero com headline em gradiente e selos de
+diferencial, quatro cartões de recurso com ícones lucide, faixa de chamada final
+e rodapé.
+
+**O catch-all mudou, e isso é mais do que cosmético.** Antes:
+
+```tsx
+<Route path="*" element={<Navigate to="/dashboard" replace />} />
+```
+
+Qualquer URL desconhecida empurrava o visitante anônimo para `/dashboard`, que o
+`ProtectedRoute` rebatia para `/login`. Na prática, **o produto não tinha porta
+de entrada** — errar a URL levava a um formulário de login. Agora cai em `/`.
+
+**Decisão sobre o redirect de quem já está logado.** A condição é
+`if (!loading && user)`. Enquanto a sessão carrega, a landing **renderiza**. A
+alternativa (segurar a tela até `loading` acabar) trocaria um piscar raro — o
+usuário logado que digita `/` — por uma tela em branco para **todo** visitante
+anônimo, que é exatamente o público da página. Deixei o porquê comentado no
+código e cobri com teste, para ninguém "consertar" isso depois.
+
+Sem chamada a service nenhum, como a restrição pedia.
+
+---
+
+### F1.4 — Favicon, e o sprite morto que foi junto
+
+Criado `public/favicon.svg`: tesoura desenhada em SVG, no amarelo primário
+(`#f0b323`) sobre fundo escuro arredondado. Nada externo, como a restrição exige.
+
+Confirmação de que passou a funcionar de verdade — não só de que o arquivo
+existe:
+
+```
+antes:  favicon.svg -> Content-Type: text/html      (fallback de SPA)
+depois: favicon.svg -> Content-Type: image/svg+xml
+```
+
+**Removi `public/icons.svg`.** Era um sprite com ícones de bluesky, discord,
+github e x, sobra de template, sem uma única referência em `src/` ou no
+`index.html` — e ia para o `dist/` a cada build. Agora `dist/` tem exatamente
+`assets/`, `favicon.svg` e `index.html`.
+
+No `index.html` entraram `description` e Open Graph, e **corrigi o `lang`**, que
+estava `en` num produto inteiramente em português. Não estava na spec; é uma
+palavra e afeta leitor de tela e indexação.
+
+---
+
+### F1.2 e F1.3 — Redesign do login e do cadastro
+
+**Lógica intacta, como mandado.** `signInWithPassword`, `signUp` com
+`tipo: 'owner'`, `criarBarbeariaEVincular`, os mesmos campos, o mesmo
+`if (err.message.includes('User already registered'))`, os mesmos redirects e a
+frase sobre cliente no rodapé — tudo preservado.
+
+**Decisão de implementação declarada: criei `src/components/auth/AuthLayout.tsx`.**
+A spec falava em modificar as duas páginas, mas o painel decorativo do
+split-screen é **idêntico** nos dois e mudaria nos dois juntos. Duplicar ~40
+linhas de markup decorativo só cria duas versões para divergirem na primeira
+alteração. O `AuthLayout` recebe título, descrição, o formulário e o rodapé; cada
+página cuida só do que é seu. Se preferir os dois arquivos independentes, é
+desfazer em minutos.
+
+Split-screen em `lg:`, empilhado no mobile (o painel de marca some — no celular
+quem manda é o formulário). Link "Voltar para o início" nas duas, e o logo do
+painel também aponta para `/`.
+
+**O fix do sucesso-como-erro entrou**, conforme a investigação 3 liberou. O
+`if (!session)` deixou de ser `throw` e passou a acionar um estado próprio, com
+tela de "Confira seu e-mail" e o endereço que a pessoa digitou.
+
+---
+
+### DESCOBERTA 14 — o fix de apresentação não fecha o buraco que está atrás dele
+
+Isto é o que eu mais preciso que você leia.
+
+Corrigir a mensagem conserta o que o usuário **vê**. Não conserta o que
+**acontece**. Com `enable_confirmations = true`, a sequência é:
+
+1. `signUp` cria a conta. **Sem sessão.**
+2. O trigger `ao_criar_usuario` cria o `usuario_perfil` com `tipo = 'owner'`
+   (vem do `raw_user_meta_data`) e **`barbearia_id` NULL**.
+3. `criarBarbeariaEVincular` **não roda** — e não tem como rodar. Verifiquei a
+   ACL da função: `criar_barbearia_e_vincular` tem `EXECUTE` para
+   `postgres, authenticated, service_role`. **Sem sessão, não há `authenticated`.**
+   O nome da barbearia que a pessoa digitou morre ali, na memória do formulário.
+4. A pessoa confirma o e-mail e faz login.
+5. `ProtectedRoute` vê `tipo = 'owner'`, que **está na lista de permitidos**, e
+   libera o painel.
+6. Ela entra num painel vazio, com todos os botões desabilitados e a mensagem
+   "Sua conta não está vinculada a uma barbearia". **E não existe nenhuma tela
+   no produto para criar a barbearia depois.** Ela fica presa.
+
+**Este buraco não foi criado pelo redesign — ele já existia.** Antes o usuário
+via uma caixa vermelha mentindo que falhou; agora vê uma mensagem verdadeira
+dizendo que deu certo. Os dois terminam no mesmo lugar. A diferença é que agora
+a promessa é explícita, o que torna a queda mais visível.
+
+**Não implementei a correção**, e ela não é pequena: exige criar a barbearia
+depois da confirmação (um passo de onboarding pós-login para quem é `owner` sem
+`barbearia_id`), ou mover a criação para uma Edge Function com `service_role` —
+que é o mesmo caminho do "convite por e-mail" já previsto na FASE-9 §7. É
+decisão de arquitetura e está fora do escopo "redesign de UI, não de lógica" que
+você definiu para esta fase.
+
+**Enquanto isso, o sistema está correto com a configuração atual**
+(`enable_confirmations = false`), que é como ele roda hoje. O risco só se
+materializa no dia em que alguém ligar a confirmação — e agora está escrito.
+
+---
+
+### F1.5 — Testes
+
+`src/pages/Landing.test.tsx`, 5 testes: renderiza para anônimo, oferece caminho
+para `/login` e `/cadastro`, redireciona quem está logado, **não** redireciona
+durante o carregamento da sessão, e descreve os módulos.
+
+Nenhum teste existente precisou mudar: a suíte do `ProtectedRoute` monta suas
+próprias rotas num `MemoryRouter` e não depende do catch-all do `App.tsx`.
+
+**Suíte: 17 → 22 testes.**
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 4 arquivos, 22 testes, todos passando
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros (exit 0)
+npx oxlint                              -> 0 erros, 16 warnings (baseline preservada)
+npm run build                           -> ✓ 3555 modules transformed, built in 4.64s
+```
+
+Rotas respondendo no dev server (`5180`): `/`, `/login`, `/cadastro` e
+`/dashboard` todas em `200`; `<title>` novo sendo servido; `favicon.svg` com
+`Content-Type: image/svg+xml`.
+
+**O que NÃO validei:** não abri o navegador. Os critérios de aceite visuais —
+"visual premium", split-screen em desktop, dark mode, responsividade — **não
+foram vistos por ninguém**. O que está provado é que compila, builda, os testes
+cobrem os caminhos de render e as rotas respondem. A extensão do Chrome continua
+desconectada aqui; se o Chefe conectar, eu confirmo na próxima rodada.
+
+Também não testei login nem cadastro de ponta a ponta contra o Auth real — a
+lógica está byte a byte igual à anterior, mas isso é argumento, não observação.
+
+---
+
+### ESTADO
+
+| tarefa | estado |
+|---|---|
+| F1.1 landing | ✅ |
+| F1.2 login | ✅ |
+| F1.3 cadastro (+ fix do sucesso-como-erro) | ✅ |
+| F1.4 favicon (+ remoção do sprite morto) | ✅ |
+| F1.5 testes | ✅ 22 no total |
+
+Árvore limpa fora dos documentos de plano. **Fase 1 entregue.**
+
+---
+
+### TRÊS COISAS PARA VOCÊ DECIDIR
+
+1. **DESCOBERTA 14** — o onboarding quebrado quando a confirmação de e-mail
+   estiver ligada. Entra na Fase 2, vira fase própria, ou fica registrado até a
+   implantação? É o único item com consequência real de produto.
+2. **`AuthLayout`** — aprovar o componente compartilhado ou preferir os dois
+   arquivos independentes.
+3. **`plano-fases-fundacao-ate-visao-cliente.md`** continua dizendo que a Fase 1
+   deve preservar "o fluxo de dois caminhos (cliente vs. barbearia)", que foi
+   removido por decisão do Chefe na bateria anterior. Sua ordem de execução já
+   estava certa; o documento é que ficou defasado. Vale uma linha de correção
+   para não confundir quem ler depois.
