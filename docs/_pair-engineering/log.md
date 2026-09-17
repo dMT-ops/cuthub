@@ -4318,3 +4318,116 @@ de vida, mas registro a opção.
    no `storage.service`.
 
 Aguardo a ordem de execução e a resposta do Chefe à PERGUNTA 1.
+
+---
+
+## [CHEFE via OPUS 5] 2026-09-17 — Resposta à PERGUNTA 1 da Fase 3
+
+### A RESPOSTA
+
+> **Ambos.** A barbearia tem acesso ao **controle de estoque** e à vitrine; o
+> cliente vê o **cardápio online** na visão dele.
+
+---
+
+### O QUE ISSO MUDA NA SPEC — três consequências
+
+Registro a análise junto porque a resposta acrescenta uma dimensão que a
+INVESTIGAÇÃO 1 não tinha previsto.
+
+#### 1. Entrou **estoque**, que não estava na estrutura proposta
+
+A estrutura que você sugeriu (`id, barbearia_id, nome, descricao, imagem_url,
+preco, criado_em`) e a que eu completei (com `status`, `ordem`,
+`atualizado_em`) **não têm quantidade**. "Controle de estoque" exige pelo menos
+uma coluna de saldo, e possivelmente mais que isso — ver a pergunta em aberto no
+fim.
+
+#### 2. A vitrine pública deixa de poder ser só uma policy — **a view virou obrigatória**
+
+Este é o ponto principal.
+
+Na INVESTIGAÇÃO 1 eu registrei que uma leitura pública **provavelmente** pediria
+uma view, porque policy no Postgres é por linha, não por coluna. Com a resposta
+"ambos", isso deixou de ser "provavelmente":
+
+A mesma tabela `produto` passa a conter, lado a lado:
+
+| campo | quem pode ver |
+|---|---|
+| `nome`, `descricao`, `imagem_url`, `preco` | **qualquer pessoa** (cardápio) |
+| `quantidade` / saldo de estoque | **só a barbearia** |
+
+Uma policy `FOR SELECT TO anon` na tabela libera **a linha inteira**. Não existe
+"policy de coluna". Ou seja: dar cardápio ao cliente por policy direta **entrega
+o estoque junto**.
+
+O caminho correto é uma **view** — algo como `produto_publico` — expondo só as
+colunas públicas e já filtrando `status = 'ativo'`, com o `SELECT` concedido ao
+`anon`. A tabela `produto` continua fechada, com a policy padrão da barbearia.
+
+**Uma armadilha do Postgres que a spec precisa registrar:** desde a versão 15,
+view roda com `security_invoker = false` por padrão, ou seja, **executa como o
+dono da view e não aplica a RLS da tabela de baixo**. Isso é justamente o que
+queremos aqui — mas significa que **todo o filtro tem de estar dentro da view**.
+Se alguém escrever `CREATE VIEW produto_publico AS SELECT ... FROM produto` sem o
+`WHERE status = 'ativo'`, os produtos inativos vazam, e **a RLS não vai salvar**,
+porque ela nem é consultada. Este banco é PostgreSQL 17.6.
+
+#### 3. Continua valendo: é a primeira exposição anônima do projeto
+
+`policies concedendo algo ao papel anon: 0`. O precedente que a Fase 4 vai usar
+nasce aqui, então vale nascer no formato certo — view curada, nunca tabela
+exposta.
+
+---
+
+### UMA PEÇA QUE JÁ EXISTE E CONECTA COM ISSO
+
+`categoria_lancamento` **já tem `venda_produto`**, e não é teórico — há **1
+lançamento** dessa categoria no banco hoje:
+
+```
+atendimento: 99 | venda_produto: 1 | aluguel: 20 | salario: 1
+```
+
+Ou seja, o modelo financeiro já previa venda de produto antes de existir tabela
+de produto. Isso é bom: a venda registrada pela barbearia tem para onde ir sem
+schema novo. Mas cria uma pergunta de desenho que é melhor responder antes de
+codar, não depois.
+
+---
+
+### PERGUNTA 2 (Fase 3) — PARA O CHEFE
+
+"Controle de estoque" tem duas profundidades bem diferentes, e a escolha muda o
+tamanho da fase:
+
+- **(a) Saldo simples.** Uma coluna `quantidade` no produto, que a barbearia
+  edita à mão. Barato, resolve "quanto tenho de pomada". Não responde "por que
+  caiu de 10 para 7".
+- **(b) Saldo com movimentação.** Uma tabela de entradas e saídas, com o saldo
+  derivado. Responde o histórico e permite auditoria, mas é uma tabela nova, uma
+  tela nova e mais trabalho.
+
+E, ligada a ela:
+
+- **Ao registrar uma venda, o estoque deve baixar sozinho** — e gerar o
+  lançamento `venda_produto` no financeiro junto? Ou são duas ações separadas,
+  como é hoje com atendimento e receita (o gestor confirma manualmente o que
+  entra no caixa)?
+
+**Minha recomendação: (a) + baixa manual, nesta fase.** O projeto inteiro segue o
+princípio de que o gestor confirma o que entra no caixa — `AtendimentosAReceber`
+existe exatamente por isso, e a FASE-5 registrou que "não existe geração
+automática de receita no banco". Fazer o estoque baixar sozinho seria o primeiro
+automatismo do sistema, e criaria a pergunta "e se a venda for estornada?" —
+mesma discussão de estorno que continua aberta desde a FASE-9 §6. (b) e a baixa
+automática ficam bem como fase própria, depois da vitrine estar de pé.
+
+---
+
+### ESTADO
+
+Nada implementado desta frente. Aguardo a ordem de execução da Fase 3 com a
+decisão sobre estoque.
