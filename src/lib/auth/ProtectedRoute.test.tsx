@@ -27,13 +27,16 @@ function estadoBase(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   } as unknown as ReturnType<typeof useAuth>;
 }
 
-function renderRota() {
+function renderRota(entrada = '/dashboard') {
   return render(
-    <MemoryRouter initialEntries={['/dashboard']}>
+    <MemoryRouter initialEntries={[entrada]}>
       <Routes>
         <Route path="/login" element={<div>tela de login</div>} />
-        <Route path="/dashboard" element={<ProtectedRoute />}>
+        <Route path="/dashboard" element={<ProtectedRoute area="gestao" />}>
           <Route index element={<div>painel de gestão</div>} />
+        </Route>
+        <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>
+          <Route index element={<div>área do cliente</div>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -69,9 +72,10 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
-  // A conta de cliente existe no banco (criada pelo painel) e antes caía direto
-  // no painel de gestão, porque a rota só checava `user`.
-  it('barra a conta de cliente e explica o porquê', () => {
+  // Na Fase 1 o cliente era barrado com um aviso, porque nao existia area para
+  // ele. Com a Fase 4 existe, entao digitar /dashboard leva ele para la em vez
+  // de mostrar uma parede.
+  it('leva o cliente que entra na gestão para a área dele', () => {
     useAuthMock.mockReturnValue(
       estadoBase({
         perfil: { id: 'u1', tipo: 'cliente', barbearia_id: null, nome: 'Cliente' },
@@ -79,9 +83,29 @@ describe('ProtectedRoute', () => {
         podeOperar: false,
       } as never)
     );
-    renderRota();
+    renderRota('/dashboard');
     expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
-    expect(screen.getByText(/área do cliente ainda não está disponível/i)).toBeInTheDocument();
+    expect(screen.getByText('área do cliente')).toBeInTheDocument();
+  });
+
+  it('deixa o cliente entrar na área dele', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'cliente', barbearia_id: null, nome: 'Cliente' },
+        barbeariaId: null,
+        podeOperar: false,
+      } as never)
+    );
+    renderRota('/minha-conta');
+    expect(screen.getByText('área do cliente')).toBeInTheDocument();
+  });
+
+  // O caminho inverso: quem gerencia nao tem o que fazer na area do cliente.
+  it('leva o owner que entra na área do cliente de volta para a gestão', () => {
+    useAuthMock.mockReturnValue(estadoBase());
+    renderRota('/minha-conta');
+    expect(screen.queryByText('área do cliente')).not.toBeInTheDocument();
+    expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
   // O gerente entrou na lista de permitidos na Fase 2. Sem isto, a feature de
@@ -99,9 +123,9 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
-  // Papel que não é barrado nominalmente em lugar nenhum: a rota usa lista de
-  // permitidos, então ele também fica de fora.
-  it('barra a conta de profissional', () => {
+  // Continua barrado: e o unico papel do enum que ainda nao tem area propria,
+  // entao nao ha para onde redirecionar.
+  it('barra a conta de profissional, que não tem área nenhuma', () => {
     useAuthMock.mockReturnValue(
       estadoBase({
         perfil: { id: 'u1', tipo: 'profissional', barbearia_id: 'b1', nome: 'Barbeiro' },

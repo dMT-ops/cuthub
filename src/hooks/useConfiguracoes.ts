@@ -14,9 +14,18 @@ export function useConfiguracoes() {
   const { barbeariaId, user, recarregarPerfil } = useAuth();
 
   const nomeBarbearia = useMutation({
-    mutationFn: (nome: string) => barbeariaService.atualizarBarbearia(barbeariaId!, nome),
+    mutationFn: (dados: {
+      nome: string;
+      cidade?: string | null;
+      estado?: string | null;
+      listada_no_catalogo?: boolean;
+    }) => barbeariaService.atualizarBarbearia(barbeariaId!, dados),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['barbearia', barbeariaId] });
+      // O catalogo publico mostra estes mesmos dados; sem isto a lista ficaria
+      // com o nome ou a cidade antigos ate alguem recarregar a pagina.
+      queryClient.invalidateQueries({ queryKey: ['catalogo'] });
+      queryClient.invalidateQueries({ queryKey: ['catalogo_cidades'] });
     },
   });
 
@@ -35,7 +44,7 @@ export function useConfiguracoes() {
   });
 
   return {
-    atualizarNomeBarbearia: nomeBarbearia.mutateAsync,
+    atualizarDadosBarbearia: nomeBarbearia.mutateAsync,
     isSalvandoBarbearia: nomeBarbearia.isPending,
     atualizarHorarioFuncionamento: horarioFuncionamento.mutateAsync,
     isSalvandoHorario: horarioFuncionamento.isPending,

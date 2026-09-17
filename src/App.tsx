@@ -10,6 +10,14 @@ import { Toaster } from '@/components/ui/sonner';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Cadastro from './pages/Cadastro';
+import Barbearias from './pages/publico/Barbearias';
+import PerfilBarbearia from './pages/publico/PerfilBarbearia';
+
+// Área do cliente
+import { ClienteLayout } from './components/layout/ClienteLayout';
+import MinhaConta from './pages/cliente/MinhaConta';
+import MeusAgendamentos from './pages/cliente/MeusAgendamentos';
+import MeusFavoritos from './pages/cliente/MeusFavoritos';
 
 // Páginas Privadas (Dashboard)
 import DashboardLayout from './pages/dashboard/Layout';
@@ -34,9 +42,24 @@ function App() {
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Cadastro />} />
+              {/* Catálogo e perfil da barbearia são públicos de propósito: se o
+                  cliente precisar de conta para ver preço e serviço, o perfil
+                  deixa de ser divulgação e vira portão. O login aparece na hora
+                  de agendar. */}
+              <Route path="/barbearias" element={<Barbearias />} />
+              <Route path="/b/:slug" element={<PerfilBarbearia />} />
+
+              {/* Área do cliente — identidade neutra do CutHub */}
+              <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>
+                <Route element={<ClienteLayout />}>
+                  <Route index element={<MinhaConta />} />
+                  <Route path="agendamentos" element={<MeusAgendamentos />} />
+                  <Route path="favoritos" element={<MeusFavoritos />} />
+                </Route>
+              </Route>
 
               {/* Rotas Protegidas */}
-              <Route path="/dashboard" element={<ProtectedRoute />}>
+              <Route path="/dashboard" element={<ProtectedRoute area="gestao" />}>
                 <Route element={<DashboardLayout />}>
                   <Route index element={<DashboardHome />} />
                   <Route path="agenda" element={<AgendaHome />} />

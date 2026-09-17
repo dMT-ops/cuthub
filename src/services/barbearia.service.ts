@@ -27,10 +27,23 @@ export const barbeariaService = {
     return data;
   },
 
-  async atualizarBarbearia(id: string, nome: string): Promise<Barbearia> {
+  /**
+   * Dados que identificam a barbearia — e, desde a Fase 4, tambem a colocam (ou
+   * nao) no catalogo publico. O `slug` NAO entra aqui de proposito: ele e
+   * gerado no cadastro e nao muda com o nome, para nao quebrar link divulgado.
+   */
+  async atualizarBarbearia(
+    id: string,
+    dados: {
+      nome: string;
+      cidade?: string | null;
+      estado?: string | null;
+      listada_no_catalogo?: boolean;
+    }
+  ): Promise<Barbearia> {
     const { data, error } = await supabase
       .from('barbearia')
-      .update({ nome })
+      .update(dados)
       .eq('id', id)
       .select()
       .single();

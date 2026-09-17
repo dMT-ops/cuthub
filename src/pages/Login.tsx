@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { authService } from '@/services/auth.service';
+import { rotaInicialDoPapel } from '@/lib/auth/areas';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,7 +20,7 @@ export default function Login() {
     setLoading(true);
     setError('');
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -26,7 +28,22 @@ export default function Login() {
     if (error) {
       setError(error.message);
       setLoading(false);
-    } else {
+      return;
+    }
+
+    // O destino depende do papel. Antes era `/dashboard` fixo, o que mandava
+    // todo mundo para o painel de gestão — e o cliente batia na barreira do
+    // ProtectedRoute. Ler o perfil aqui evita o desvio visível: a pessoa vai
+    // direto para a área dela.
+    //
+    // O ProtectedRoute continua sendo quem decide de verdade; isto é só para
+    // escolher a primeira porta. Se a leitura falhar, manda para a gestão e
+    // deixa o ProtectedRoute tratar — ele tem a tela de erro com "tentar de
+    // novo", que é melhor do que travar o login.
+    try {
+      const perfil = data.user ? await authService.obterPerfil(data.user.id) : null;
+      navigate(rotaInicialDoPapel(perfil?.tipo) ?? '/dashboard');
+    } catch {
       navigate('/dashboard');
     }
   };

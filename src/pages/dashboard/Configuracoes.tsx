@@ -35,7 +35,7 @@ export default function Configuracoes() {
           </TabsList>
 
           <TabsContent value="geral" className="space-y-6">
-            <BarbeariaForm nomeAtual={barbearia?.nome} isLoading={isLoading} />
+            <BarbeariaForm barbearia={barbearia} isLoading={isLoading} />
             <HorarioFuncionamentoForm
               horarioAbertura={configuracao?.horario_abertura}
               horarioFechamento={configuracao?.horario_fechamento}

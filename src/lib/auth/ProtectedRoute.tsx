@@ -1,20 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from './AuthContext';
-import type { Database } from '@/types/database.types';
-
-type TipoUsuario = Database['public']['Enums']['tipo_usuario'];
-
-/**
- * Quem entra no painel de gestão.
- *
- * É uma lista de permitidos, não de barrados: `tipo_usuario` tem cinco
- * valores e nem `cliente` nem `profissional` têm área própria ainda. Barrar
- * nominalmente só `cliente` deixaria `profissional` entrar por omissão, e
- * qualquer papel novo no enum passaria a nascer com acesso total — foi o que
- * obrigou a incluir `gerente` aqui de forma explícita na Fase 2.
- */
-const PAPEIS_DO_PAINEL: TipoUsuario[] = ['owner', 'gerente', 'admin_supremo'];
+import { PAPEIS_POR_AREA, ROTA_DA_AREA, areaDoPapel } from './areas';
+import type { Area, TipoUsuario } from './areas';
 
 /** Explicação em tela cheia para quem não pode seguir, com uma saída. */
 function Barreira({
@@ -38,13 +26,16 @@ function Barreira({
 }
 
 const AREA_INDISPONIVEL: Partial<Record<TipoUsuario, string>> = {
-  cliente:
-    'Sua conta é de cliente. A área do cliente ainda não está disponível — por enquanto, fale com a sua barbearia.',
   profissional:
     'Sua conta é de profissional. A área do profissional ainda não está disponível — por enquanto, fale com a sua barbearia.',
 };
 
-export function ProtectedRoute() {
+interface ProtectedRouteProps {
+  /** Qual área este bloco de rotas protege. */
+  area?: Area;
+}
+
+export function ProtectedRoute({ area = 'gestao' }: ProtectedRouteProps) {
   const { user, perfil, loading, erroPerfil, recarregarPerfil, signOut } = useAuth();
 
   if (loading) {
@@ -95,22 +86,29 @@ export function ProtectedRoute() {
     );
   }
 
-  if (!PAPEIS_DO_PAINEL.includes(perfil.tipo)) {
-    return (
-      <Barreira
-        titulo="Área ainda não disponível"
-        descricao={
-          AREA_INDISPONIVEL[perfil.tipo] ??
-          'Sua conta não tem acesso ao painel de gestão.'
-        }
-        acao={
-          <Button variant="outline" onClick={() => void signOut()}>
-            Sair
-          </Button>
-        }
-      />
-    );
+  if (PAPEIS_POR_AREA[area].includes(perfil.tipo)) {
+    return <Outlet />;
   }
 
-  return <Outlet />;
+  // O papel tem área, mas não é esta. Em vez de barrar, leva para a dele:
+  // um cliente que digita /dashboard quer usar o CutHub, não ler um aviso.
+  const areaCerta = areaDoPapel(perfil.tipo);
+  if (areaCerta) {
+    return <Navigate to={ROTA_DA_AREA[areaCerta]} replace />;
+  }
+
+  // Sobrou quem não tem área nenhuma — hoje só `profissional`.
+  return (
+    <Barreira
+      titulo="Área ainda não disponível"
+      descricao={
+        AREA_INDISPONIVEL[perfil.tipo] ?? 'Sua conta ainda não tem uma área no CutHub.'
+      }
+      acao={
+        <Button variant="outline" onClick={() => void signOut()}>
+          Sair
+        </Button>
+      }
+    />
+  );
 }
