@@ -3406,3 +3406,163 @@ melhor que a coluna entre **junto** com o resto da Fase 2, não depois.
 8. **A opção (b) da PERGUNTA 1 é a única que exige coluna nova.**
 
 Aguardo a ordem de execução.
+
+---
+
+## [OPUS 5] 2026-09-17 — Nova demanda do Chefe: console do `admin_supremo` ("mão de Deus")
+
+### A DEMANDA, NAS PALAVRAS DO CHEFE
+
+> "no admin supremo ter todas essa visão de usuarios, barbearias e tudo
+> relacionado a poder dentro do nosso site, sem essa visão de barbearia que
+> temos, e sim uma mão de Deus sobre o nosso site, logs, graficos e tudo mais
+> relacionados a saber como o site está e ter todas as ferramentas editáveis do
+> site."
+
+Ou seja: o `admin_supremo` deixa de entrar no painel de **uma** barbearia e passa
+a ter um **console da plataforma** — visão de todas as barbearias e usuários,
+indicadores do produto inteiro, registro de atividade e capacidade de editar.
+
+Registro aqui com o levantamento técnico do que já existe e do que não existe,
+para o arquiteto especificar sem precisar reinvestigar.
+
+---
+
+### A BOA NOTÍCIA: a camada de dados já está pronta
+
+O `is_admin_supremo()` está em **todas as 11 policies**. Autenticado como
+`admin@cuthub.com`, em transação revertida:
+
+```
+      t       | count
+--------------+-------
+ barbearias   |     2
+ clientes     |    48
+ agendamentos |   130
+ lancamentos  |   121
+ perfis       |     3
+```
+
+**Leitura cross-tenant total, já funcionando.** Nenhuma policy nova é necessária
+para a parte de *ver*. O que falta é interface, caminho de escrita e rastro.
+
+---
+
+### O QUE FALTA, EM QUATRO BLOCOS
+
+#### 1. Interface — hoje o admin cai no lugar errado
+
+É a DESCOBERTA 6, que abriu esta colaboração. O admin entra no painel de
+barbearia, e como todo hook é `enabled: !!barbeariaId` e ele tem `barbearia_id`
+nulo, **nenhuma query dispara**. Ele vê 48 clientes pelo banco e uma tela vazia
+pelo app.
+
+Os guards que entregamos (`podeOperar`, botões desabilitados) tornaram a falha
+**honesta**, não a resolveram: a mensagem correta hoje é "Administrador não opera
+dentro de uma barbearia específica", que descreve exatamente o problema que esta
+demanda quer eliminar.
+
+Implicação de rota: o `ProtectedRoute` hoje manda `owner` e `admin_supremo` para
+o mesmo `/dashboard`. O console pede **destino próprio** — algo como `/admin` —
+com o `admin_supremo` desviado para lá em vez do painel de barbearia.
+
+#### 2. Escrita — o admin pode editar, mas **não pode criar nem remover** usuários
+
+Lendo as policies de `usuario_perfil` com atenção ao `is_admin_supremo()`:
+
+| cmd | o admin consegue? | por quê |
+|---|---|---|
+| SELECT | **sim** | `OR is_admin_supremo()` no `qual` |
+| UPDATE | **sim**, inclusive promover a `admin_supremo` | `qual` e `with_check` têm a escapatória |
+| INSERT | **não** | `with_check` é `id = auth.uid() AND tipo <> 'admin_supremo'` — **sem escapatória de admin** |
+| DELETE | **não** | **não existe policy de DELETE**; testado, dá `DELETE 0` em silêncio |
+
+"Todas as ferramentas editáveis" esbarra nisso: criar e remover usuário são as
+duas operações que o banco hoje não permite a ninguém. É o mesmo achado da
+INVESTIGAÇÃO 1 da Fase 2 — e **é o mesmo conjunto de RPCs**. Ver a sobreposição
+mais abaixo.
+
+#### 3. Registro de atividade — não existe nada
+
+Procurei em todo o schema:
+
+```
+colunas de autoria .... 1 (lancamento_financeiro.criado_por)
+tabelas de auditoria .. 0
+```
+
+Não há como responder "quem cancelou este agendamento" ou "quando esta barbearia
+mudou de nome". **"Logs" é a parte desta demanda que precisa ser construída do
+zero** — provavelmente uma tabela de auditoria alimentada por trigger nas tabelas
+que importam, com ator, ação, tabela, registro e instante.
+
+É também a parte mais cara e a que mais decisão exige: o que registrar, por
+quanto tempo guardar, e se o registro é imutável (append-only) — porque um log de
+auditoria que o próprio admin pode apagar não serve de auditoria.
+
+Vale separar dois sentidos de "log" que a demanda mistura:
+
+- **auditoria de negócio** (quem fez o quê no produto) — não existe, é construção;
+- **logs de plataforma** (erro, latência, requisições) — o stack Supabase já
+  coleta, mas registro que o `supabase_vector_cuthub` está em `Restarting` há
+  horas neste ambiente, ou seja, essa coleta está degradada localmente.
+
+#### 4. Gráficos — os que existem são por barbearia
+
+`dashboard.service.ts` tem `obterIndicadores` e `obterFaturamentoDiario`, e os
+dois recebem `barbeariaId` e filtram por ele. Para indicadores de plataforma
+(barbearias ativas, usuários, agendamentos no total, crescimento) são **consultas
+novas**, agregando sem o recorte de tenant. A RLS já permite; é trabalho de
+service e de UI, não de permissão.
+
+---
+
+### SOBREPOSIÇÃO COM A FASE 2 — o ponto que o arquiteto precisa decidir agora
+
+Esta demanda **não é independente da Fase 2**. As duas precisam exatamente da
+mesma peça: **RPCs `SECURITY DEFINER` para criar, promover e remover usuário**,
+porque por acesso direto à tabela é impossível para todo mundo.
+
+Se a Fase 2 especificar essas RPCs pensando só no `owner` cadastrando `gerente`,
+o console do admin vai precisar de um segundo conjunto quase igual. Se
+especificar já prevendo o ator `admin_supremo` (que age **sobre qualquer**
+barbearia, não sobre a sua), sai um conjunto só.
+
+**Minha recomendação:** a Fase 2 fecha como está — permissão e marca — mas as
+RPCs de gestão de usuário nascem com o parâmetro de barbearia explícito e a
+checagem de ator separada (`checar_acesso_barbearia` já faz isso e já abre
+exceção para `admin_supremo`). O console vira fase própria, consumindo o que a
+Fase 2 deixar pronto. Assim nenhuma linha é escrita duas vezes e nada é
+antecipado sem necessidade.
+
+---
+
+### PERGUNTAS QUE A SPEC DO CONSOLE VAI PRECISAR
+
+Levanto, não respondo — são de produto e segurança:
+
+1. **Onde o console mora?** Rota separada (`/admin`) com o `admin_supremo`
+   desviado para lá, ou alternância dentro do painel atual?
+2. **O admin opera *como* uma barbearia?** Ou seja: existe um seletor "entrar na
+   barbearia X" que o faz enxergar o painel dela? Isso resolveria a DESCOBERTA 6
+   por outro caminho e é bem mais barato que recriar cada tela em versão
+   plataforma.
+3. **Auditoria é imutável?** Se o admin pode apagar o log, ele não audita o
+   admin. Decisão de segurança, não de implementação.
+4. **O que entra na auditoria?** Tudo, ou só ações sensíveis (exclusão, mudança
+   de papel, mudança de dono, movimentação financeira)? Registrar tudo cresce
+   rápido e custa.
+5. **Criar barbearia pelo console?** Hoje só nasce pelo cadastro público, via
+   `criar_barbearia_e_vincular`, que vincula quem chamou. Um admin criando
+   barbearia para outra pessoa é um fluxo que não existe.
+6. **Remover barbearia?** Todas as FKs são `ON DELETE CASCADE` a partir de
+   `barbearia` — apagar uma leva junto agendamentos, clientes, serviços,
+   financeiro e histórico. É irreversível e não tem nada parecido no produto
+   hoje.
+
+---
+
+### ESTADO
+
+Nada implementado. Demanda registrada para o arquiteto especificar, junto com as
+investigações 1 e 2 da Fase 2 na entrada anterior.
