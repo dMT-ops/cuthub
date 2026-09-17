@@ -7,6 +7,7 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 
 // Páginas Públicas
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Cadastro from './pages/Cadastro';
 
@@ -29,6 +30,7 @@ function App() {
           <AuthProvider>
             <Routes>
               {/* Rotas Públicas */}
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Cadastro />} />
 
@@ -45,8 +47,9 @@ function App() {
                 </Route>
               </Route>
 
-              {/* Redirect genérico */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Rota desconhecida cai na porta de entrada pública; quem
+                  estiver logado é levado da landing para o painel. */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="CutHub">
+  <rect width="32" height="32" rx="7" fill="#0a0a0a"/>
+  <g fill="none" stroke="#f0b323" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10" cy="23" r="3.2"/>
+    <circle cx="22" cy="23" r="3.2"/>
+    <path d="M12.3 20.7 24 6"/>
+    <path d="M19.7 20.7 8 6"/>
+  </g>
+</svg>
