@@ -3566,3 +3566,404 @@ Levanto, não respondo — são de produto e segurança:
 
 Nada implementado. Demanda registrada para o arquiteto especificar, junto com as
 investigações 1 e 2 da Fase 2 na entrada anterior.
+
+---
+
+## [OPUS 4.6] 2026-09-17 12:12 — Análise das Investigações e Decisões Pendentes
+
+### CONTEXTO
+
+Li o relatório excelente do Opus 5 sobre as investigações da Fase 2 e o
+levantamento da nova demanda do console "mão de Deus".
+A investigação confirmou que a gestão de usuários por acesso direto é impossível
+e precisaremos de RPCs `SECURITY DEFINER`. E como o Opus 5 bem observou, essas
+RPCs devem ser construídas agora na Fase 2 já prevendo o `admin_supremo`, para
+reaproveitamento no futuro console.
+
+### DECISÕES ARQUITETURAIS TOMADAS (Para o Opus 5)
+
+1. **Gestão de usuários via RPCs:** Especificarei as funções RPC
+   (`adicionar_gestor`, `remover_gestor`, `alterar_papel_gestor`) com checagem
+   de permissão explícita, suportando tanto `owner` quanto `admin_supremo`.
+2. **Novo papel `gerente`:** Apenas 3 tabelas precisam de ajuste no RLS
+   (`barbearia`, `configuracao_barbearia`, `usuario_perfil`).
+3. **Storage:** Criaremos o bucket `barbearia_assets`. Limite de 5MB (para
+   comportar banners), **sem suporte a SVG** para evitar XSS.
+4. **Colaterais:** `get_barbearia_do_usuario()` passará a ser `STABLE` e o
+   bypass do trigger em `criar_barbearia_e_vincular` será resetado no final da RPC.
+5. **Console Admin:** Será tratado como uma FASE PRÓPRIA, mas a base de dados
+   (RPCs de gestão) já nascerá pronta na Fase 2.
+
+---
+
+### 🔴 AÇÃO EXIGIDA: RESPOSTAS DO CHEFE
+
+Chefe, o Opus 5 terminou a investigação, mas **eu ainda não posso gerar a ordem
+de execução da Fase 2 para ele**. Preciso que você responda as perguntas abaixo
+para que eu feche a especificação.
+
+Por favor, registre suas respostas na log:
+
+**PERGUNTA 1 (Repetida, bloqueia a Fase 2):** Um proprietário (`owner`)
+cadastrado posteriormente pode remover o proprietário original?
+- **(a)** Sim, todos os owners têm poder idêntico.
+- **(b)** Não. (Nota: isso exige criar uma coluna `criado_por` agora).
+- **(c)** Não, nenhum owner pode remover outro owner (só o admin supremo pode).
+
+**PERGUNTA 2 (Bloqueia a Fase 2):** O `gerente` pode alterar o horário de
+funcionamento da barbearia (`configuracao_barbearia`)? (Minha recomendação:
+Sim, é operação de rotina).
+
+**PERGUNTAS SOBRE O NOVO CONSOLE ADMIN (Mão de Deus):**
+Como o console será uma fase própria, *não bloqueia a Fase 2*, mas precisamos
+definir para o futuro:
+**3. Onde o console mora?** Rota separada `/admin` com um seletor "entrar na
+   barbearia X" (recomendado, resolve o bug do admin ver tela vazia)?
+**4. Auditoria:** O log de atividades será imutável? Vamos registrar TUDO ou só
+   ações sensíveis (exclusão, mudança de papel, finanças)?
+**5. Poderes:** O admin supremo poderá criar e excluir uma barbearia inteira
+   pelo painel?
+
+Assim que você responder pelo menos as perguntas 1 e 2, eu gero a ordem de
+execução completa da Fase 2 e aviso para você mandar o `/log` para o engenheiro.
+
+---
+
+## [CHEFE] 2026-09-17 12:21 — Respostas às Perguntas 1 e 2
+
+**Pergunta 1 (Proprietário original pode ser removido?):**
+- **Não pode.** (O fundador original da barbearia é imutável).
+
+**Pergunta 2 (Gerente pode alterar horários?):**
+- **Pode sim.**
+
+*(Nota: As perguntas sobre o console Admin Supremo ficam registradas para quando formos iniciar a Fase 5).*
+
+---
+
+## [OPUS 4.6] 2026-09-17 12:21 — Ordem de Execução da Fase 2
+
+### CONTEXTO
+
+Com as respostas do Chefe, a arquitetura está definida. O fundador da barbearia é intocável (o que exige rastrear quem a criou), e gerentes podem operar o dia a dia da configuração (horários e, por extensão, assets da marca). O acesso direto à gestão de usuários continua bloqueado via RLS, exigindo a criação das RPCs privilegiadas.
+
+Abaixo está a spec completa. Siga a ordem e faça commits atômicos conforme os blocos lógicos.
+
+---
+
+### TAREFA F2.1 — Banco de Dados: Schema e RPCs de Gestão
+
+Crie uma nova migration `00014_fundacao_permissao_marca.sql`:
+
+1. **Enum:** Adicione o valor `'gerente'` ao tipo enum `tipo_usuario`.
+2. **Imutabilidade do Fundador:**
+   - Adicione a coluna `criado_por UUID REFERENCES usuario_perfil(id)` na tabela `barbearia`.
+   - Faça um script de backfill simples na própria migration que atualiza as barbearias existentes, setando `criado_por` como o ID do primeiro `owner` encontrado para aquela barbearia.
+   - Atualize a RPC `criar_barbearia_e_vincular` para que, ao criar a barbearia, grave o `auth.uid()` em `criado_por`. E **aproveite para corrigir o colateral** descoberto na Fase 1: resete `set_config('app.vinculo_autorizado', '', true)` no final da RPC.
+3. **Funções de Suporte (RLS):**
+   - Mude `get_barbearia_do_usuario()` para `STABLE`.
+   - Crie `is_owner() RETURNS BOOLEAN` (`STABLE SECURITY DEFINER`).
+4. **RPCs de Gestão de Usuários (`SECURITY DEFINER`):**
+   Crie as funções abaixo garantindo que validem `is_owner()` ou `is_admin_supremo()` e operem apenas na `barbearia_id` do chamador (exceto para o admin).
+   - `adicionar_gestor(p_email, p_nome, p_tipo)`: insere na `usuario_perfil`. Se não houver conta Auth, a UI tratará (ou a RPC devolve um erro claro). *Lembre-se que convite via Auth pode ser complexo; para simplificar esta fase, você pode assumir que o usuário já se cadastrou ou tratar como na Fase 1 (onde o backend cadastra).*
+   - `remover_gestor(p_usuario_id)`: Bloqueie a deleção se o `p_usuario_id` for igual ao `barbearia.criado_por`.
+   - `alterar_papel_gestor(p_usuario_id, p_novo_tipo)`.
+
+### TAREFA F2.2 — Banco de Dados: Assets, Marca e RLS
+
+Ainda na mesma migration (ou numa 00015):
+
+1. **Schema da Marca:**
+   Adicione em `configuracao_barbearia` as colunas: `tema_cor_primaria`, `tema_logo_url`, `tema_banner_url`, `tema_descricao`. (Todas opcionais/nullable).
+2. **Storage:**
+   Crie o bucket `barbearia_assets`.
+   - `public = true`, `file_size_limit = 5242880` (5MB).
+   - `allowed_mime_types = '{image/jpeg, image/png, image/webp}'` (**Sem SVG**, proteção contra XSS, conforme recomendação).
+   - Políticas do bucket: Leitura pública. Inserção/Atualização/Deleção restrita a `is_owner() OR is_admin_supremo()`.
+3. **Ajuste Fino de RLS:**
+   - Na tabela `barbearia`, limite o `UPDATE` (que é basicamente renomear a barbearia) apenas a `is_owner() OR is_admin_supremo()`.
+   - Na tabela `configuracao_barbearia`, **mantenha a policy atual**. Como o Chefe permitiu, o `gerente` herda a permissão e poderá alterar horários e a nova marca.
+
+### TAREFA F2.3 — Frontend: Fundação de Acesso
+
+1. **`ProtectedRoute.tsx`:** Inclua `'gerente'` na lista `PAPEIS_DO_PAINEL` e atualize o teste (`ProtectedRoute.test.tsx`) para garantir que gerentes entram e clientes são barrados.
+2. **`AuthContext.tsx`:** Adicione e exporte `podeGerenciarUsuarios` (`perfil?.tipo === 'owner' || perfil?.tipo === 'admin_supremo'`).
+3. Certifique-se de que o papel `gerente` flua perfeitamente nas tipagens do frontend.
+
+### TAREFA F2.4 — Frontend: Refatorar Configurações (Tabs)
+
+1. Vá em `src/pages/Configuracoes.tsx`. Use o componente de `Tabs` do shadcn para quebrar os forms empilhados em seções limpas.
+2. Sugestão de abas:
+   - **Geral**: Dados da Barbearia (nome) e Horários.
+   - **Identidade e Marca**: (Tarefa F2.5).
+   - **Acessos / Equipe**: (Tarefa F2.6).
+
+### TAREFA F2.5 — Frontend: Implementar Identidade e Marca
+
+1. Crie o form para a aba "Identidade e Marca".
+2. Conecte o uploader usando o `storage.service.ts` genérico apontando para `barbearia_assets`.
+3. Os campos salvam no objeto `configuracao_barbearia` via Supabase client.
+4. **Guards de UI**: Só permita acesso a essa aba se a barbearia já existir. Como `gerentes` têm acesso, não bloqueie a visualização da aba para eles.
+
+### TAREFA F2.6 — Frontend: Gestão de Acessos (Multi-proprietário)
+
+1. Crie o form/lista para a aba "Acessos / Equipe".
+2. **Leitura:** Liste todos os usuários (`usuario_perfil`) pertencentes à barbearia atual. Destaque o fundador original (comparando com `barbearia.criado_por`) com um selo/badge inremovível.
+3. **Escrita:** Formulário para Adicionar Gestor (E-mail, Nome, Papel). *Proteja via UI usando `podeGerenciarUsuarios`.*
+4. **Ações:** Botões de mudar papel e remover. Esconda/desabilite ações destrutivas na linha do fundador.
+
+---
+
+### CRITÉRIOS DE ACEITE
+- `gerente` consegue acessar o painel e atualizar horários/marca, mas **não** consegue acessar a aba de Gestão de Acessos.
+- `owner` não consegue remover o fundador da barbearia.
+- A marca salva imagens de até 5MB e recusa SVGs e outros arquivos.
+- Testes continuam passando; teste do `ProtectedRoute` atualizado e coberto.
+- Código sem `TS errors` ou lints severos.
+
+---
+
+**Engenheiro (Opus 5)**: O bastão é seu. Execute as tarefas, faça os commits, suba pro `feat/fase-implantacao` e gere seu relatório nesta log ao final.
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 2 executada: F2.1 a F2.6
+
+### CONTEXTO
+
+Ordem recebida com as respostas do Chefe (fundador imutável, gerente altera
+horários). As seis tarefas estão feitas, em quatro commits.
+
+| commit | tarefas |
+|---|---|
+| `0950118` | F2.1 e F2.2 — banco |
+| `b19e525` | F2.3 — fundação de acesso no frontend |
+| `ed6fa09` | F2.4 a F2.6 — abas, marca e acessos |
+
+---
+
+### O BLOQUEIO QUE MUDOU O FORMATO: DUAS MIGRATIONS, NÃO UMA
+
+A spec pedia `00014` com tudo. **Não é possível.** O Postgres recusa usar um
+valor de enum na mesma transação que o criou. Verificado antes de escrever:
+
+```
+BEGIN;
+ALTER TYPE tipo_usuario ADD VALUE 'gerente';
+SELECT 'gerente'::tipo_usuario;
+ERROR:  unsafe use of new value "gerente" of enum type tipo_usuario
+HINT:   New enum values must be committed before they can be used.
+```
+
+Como cada arquivo de migration roda na própria transação, dividi:
+
+- **`00014_papel_gerente.sql`** — só o `ADD VALUE`.
+- **`00015_fundacao_permissao_marca.sql`** — todo o resto.
+
+Deixei o motivo escrito dentro da própria `00014`, com o erro reproduzido, para
+que ninguém junte as duas "para organizar" e descubra o problema com meia fase
+aplicada.
+
+---
+
+### F2.1 — Banco: papéis, fundador e RPCs
+
+**Divergência declarada: `remover_gestor` desvincula, não apaga.**
+
+A spec diz "bloqueie a deleção se for o fundador". Implementei a proteção, mas a
+operação em si virou `UPDATE ... SET barbearia_id = NULL, tipo = 'cliente'`.
+
+Motivo: `usuario_perfil.id` referencia `auth.users(id)`. Apagar a linha deixaria
+uma conta de autenticação **sem perfil** — e o `ProtectedRoute` que entregamos na
+Fase 1 trata exatamente esse estado como "Conta sem perfil", uma barreira **sem
+botão de tentar de novo**. A pessoa ficaria trancada para fora sem caminho de
+volta, e os vínculos em `cliente.usuario_id` e `profissional.usuario_id` virariam
+NULL, perdendo o rastro de quem atendeu o quê. Desvincular é reversível pelo
+próprio `adicionar_gestor`.
+
+**Proteção extra que a spec não pediu e o modelo exigia:** `alterar_papel_gestor`
+também recusa mexer no fundador. Sem isso, "o fundador não pode ser removido"
+seria contornável em dois passos — rebaixa para gerente, remove em seguida.
+
+**`criado_por` é `NO ACTION`, não `ON DELETE SET NULL`.** Com SET NULL, apagar o
+perfil do fundador faria a barbearia perder a marca **em silêncio**, e a partir
+daí qualquer owner poderia remover qualquer outro. Com NO ACTION a tentativa
+falha alto.
+
+**As três RPCs recebem `p_barbearia_id` com default para a do chamador.** É o que
+permite o console do `admin_supremo` reusar exatamente estas funções em vez de
+exigir um segundo conjunto — o ponto que você levantou na análise.
+
+---
+
+### F2.2 — Banco: marca, bucket e RLS
+
+Colunas `tema_cor_primaria`, `tema_logo_url`, `tema_banner_url` e
+`tema_descricao` em `configuracao_barbearia`, com CHECK de hexadecimal e limite
+de 1000 caracteres na descrição. Sem o CHECK, qualquer string entraria e o erro
+só apareceria na tela do cliente, meses depois, como uma cor que não renderiza.
+
+Bucket `barbearia_assets`: público, 5 MB, **sem SVG**.
+
+**Contradição na spec que precisei resolver.** O item F2.2.2 manda restringir a
+escrita no bucket a `is_owner() OR is_admin_supremo()`. Mas o item F2.2.3 manda
+manter a policy de `configuracao_barbearia` "para o gerente alterar horários **e
+a nova marca**", e o critério de aceite diz "gerente consegue atualizar
+horários/**marca**".
+
+Os três não podem valer juntos: com o bucket restrito ao owner, o gerente
+gravaria a URL do logo e **não conseguiria subir a imagem** — erro no meio do
+fluxo, sem explicação.
+
+Segui os **critérios de aceite** (dois votos contra um) e liberei a escrita no
+bucket para quem pertence à barbearia, mesma convenção do bucket de serviços.
+**Se a intenção era owner-only, é trocar a condição das três policies** — mas aí
+o critério de aceite precisa mudar junto.
+
+`barbearia` teve a policy `FOR ALL` quebrada em SELECT (quem pertence) e UPDATE
+(só owner). INSERT e DELETE ficam negados por acesso direto; o INSERT real passa
+pela RPC, que é SECURITY DEFINER.
+
+**DESCOBERTA 15 — apagar uma barbearia já falhava, mas por acidente.** Testei
+como Owner A antes de mexer:
+
+```
+DELETE FROM barbearia WHERE id=<barbearia A>;
+ERROR:  Alteracao do vinculo de barbearia nao permitida
+CONTEXT: PL/pgSQL function proteger_campos_de_autorizacao() line 18
+```
+
+Não é a RLS que barra. A FK `usuario_perfil.barbearia_id` é `ON DELETE SET NULL`,
+então apagar a barbearia dispara um UPDATE em `usuario_perfil` que o **trigger de
+proteção recusa**. Ou seja: a única coisa impedindo alguém de apagar uma
+barbearia inteira — com 130 agendamentos, clientes e financeiro em cascata — era
+um efeito colateral de um trigger escrito para outra finalidade. Negar
+explicitamente na policy põe a intenção no lugar certo e sobrevive a quem um dia
+mexer no trigger. **Isso importa para a Fase 5:** a pergunta "o admin pode
+excluir uma barbearia?" hoje tem resposta "ninguém pode, sem querer".
+
+---
+
+### VALIDAÇÃO DO BANCO — 19 testes, todos em transação revertida
+
+| # | cenário | resultado |
+|---|---|---|
+| T1 | owner adiciona gerente | vinculado, `tipo = gerente` |
+| T2 | adicionar a mesma conta de novo | `ERRO: ja tem acesso` |
+| T3 | e-mail sem conta | `ERRO: nao existe conta com este e-mail` |
+| T6 | Owner **B** agindo na barbearia **A** | `ERRO: operacao nao permitida` |
+| T7 | **gerente** tentando conceder acesso | `ERRO: apenas o proprietario` |
+| T8 | **gerente** renomeando a barbearia | `UPDATE 0` — bloqueado |
+| T9 | **gerente** mudando horário e marca | `UPDATE 1` — permitido |
+| T10 | owner renomeando a barbearia | `UPDATE 1` |
+| T13 | **segundo owner** removendo o fundador | `ERRO: o fundador nao pode ser removido` |
+| T14 | **segundo owner** rebaixando o fundador | `ERRO: nao pode ter o papel alterado` |
+| T16 | cor `#GGGGGG` | `ERRO: viola configuracao_cor_primaria_hex` |
+| T18 | **admin_supremo** removendo o fundador | `ERRO: o fundador nao pode ser removido` |
+| T19 | admin removendo o sócio (não fundador) | desvinculado, conta preservada |
+
+Dois detalhes honestos sobre a bateria:
+
+1. **A primeira rodada testou a guarda errada.** "Owner remove o fundador" passou
+   pela mensagem "não pode remover o próprio acesso", porque na barbearia A o
+   fundador **é** o próprio chamador. A proteção do fundador só foi de fato
+   exercida em T13/T14, criando um **segundo owner** e agindo com ele. Sem isso
+   eu teria reportado um teste verde que não testava nada.
+2. **T18 merece decisão sua.** Nem o `admin_supremo` remove o fundador. Isso
+   segue a resposta do Chefe ao pé da letra (opção **b**, "o criador original é
+   imutável" — a opção que dava exceção ao admin era a **c**, e não foi a
+   escolhida). Mas o console da Fase 5 provavelmente vai precisar dessa
+   escapatória, por exemplo para transferir uma barbearia. Registro em vez de
+   decidir.
+
+Dados intactos: `130 agendamentos / 3 perfis / 3 contas / 121 lancamentos`.
+
+---
+
+### F2.3 — Fundação de acesso
+
+`'gerente'` entrou em `PAPEIS_DO_PAINEL` e ganhou teste. **Conferi que o teste
+falha** quando o papel sai da lista — sem isso a feature nasceria inacessível.
+
+`podeGerenciarUsuarios` no `AuthContext`, mais estreito que `podeOperar`.
+
+**Regenerei `database.types.ts`** em vez de editar à mão. A regeneração trouxe o
+papel novo, `barbearia.criado_por`, as quatro colunas de tema e as assinaturas
+das cinco funções novas — nove blocos. Editar tudo isso à mão era mais arriscado
+do que regenerar e recolocar as nove linhas de alias manual, que salvei antes e
+reconferi depois. O receio registrado na FASE-9 §2.4 continua válido; só deixou
+de ser o menor risco.
+
+---
+
+### F2.4 a F2.6 — Abas, marca e acessos
+
+Quatro abas: Geral, Identidade e marca, Acessos, Minha conta.
+
+**`useImageUpload` tinha o limite de 2 MB fixo no cliente** — o teto do bucket de
+serviços. Com o bucket novo aceitando 5 MB, o navegador recusaria um banner que o
+servidor aceitaria, com uma mensagem que o usuário não teria como entender. Virou
+parâmetro `maxBytes`, com default de 2 MB para não mexer no uso existente.
+
+Na aba de Acessos, o fundador leva selo e as ações destrutivas ficam
+desabilitadas na linha dele e na do próprio usuário — o banco recusa as duas, e a
+UI antecipa em vez de oferecer botão que volta com erro. O formulário de conceder
+acesso só aparece para `podeGerenciarUsuarios`; o gerente vê a lista e uma
+explicação.
+
+**Limitação que vale registrar: a lista não mostra e-mail.** Ele mora em
+`auth.users`, que a RLS não expõe ao app, e `perfil_por_email` só resolve na
+direção contrária (e teve o EXECUTE revogado na `00013`). As pessoas são
+identificadas por nome e papel. Se e-mail na lista for requisito, precisa de uma
+RPC nova.
+
+As mensagens das RPCs são traduzidas no service por trecho — mesmo padrão que
+`agendamentos.service.ts` usa com o nome da constraint. O `RAISE EXCEPTION` está
+sem acentuação para não depender do encoding do banco, e o texto de produto é
+montado no frontend.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 4 arquivos, 23 testes, todos passando
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros
+npx oxlint                              -> 0 erros, 17 warnings
+npm run build                           -> ✓ 3560 modules transformed
+```
+
+**A baseline de lint subiu de 16 para 17**, e não vou esconder isso. A nova é
+`set-state-in-effect` no `MarcaForm` — mesma classe já presente em cinco
+componentes de formulário do projeto. **Conferi que não é o caso perigoso da
+DESCOBERTA 9:** a dependência vem direto de `queryConfig.data`, sem `|| {}`, então
+tem identidade estável e o efeito não realimenta.
+
+**O que NÃO validei:** não abri o navegador. Nenhuma das quatro abas foi vista, e
+**o upload para o bucket novo nunca foi exercido de verdade** — testei as policies
+por SQL, não subi um arquivo pelo app. Os critérios de aceite de banco estão
+provados; os de interface, não.
+
+---
+
+### ESTADO
+
+| tarefa | estado |
+|---|---|
+| F2.1 migration de permissão | ✅ 2 migrations, 19 testes |
+| F2.2 marca, bucket e RLS | ✅ |
+| F2.3 gerente no painel | ✅ teste com dente conferido |
+| F2.4 abas | ✅ |
+| F2.5 identidade e marca | ✅ |
+| F2.6 gestão de acessos | ✅ |
+
+---
+
+### TRÊS COISAS PARA VOCÊ DECIDIR
+
+1. **Escrita no bucket: owner-only ou barbearia inteira?** Segui o critério de
+   aceite (gerente edita a marca). Se for owner-only, muda a condição das três
+   policies **e** o critério de aceite.
+2. **O `admin_supremo` deve poder remover o fundador?** Hoje não pode. Segue a
+   decisão do Chefe, mas o console da Fase 5 provavelmente precisa da exceção.
+3. **E-mail na lista de acessos** — hoje impossível sem RPC nova. É requisito?
