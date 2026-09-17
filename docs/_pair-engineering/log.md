@@ -4472,3 +4472,236 @@ quantidade INTEGER NOT NULL DEFAULT 0 CHECK (quantidade >= 0)
 
 E é **exatamente esta coluna** que não pode aparecer na view pública — é o campo
 que torna a view obrigatória em vez de opcional, conforme a entrada anterior.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-17 15:06 — Ordem de Execução da Fase 3
+
+### CONTEXTO
+
+O Chefe bateu o martelo sobre a Fase 3:
+1. **O catálogo de produtos será misto**: a barbearia terá controle interno de estoque (baixa manual, sem movimentação complexa nesta fase), e o cliente verá a vitrine como um cardápio online.
+2. **Implicação Arquitetural**: Para não vazar o estoque publicamente, a vitrine exigirá uma **VIEW pública**.
+3. **Sobre Preferências no Agendamento**: Como a investigação provou que já existe de ponta a ponta (`agendamento.observacoes`), **esta frente está cortada da Fase 3** para evitar retrabalho.
+
+Abaixo está a spec completa da Fase 3 para você executar, Opus 5.
+
+---
+
+### TAREFA F3.1 — Banco de Dados: Tabela `produto` e View Pública
+
+Crie a migration `00016_catalogo_de_produtos.sql`:
+
+1. **Tabela `produto`:**
+   - Crie a tabela base sugerida por você: `id, barbearia_id, nome, descricao, imagem_url, preco (NUMERIC(10,2) CHECK >= 0), quantidade (INTEGER DEFAULT 0 CHECK >= 0), status (status_registro DEFAULT 'ativo'), ordem, criado_em, atualizado_em`.
+   - O RLS deve ser o padrão da barbearia (`barbearia_id = get_barbearia_do_usuario() OR is_admin_supremo()`). Isso permite o `gerente` ler/escrever. E lembre-se do trigger genérico `update_atualizado_em`.
+2. **View `produto_publico`:**
+   - Crie a view **filtrando apenas os produtos ativos** e **omitindo a coluna `quantidade`** (e qualquer outra interna).
+   - `CREATE VIEW produto_publico WITH (security_invoker = false) AS SELECT id, barbearia_id, nome, descricao, imagem_url, preco, ordem FROM produto WHERE status = 'ativo';`
+   - Dê os devidos GRANTs de leitura pública na view (`GRANT SELECT ON produto_publico TO anon, authenticated`).
+3. **Storage:**
+   - Crie o bucket `produtos` exatamente como você recomendou. 
+   - Limite de 2MB. Políticas de leitura pública e escrita restrita à barbearia/admin.
+
+### TAREFA F3.2 — Frontend: CRUD de Produtos
+
+O foco desta fase no Frontend é o **painel de gestão da barbearia**. O lado do cliente final (Fase 4) não será feito agora, pois consumirá os dados futuramente.
+
+1. **Barra Lateral (`navigation.config.ts`):** Adicione um novo item "Produtos" (rota `/dashboard/produtos`, sugiro ícone `Package` ou `ShoppingBag`), posicionado de forma lógica (ex: abaixo de Serviços).
+2. **Página `Produtos.tsx`:** 
+   - Implemente a listagem padrão (semelhante à de Serviços). Mostre o Nome, Preço, Status e, crucialmente, o **Estoque** (quantidade).
+   - Implemente os formulários/modais de criação e edição, incluindo a baixa manual do estoque.
+   - Utilize o `storage.service.ts` para subir a imagem_url para o bucket `produtos`.
+
+---
+
+### CRITÉRIOS DE ACEITE
+- A RLS da tabela `produto` bloqueia acesso de anônimos.
+- A view `produto_publico` permite acesso de anônimos apenas às colunas liberadas e produtos ativos, sem vazar a `quantidade`.
+- Pelo Painel, o `gerente` (ou `owner`) consegue cadastrar, editar, ocultar (status) e alterar o saldo de produtos de sua barbearia.
+- A imagem do produto é salva no bucket dedicado de `produtos`.
+- Zero regressão de RLS e os testes de build continuam passando.
+
+---
+
+**Engenheiro (Opus 5)**: Execute as tarefas e reporte aqui na log assim que o commit estiver no GitHub. O campo é seu.
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 3 executada: F3.1 e F3.2
+
+### CONTEXTO
+
+As duas tarefas estão feitas, em dois commits. A frente de "preferências no
+agendamento" foi cortada por você, com base na INVESTIGAÇÃO 2.
+
+| commit | tarefa |
+|---|---|
+| `b10966c` | F3.1 — tabela, view pública e bucket |
+| `9428ec7` | F3.2 — CRUD no painel |
+
+---
+
+### FURO DE SEGURANÇA ENCONTRADO NA PRÓPRIA SPEC — e fechado
+
+**Este é o item mais importante desta entrada.**
+
+Implementei a F3.1 exatamente como escrito: `CREATE VIEW` mais
+`GRANT SELECT ON produto_publico TO anon, authenticated`. Aí rodei a bateria de
+validação e um dos testes veio errado:
+
+```
+=== T4 ANON tentando escrever na view -> esperado ERRO de permissao
+INSERT 0 1
+```
+
+**Qualquer pessoa, sem login, criava, editava e apagava produto de qualquer
+barbearia.**
+
+**Causa raiz.** O Supabase concede, via *default privileges*, **todos** os
+privilégios a `anon` e `authenticated` em cada objeto novo do schema `public`.
+Verificado logo após o `CREATE VIEW`:
+
+```
+ grantee | privilegios
+---------+---------------------------------------------------------------
+ anon    | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+```
+
+Numa **tabela** isso é inofensivo: a RLS barra linha a linha, e é exatamente por
+isso que o projeto inteiro é invisível para `anon` hoje. Numa **view não existe
+RLS** — e esta view é auto-atualizável (SELECT simples sobre uma tabela só) e
+roda com `security_invoker = false`, ou seja, **escreve como o dono, passando por
+cima da RLS de `produto`**.
+
+Ou seja: a mesma propriedade que torna a view segura para *ler* (não aplica RLS,
+então mostra produtos de todas as barbearias ao público) a torna perigosa para
+*escrever*. E `GRANT SELECT` **não remove** o que o default privileges já
+concedeu.
+
+**Correção:**
+
+```sql
+REVOKE ALL ON produto_publico FROM PUBLIC;
+REVOKE ALL ON produto_publico FROM anon, authenticated;
+GRANT SELECT ON produto_publico TO anon, authenticated;
+```
+
+Depois: as três escritas respondem `permission denied for view produto_publico`,
+e a leitura continua funcionando. O motivo está escrito dentro da migration,
+porque **o próximo objeto público do projeto vai cair na mesma armadilha** — e a
+Fase 4 é feita de objetos públicos.
+
+---
+
+### F3.1 — Banco
+
+`produto` espelhando a `servico`, com `quantidade` (CHECK maior ou igual a zero),
+`status`, `ordem` e o trigger genérico de `atualizado_em`. RLS padrão da
+barbearia, que já contempla o `gerente`.
+
+`produto_publico` com `security_invoker = false`, só `status = 'ativo'`, e sem
+`quantidade`, `status`, `criado_em` nem `atualizado_em` — as três últimas não
+ajudam o cliente e contam sobre a operação da barbearia.
+
+Bucket `produtos`, 2 MB, leitura pública e escrita restrita à barbearia dona da
+pasta.
+
+**Deixei registrado dentro da migration** que ligar a RLS na tabela não é
+formalidade: como o `anon` já tem GRANT SELECT por default, **uma tabela criada
+sem RLS neste projeto nasce pública**.
+
+### VALIDAÇÃO — 15 cenários, em transação revertida
+
+| cenário | resultado |
+|---|---|
+| `anon` lendo a **tabela** `produto` | **0 linhas** |
+| `anon` lendo a **view** | só os ativos, das duas barbearias |
+| `anon` pedindo `quantidade` na view | `ERROR: column "quantidade" does not exist` |
+| `anon` INSERT / UPDATE / DELETE na view | `permission denied for view` (os três) |
+| Owner **B** escrevendo na barbearia A **pela view** | `permission denied for view` |
+| Owner **B** lendo produto da barbearia A | só vê o próprio |
+| Owner **B** inserindo na barbearia A | `ERROR: violates row-level security policy` |
+| estoque negativo | `ERROR: violates check constraint "produto_quantidade_check"` |
+| preço negativo | `ERROR: violates check constraint "produto_preco_check"` |
+| ocultar produto | some da vitrine pública na hora |
+| trigger `atualizado_em` | funciona |
+
+**Dois testes meus estavam errados e eu corrigi o teste, não o código:**
+
+1. O primeiro teste de `atualizado_em` comparava `atualizado_em` com `criado_em`
+   dentro da **mesma transação**. Como `now()` é o timestamp da transação, os
+   dois são idênticos e o teste dava falso — parecia trigger quebrado. Refiz
+   fixando uma data antiga antes do UPDATE.
+2. O teste de escrita do `anon` foi o que achou o furo real. Se eu tivesse
+   assumido que "a spec mandou GRANT SELECT, então está seguro", a vitrine teria
+   ido para produção gravável.
+
+Dados intactos: `0 produtos / 131 agendamentos / 5 perfis`.
+
+---
+
+### F3.2 — Painel
+
+Item "Produtos" na sidebar (abaixo de Serviços), rota `/dashboard/produtos`,
+listagem em tabela com **nome, preço, estoque e vitrine**, e formulário de
+criação e edição com upload.
+
+A tabela deixa explícito o que é interno e o que é público: a coluna **Estoque**
+só existe ali, e a coluna **Vitrine** diz se o cliente vê. Estoque zerado aparece
+como "Sem estoque". A ação de ocultar e reexibir está na linha, com o `title`
+explicando o efeito ("Tirar da vitrine do cliente").
+
+**Não existe excluir**, de propósito: ocultar preserva histórico e não quebra
+link já compartilhado, que passa a ser uma preocupação real agora que a vitrine
+é pública.
+
+**Baseline de lint mantida em 17.** O formulário guarda a imagem **dentro do
+react-hook-form** em vez de um `useState` separado — assim o `form.reset` cuida
+da sincronização ao abrir em outro produto, sem efeito com `setState`. A primeira
+versão tinha o `useState` e subia a baseline para 18; troquei por código melhor
+em vez de aceitar a warning.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 4 arquivos, 23 testes, todos passando
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros
+npx oxlint                              -> 0 erros, 17 warnings (mesma baseline da Fase 2)
+npm run build                           -> ✓ 3564 modules transformed
+rota /dashboard/produtos                -> HTTP 200
+```
+
+**O que NÃO validei:** não abri o navegador. A tela de Produtos, o upload para o
+bucket `produtos` e o fluxo de ocultar e reexibir **não foram vistos por
+ninguém**. Os critérios de aceite de banco estão todos provados por SQL; os de
+interface, não. Continua sendo o único tipo de aceite que atravessa todas as
+fases sem fechar do meu lado.
+
+---
+
+### ESTADO
+
+| critério de aceite | situação |
+|---|---|
+| RLS de `produto` bloqueia anônimo | provado |
+| view expõe só colunas liberadas e ativos, sem `quantidade` | provado |
+| `gerente`/`owner` cadastra, edita, oculta e ajusta saldo | provado no banco; UI não vista |
+| imagem no bucket dedicado | configurado; upload não exercido |
+| zero regressão de RLS, build passando | ok |
+
+---
+
+### DUAS COISAS PARA VOCÊ
+
+1. **A armadilha do `REVOKE` vale para a Fase 4 inteira.** Toda view ou tabela
+   exposta ao cliente precisa de `REVOKE ALL` antes do `GRANT SELECT`. Sugiro
+   que isso entre na spec da Fase 4 como regra, não como lembrete.
+2. **Baixa de estoque na listagem.** Hoje ajustar o saldo exige abrir o
+   formulário de edição inteiro. Para o uso real — vendeu uma pomada, baixa uma
+   unidade — um controle rápido na linha seria bem mais direto. Não fiz porque a
+   spec pedia o ajuste no formulário e eu não quis ampliar escopo por conta
+   própria. Se quiser, é pequeno.
