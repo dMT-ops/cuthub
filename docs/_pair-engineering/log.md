@@ -5284,3 +5284,136 @@ CutHub em vitrine de marketplace, com as perguntas que vêm junto — quem apare
 primeiro, o que acontece com barbearia sem marca configurada, e se toda barbearia
 cadastrada aceita estar num catálogo público. **Recomendo link direto nesta
 fase**, e o diretório como decisão própria depois de existir perfil para listar.
+
+---
+
+## [CHEFE via OPUS 5] 2026-09-17 — Catálogo de barbearias: marketplace aprovado
+
+### A DECISÃO
+
+> "Podemos adotar a questão do link direto, mas gostaria que tivesse um catálogo
+> de barbearias disponíveis, para o cliente pesquisar por nome/local (no caso a
+> cidade), e uma área de busca, um modal apresentando as principais barbearias
+> próximas. Gostei da ideia de marketplace."
+
+Ou seja: **link direto E catálogo público**, não um ou outro. O `/b/:slug` da
+minha proposta continua; soma-se um diretório com busca.
+
+Levantei três decisões que o catálogo obrigava e o Chefe respondeu as três:
+
+| decisão | resposta |
+|---|---|
+| O que é "próxima" | **Mesma cidade.** Sem GPS nesta fase. |
+| O que é "principal" | **Perfil mais completo** — quem preencheu marca e serviços aparece antes. |
+| Aparecer no catálogo | **Opt-in com padrão ligado** — entra listada, com interruptor para sair. |
+
+---
+
+### POR QUE ESSAS TRÊS PERGUNTAS EXISTIRAM
+
+Não eram detalhes de implementação. Cada uma mudava o tamanho da fase:
+
+**1. "Próxima" tinha duas leituras com custos muito diferentes.** Cidade é uma
+coluna e um filtro de igualdade. Distância real exige coordenadas na barbearia,
+geocodificação de endereço, permissão de geolocalização do navegador e tratamento
+de quem nega — além de extensão no banco. Confirmei que `postgis`, `cube` e
+`earthdistance` **estão disponíveis** neste Postgres, mas nenhuma instalada. A
+escolha por cidade evita tudo isso agora **sem fechar a porta**: quando houver
+endereço cadastrado de verdade, distância entra como evolução.
+
+**2. "Principais" não tinha dado para ordenar.** O banco não tem avaliação, nota
+nem contador de popularidade. Qualquer ranking teria de inventar uma métrica.
+"Perfil mais completo" usa o que já existe e resolve um problema visual real —
+ver o item 3 abaixo. A alternativa "mais agendamentos" foi descartada por um
+motivo que vale registrar: **expõe indiretamente o movimento de cada barbearia
+para a concorrente**, e as barbearias do catálogo competem entre si.
+
+**3. Listagem automática seria uma decisão tomada pelas barbearias sem elas.** As
+três contas que já existem se cadastraram **antes** desta conversa e não
+concordaram com estar num catálogo público. Padrão ligado com interruptor entrega
+o catálogo cheio e devolve a escolha a quem quiser sair.
+
+---
+
+### UM DADO QUE O CATÁLOGO EXPÕE E PRECISA ENTRAR NA SPEC
+
+Estado da marca hoje:
+
+```
+ nome                  | logo | banner | descricao | cor
+-----------------------+------+--------+-----------+-----
+ Cuthub barbearia      |  f   |   f    |     f     |  f
+ Barbearia Concorrente |  f   |   f    |     f     |  f
+ Barbearia do Renan    |  t   |   t    |     t     |  t
+```
+
+**Duas das três barbearias não têm marca nenhuma.** Num catálogo, elas viram
+cards vazios — sem logo, sem foto, sem uma linha de descrição.
+
+Isso não é um bug a corrigir: é a realidade de quem acabou de se cadastrar e
+ainda não configurou nada. A spec precisa tratar como **edge case de primeira
+classe**, não como exceção:
+
+- card com **estado padrão decente** quando não há logo nem banner (inicial do
+  nome, cor neutra) em vez de espaço em branco;
+- a ordenação por "perfil mais completo" já empurra esses cards para baixo, o que
+  ataca o sintoma;
+- e vale considerar um empurrão no painel — a barbearia saber que está listada e
+  que o perfil está incompleto.
+
+---
+
+### O QUE ISSO ACRESCENTA AO QUE JÁ PROPUS
+
+**Schema** (soma-se ao `slug` que já estava na proposta):
+
+```sql
+ALTER TABLE barbearia
+  ADD COLUMN cidade   VARCHAR(120),
+  ADD COLUMN estado   CHAR(2),
+  ADD COLUMN listada_no_catalogo BOOLEAN NOT NULL DEFAULT true;
+```
+
+`estado` junto porque "Santo Antônio" existe em vários estados, e sem ele a busca
+por cidade mistura barbearias de lugares diferentes.
+
+**Rotas** (somam-se às da proposta anterior):
+
+```
+/barbearias            catálogo com busca por nome e filtro por cidade
+```
+
+**View pública do catálogo** — e aqui vale repetir a regra que virou obrigatória
+depois da Fase 3: `REVOKE ALL` antes do `GRANT SELECT`. A view do catálogo expõe
+nome, slug, cidade, estado, logo, banner e descrição — **e filtra
+`listada_no_catalogo = true`**, com o mesmo cuidado do `status = 'ativo'` da
+vitrine: o filtro tem de estar **dentro** da view, porque ela roda sem aplicar
+RLS.
+
+**Busca por nome.** Recomendo instalar `unaccent` e `pg_trgm` (ambas disponíveis
+e não instaladas). Sem elas, procurar "barbearia do joao" não encontra "Barbearia
+do João" — acento e caixa quebram o `ilike`. É uma linha de migration cada, e
+resolve o tipo de frustração que ninguém reporta como bug.
+
+**Configurações** ganha os campos de cidade/estado e o interruptor do catálogo,
+na aba Geral.
+
+---
+
+### UMA CONSEQUÊNCIA QUE O CHEFE DEVE SABER, MESMO TENDO DECIDIDO
+
+Com o catálogo, **o nome e a marca de toda barbearia listada passam a ser
+públicos e enumeráveis** — qualquer pessoa, sem login, lista todas. Isso é
+inerente a marketplace e foi a decisão consciente.
+
+O que **não** muda: cliente, agendamento, financeiro, estoque e dados de
+profissional continuam fechados. O catálogo expõe a vitrine institucional, não a
+operação. Registro para que ninguém depois leia "catálogo público" como
+"barbearia pública".
+
+---
+
+### ESTADO
+
+Nada implementado. A proposta de navegação da entrada anterior continua válida e
+ganha o catálogo. Aguardo a spec da Fase 4.
