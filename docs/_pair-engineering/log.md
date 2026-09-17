@@ -2938,3 +2938,138 @@ lógica está byte a byte igual à anterior, mas isso é argumento, não observa
    removido por decisão do Chefe na bateria anterior. Sua ordem de execução já
    estava certa; o documento é que ficou defasado. Vale uma linha de correção
    para não confundir quem ler depois.
+
+---
+
+## [CHEFE] 2026-09-17 11:14 — Respostas às 3 decisões pendentes da Fase 1
+
+### 1. DESCOBERTA 14 — onboarding quebrado com confirmação de email
+
+**Registrar como pendência crítica para a Fase 2.** Não cabe na Fase 1 (redesign
+de UI) nem justifica fase própria. Mas precisa estar resolvido **antes da
+implantação**. Na Fase 2 já estaremos mexendo em permissões e onboarding — é o
+lugar natural.
+
+### 2. `AuthLayout`
+
+**Aprovado.** Decisão correta — duplicar markup decorativo é pedir para divergir.
+
+### 3. Documento de plano defasado
+
+**Corrigir agora.** Uma linha no `plano-fases-fundacao-ate-visao-cliente.md`
+anotando que o fluxo de dois caminhos foi removido por decisão anterior. Não
+reescrever o documento — só anotar a defasagem.
+
+---
+
+### INSTRUÇÕES PARA O ENGENHEIRO
+
+1. Corrigir a linha defasada no documento de plano (anotação, não reescrita).
+2. **Push** dos 3 commits da Fase 1 para `origin/feat/fase-implantacao`.
+3. Registrar estado final na log.
+
+**Fase 1 está aceita.** Após o push, estamos prontos para iniciar a Fase 2.
+
+---
+
+## [OPUS 5] 2026-09-17 — Fase 1 fechada: anotação no plano, push confirmado
+
+### CONTEXTO
+
+Três decisões recebidas. Executei as instruções 1 e 3; a **instrução 2 (push) já
+estava cumprida** — explico abaixo em vez de repetir a operação.
+
+---
+
+### INSTRUÇÃO 1 — Documento de plano anotado
+
+`plano-fases-fundacao-ate-visao-cliente.md`, seção FASE 1. **Anotação, não
+reescrita**, como você pediu: a linha original ficou intacta e ganhou um
+sub-item abaixo marcando a defasagem, apontando a decisão que a causou
+(RESPOSTA À PERGUNTA 6, opção **c**), o motivo, o que a Fase 1 de fato preservou
+(`tipo: 'owner'`) e onde está o registro completo.
+
+Quem ler o plano daqui a um mês vê a intenção original **e** por que ela mudou,
+sem precisar descobrir sozinho que houve uma decisão no meio.
+
+---
+
+### INSTRUÇÃO 2 — Push: já estava feito
+
+Os commits da Fase 1 foram para o `origin` no fechamento anterior, junto com o
+commit de log. Estado verificado agora, sem nova operação:
+
+```
+git log --oneline origin/feat/fase-implantacao -1   -> 8918575
+git rev-list --count origin/feat/fase-implantacao..HEAD -> 0
+```
+
+Zero commits locais à frente do remoto. Os quatro da Fase 1 (`1efad76`,
+`44a41e5`, `2cb0ab9`, `8918575`) estão no GitHub.
+
+Registro isso explicitamente porque "push pendente" e "push já feito" levam a
+ações opostas, e eu não ia repetir um comando de rede só para produzir a mesma
+saída.
+
+---
+
+### INSTRUÇÃO 3 — Estado final da Fase 1
+
+| tarefa | entrega | commit |
+|---|---|---|
+| F1.1 landing pública em `/` | rota nova, catch-all corrigido, SEO | `1efad76` |
+| F1.4 favicon | SVG próprio, sprite morto removido | `1efad76` |
+| F1.2 login | split-screen, lógica intacta | `44a41e5` |
+| F1.3 cadastro | split-screen + fix do sucesso-como-erro | `44a41e5` |
+| F1.5 testes | 5 novos, suíte em 22 | `2cb0ab9` |
+| registro | investigações + relatório | `8918575` |
+
+```
+npm test    -> 4 arquivos, 22 testes, todos passando
+tsc         -> 0 erros
+oxlint      -> 0 erros, 16 warnings (baseline)
+npm run build -> ✓ 3555 modules
+```
+
+**Continua sem validação visual.** Nenhuma das três telas novas (landing, login,
+cadastro) foi vista em navegador. O que está provado é compilação, build, rotas
+respondendo e os caminhos de render cobertos por teste. Não vou registrar os
+critérios de aceite visuais como cumpridos.
+
+---
+
+### CARREGADO PARA A FASE 2 — DESCOBERTA 14 como pendência crítica
+
+Decisão do Chefe: resolver na Fase 2, antes da implantação. Deixo aqui o que
+quem for especificar precisa saber, para não reinvestigar:
+
+**O que quebra:** com `enable_confirmations = true`, `signUp` não devolve sessão
+→ `criar_barbearia_e_vincular` não roda (a função tem `EXECUTE` só para
+`postgres, authenticated, service_role`; sem sessão não há `authenticated`) → o
+nome da barbearia digitado se perde. A pessoa confirma o e-mail, entra como
+`owner` sem `barbearia_id`, **passa pelo guard de papel** e cai num painel vazio
+sem nenhuma tela para criar a barbearia.
+
+**Os dois caminhos de correção que enxergo:**
+
+1. **Onboarding pós-login** — o `ProtectedRoute` (ou uma rota dedicada) desviar
+   `owner` sem `barbearia_id` para uma tela de "crie sua barbearia", que chama a
+   RPC que já existe. Menor esforço, não exige backend novo, e resolve também
+   qualquer conta que já esteja nesse estado hoje.
+2. **Edge Function com `service_role`** — criar conta e barbearia num passo só,
+   fora do frontend. É o mesmo caminho do "convite por e-mail" previsto na
+   FASE-9 §7, então os dois podem ser especificados juntos.
+
+**Detalhe que muda a spec da Fase 2:** o caminho 1 conflita com o guard de papel
+que entregamos — hoje `owner` sem barbearia **entra** no painel. Se a Fase 2
+adotar esse caminho, o `ProtectedRoute` ganha uma sexta porta, e os testes de
+`ProtectedRoute.test.tsx` vão precisar de um caso novo. Não é obstáculo; é só
+para a spec já nascer sabendo.
+
+---
+
+### ESTADO
+
+Árvore limpa, branch em sincronia com o remoto, 22 testes passando.
+
+**Fase 1 aceita e fechada. Em stand-by para a Fase 2.**

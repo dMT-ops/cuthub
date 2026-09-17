@@ -30,6 +30,7 @@ O CutHub hoje opera com uma visão simplificada de "admin supremo + barbearia" c
 ### FASE 1 — Fundação de acesso
 - Landing page pública, anterior ao login: função exclusivamente promocional/institucional, com link para a área de login/cadastro. Não deve conter lógica de autenticação.
 - Redesign visual do login/cadastro atual — é redesign de UI, não de lógica. O fluxo de dois caminhos (cliente vs. barbearia) já existente deve ser preservado exatamente como funciona hoje, só a apresentação muda, a menos que a investigação encontre um motivo técnico concreto pra mexer na lógica.
+  - **[DEFASADO — anotado em 2026-09-17]** O fluxo de dois caminhos (cliente vs. barbearia) **não existe mais**: a opção "Sou Cliente" foi removida do cadastro público por decisão do Chefe (RESPOSTA À PERGUNTA 6, opção **c**), porque criava conta sem destino enquanto a área do cliente não existir. A Fase 1 preservou o fluxo **atual** — só barbearia (`tipo: 'owner'`). Ver `docs/_pair-engineering/log.md`.
 - Risco baixo, bom ponto de partida para validar o ciclo Opus 4.6 ↔ Opus 5 numa fase real.
 
 ### FASE 2 — Fundação de permissão e marca
