@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { ROTA_DA_AREA } from '@/lib/auth/areas';
 
 type TipoConta = 'barbearia' | 'cliente';
 
@@ -63,8 +64,10 @@ export default function Cadastro() {
         await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
       }
 
-      // Sucesso! Redirecionar para dashboard
-      navigate('/dashboard');
+      // O destino segue o tipo de conta, como no login. Mandar todo mundo
+      // para /dashboard funcionaria (o ProtectedRoute redireciona o cliente),
+      // mas a pessoa veria o desvio acontecer.
+      navigate(ehBarbearia ? ROTA_DA_AREA.gestao : ROTA_DA_AREA.cliente);
 
     } catch (err: any) {
       // Traduzir erro comum de email já em uso
@@ -107,7 +110,7 @@ export default function Cadastro() {
       descricao={
         ehBarbearia
           ? 'Cadastre sua barbearia e comece a usar o CutHub.'
-          : 'Crie sua conta pessoal para receber acesso de uma barbearia.'
+          : 'Acompanhe seus agendamentos e as barbearias que você gosta.'
       }
       rodape={
         <p>
@@ -133,13 +136,13 @@ export default function Cadastro() {
       </Tabs>
 
       {!ehBarbearia && (
-        // Ser honesto aqui é o ponto: a conta de cliente é criada de verdade,
-        // mas ainda não existe área do cliente, e o painel de gestão barra o
-        // papel. Sem este aviso a pessoa se cadastra e bate numa porta fechada
-        // sem entender por quê.
+        // Este aviso nasceu no hotfix dizendo que a área do cliente não
+        // existia — era verdade naquele momento. A Fase 4 criou a área, então o
+        // texto mudou junto: um aviso desatualizado mente com a mesma
+        // eficiência de um erro.
         <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-          A área do cliente ainda não está disponível. Esta conta serve para a
-          sua barbearia conceder acesso a você em Configurações → Acessos.
+          Sua conta guarda agendamentos e favoritos. Para marcar um horário, a
+          barbearia precisa ter você no cadastro dela.
         </div>
       )}
 
