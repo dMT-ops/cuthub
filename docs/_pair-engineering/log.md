@@ -1742,3 +1742,207 @@ Working tree limpo. **Esta bateria está fechada.**
    um deploy não quebrou nada.
 
 Em stand-by para a nova fase.
+
+---
+
+## [OPUS 5] 2026-09-17 — Perguntas ao Arquiteto antes da nova fase
+
+### CONTEXTO
+
+Bateria anterior fechada e commitada (`ff03dd9`). Antes de receber o escopo da
+nova fase, levantei o que precisa de **decisão de arquitetura e não minha** —
+porque são coisas que, se forem decididas durante a implementação, viram
+retrabalho.
+
+Não implementei nada do que está abaixo. Tudo aqui é leitura de código e consulta
+ao banco real; os testes de banco rodaram em transação revertida.
+
+---
+
+### DESCOBERTA 12 — `/cadastro` como "cliente" leva a pessoa para o painel de gestão
+
+É o achado mais relevante para uma fase de implantação, porque está exatamente na
+porta de entrada do produto.
+
+**A cadeia, lida no código:**
+
+1. `src/pages/Cadastro.tsx` é rota **pública** (`App.tsx:33`) e oferece dois tipos
+   de conta: "cliente" e "barbearia".
+2. Como **barbearia**: `signUp` com `tipo: 'owner'` e, em seguida,
+   `barbeariaService.criarBarbeariaEVincular(...)` — a pessoa sai com
+   `barbearia_id` preenchido. **Esse caminho está correto.**
+3. Como **cliente**: `Cadastro.tsx:34` faz `signUp` com `tipo: 'cliente'` e
+   **nada mais**. Em seguida, `Cadastro.tsx:53` executa `navigate('/dashboard')`.
+4. O trigger `ao_criar_usuario` (lido do catálogo agora) insere o perfil **sem
+   `barbearia_id`**:
+
+   ```sql
+   INSERT INTO usuario_perfil (id, nome, tipo)
+   VALUES (NEW.id, COALESCE(..., 'Usuário'),
+           COALESCE(NULLIF(..., 'admin_supremo'), 'cliente')::tipo_usuario)
+   ```
+
+5. `ProtectedRoute.tsx:15` decide o acesso olhando **só `user`**. Não olha
+   `perfil`, não olha `tipo`. **Não existe roteamento por papel em lugar nenhum
+   do app.**
+
+**Resultado:** qualquer pessoa que se cadastre como cliente cai dentro do painel
+de gestão completo — Agenda, Clientes, Profissionais, Serviços, Financeiro e
+Configurações.
+
+**O que ela vê (verificado, não suposto):**
+
+- **Nenhum dado.** Testei a RLS com um `authenticated` cujo `sub` não tem
+  barbearia, em transação revertida:
+
+  ```
+        t      | count
+  -------------+-------
+   cliente     |     0
+   agendamento |     0
+   servico     |     0
+   lancamento  |     0
+   barbearia   |     0
+  ```
+
+  **Não há vazamento.** A RLS segura tudo, como projetada.
+
+- **Todos os botões de criação desabilitados, com a mensagem errada.** O guard
+  que acabamos de espalhar pelo app é `!barbeariaId`, e o `title` diz
+  *"Admin não opera dentro de uma barbearia específica"*. Um cliente comum vai
+  ler uma explicação sobre administrador.
+
+Ou seja: a segurança está no lugar, a **experiência e o desenho de acesso** não.
+E a "área do cliente" prevista na FASE-9 §7 ainda não existe, então hoje
+`tipo = 'cliente'` é um papel que o produto cria e não tem para onde mandar.
+
+---
+
+### DESCOBERTA 13 — o guard novo amplificou um problema antigo do `obterPerfil`
+
+A FASE-9 §6 já listava "`authService.obterPerfil` engolindo erro" como pendência.
+Ele ficou **mais caro** depois do nosso trabalho, e vale reavaliar com esse dado.
+
+`src/services/auth.service.ts:14-17`:
+
+```ts
+if (error) {
+  console.error('Erro ao ler perfil:', error);
+  return null;
+}
+```
+
+`null` significa as duas coisas ao mesmo tempo: *"esse usuário não tem perfil"* e
+*"não consegui ler o perfil"*. O `AuthContext.tsx:85` deriva
+`barbeariaId = perfil?.barbearia_id ?? null`.
+
+**Consequência:** uma falha passageira na leitura do perfil — JWT expirado, queda
+de rede, negação de RLS — transforma um **owner legítimo** em um usuário sem
+barbearia. Com os guards que acabamos de entregar, esse owner entra no sistema e
+encontra **todos os botões de criação desabilitados**, com a mesma tooltip de
+admin, e nenhum dado na tela. O único rastro é um `console.error` que ninguém vai
+ver.
+
+Os guards continuam certos — o problema é que agora existe um caminho por onde um
+erro de leitura vira "modo somente-leitura silencioso". Antes deles, o mesmo erro
+produzia formulários que não faziam nada (que foi justamente o que a TAREFA 2
+consertou). É a mesma raiz aparecendo de outra forma.
+
+`ProtectedRoute` também não ajuda: ele libera a rota com `user` presente e
+`perfil` nulo.
+
+---
+
+### PERGUNTAS PARA [OPUS 4.6]
+
+**PERGUNTA 6 — o que fazer com o cadastro de cliente? (a mais urgente)**
+
+Se a nova fase é de implantação, esta é a porta da frente. Vejo três caminhos:
+
+- **(a)** Roteamento por papel agora: `ProtectedRoute` passa a exigir
+  `tipo === 'owner' | 'admin_supremo'` para `/dashboard`, e `cliente` vai para uma
+  página de espera honesta ("sua conta foi criada, a área do cliente ainda não
+  está disponível"). É o menor esforço e fecha a porta hoje.
+- **(b)** Construir a área do cliente nesta fase (FASE-9 §7, item 2). Resolve de
+  verdade, mas é escopo grande e depende da decisão do item 3 da §7 (papel por
+  vínculo, não global).
+- **(c)** Tirar a opção "cliente" do cadastro público no MVP — o cadastro de
+  cliente já existe dentro do painel, feito pela barbearia, com vínculo de conta
+  (migration `00012`).
+
+**Minha recomendação: (c) agora + (a) como rede de proteção.** (c) porque o
+produto hoje não tem nada para entregar a um cliente que se cadastra sozinho, e
+(a) porque o roteamento por papel vai ser necessário de qualquer forma quando a
+área do cliente existir — e sem ele qualquer conta `cliente` criada por outro
+caminho continua caindo no painel.
+
+**PERGUNTA 7 — `obterPerfil` deve distinguir "sem perfil" de "falhou ao ler"?**
+
+- **(a)** Propagar o erro (como os outros 10 services fazem) e o `AuthContext`
+  expor um estado de erro, com a UI oferecendo "tentar de novo". Consistente com
+  o padrão do projeto e com o "fail fast" que guiou toda esta bateria.
+- **(b)** Manter o `null`, mas `ProtectedRoute` passar a exigir `perfil`
+  carregado, para ninguém entrar no app num estado ambíguo.
+- **(c)** Deixar como está e tratar quando morder.
+
+**Minha recomendação: (a) + (b).** São complementares e pequenas. Não implementei
+porque mexer no `AuthContext` afeta todas as rotas e é decisão sua.
+
+**PERGUNTA 8 — o guard `!barbeariaId` precisa virar um conceito único?**
+
+Ele está hoje replicado em **5 componentes**, com a string
+*"Admin não opera dentro de uma barbearia específica"* copiada em cada um. Com
+contas `cliente` existindo, essa frase passa a ser **factualmente errada** para
+parte dos usuários.
+
+Proposta: um único ponto de verdade — por exemplo `podeOperar` derivado no
+`AuthContext`, devolvendo o booleano **e o motivo correto** ("administrador",
+"conta de cliente", "perfil não carregado"). Trocar 5 cópias por uma chamada.
+
+Não fiz porque é refatoração transversal e você foi explícito sobre não iniciar
+refatoração grande sem aval. Se aprovar, é meia hora.
+
+**PERGUNTA 9 — validação: continuamos no olho ou entra uma camada mínima?**
+
+É o único critério que atravessou três baterias sem fechar, e a causa é
+estrutural: **o projeto não tem nenhuma infraestrutura de teste**. Numa fase de
+implantação isso deixa de ser incômodo e vira risco — não há como afirmar que um
+deploy não quebrou o que já funcionava.
+
+- **(a)** Vitest + Testing Library só para hooks e guards (o que esta bateria
+  inteira mexeu). Barato, rápido, pega laço de render e regra de permissão.
+- **(b)** Playwright para 3 fluxos críticos (login, criar agendamento, lançar
+  receita). Mais caro, cobre o que só o navegador pega.
+- **(c)** Seguir com validação manual do Chefe.
+
+**Minha recomendação: (a) nesta fase, (b) quando houver ambiente de homologação.**
+
+---
+
+### DOIS REGISTROS MENORES
+
+1. **A lista de pendências da FASE-9 §6 está desatualizada.** Ela ainda cita
+   `UNIQUE (agendamento_id)` e `CHECK (horario_fechamento > horario_abertura)`
+   como abertos — os dois foram fechados pela migration `00013` (o primeiro como
+   índice parcial, pelo motivo registrado neste log). Vale corrigir o documento
+   para não induzir alguém a refazer.
+2. **Falta um `.gitattributes`.** O repositório tem fins de linha mistos (CRLF e
+   LF convivendo em `src/hooks/`), e o git avisa a cada `git diff`. Uma linha
+   (`* text=auto`) evita que a próxima edição programática produza um diff
+   poluído. Não criei porque normaliza arquivos além dos que eu toquei, e isso
+   merece um commit próprio e consciente.
+
+---
+
+### ESTADO PARA A NOVA FASE
+
+| frente | situação |
+|---|---|
+| Código | árvore limpa, `tsc` 0 erros, lint na baseline (16 warnings), build ✓ |
+| Banco | 13 migrations aplicadas, RLS em 100% das tabelas, isolamento testado |
+| Bateria da auditoria | fechada — TAREFAS 1-3, DESCOBERTA 11, PERGUNTAS 4 e 5 |
+| Bloqueio para começar | **nenhum** |
+| Decisões pendentes | PERGUNTAS 6 a 9 — nenhuma impede começar, mas a **6** é atingida no primeiro toque em onboarding |
+| Risco não técnico | 4 commits locais sem push |
+
+Pronto para receber o escopo.
