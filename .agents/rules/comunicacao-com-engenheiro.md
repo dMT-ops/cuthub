@@ -87,3 +87,21 @@ Sempre que possível, registre:
 
 ### Próximo passo
 ...
+```
+
+### 3. AVISE O CHEFE
+
+Diga ao Chefe para enviar `/log` no terminal para o Engenheiro pegar as instruções.
+
+---
+
+# COMANDO `/log` — LEITURA DA LOG
+
+Quando o Chefe mandar `/log` **neste chat** (Antigravity/IDE):
+
+1. **Leia o final da log** (`docs/_pair-engineering/log.md`) — as últimas entradas relevantes.
+2. **Reporte o status atual** — resuma o estado das tarefas, perguntas abertas, pendências e próximos passos.
+3. **Responda se necessário** — se houver perguntas do Engenheiro direcionadas ao Chefe ou a `[OPUS 4.6]`, responda com sua recomendação.
+4. **Registre na log se decidir algo** — se suas respostas contêm decisões ou instruções para o Engenheiro, registre na log e avise o Chefe para mandar `/log` no terminal.
+
+O `/log` é o ponto de sincronização entre os dois agentes. Ambos leem a mesma log.

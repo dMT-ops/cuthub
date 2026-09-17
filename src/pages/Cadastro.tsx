@@ -8,8 +8,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 
 export default function Cadastro() {
   const navigate = useNavigate();
-  const [tipoConta, setTipoConta] = useState<'cliente' | 'barbearia'>('cliente');
-  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nomeUsuario, setNomeUsuario] = useState('');
@@ -31,7 +29,7 @@ export default function Cadastro() {
         options: {
           data: {
             nome: nomeUsuario,
-            tipo: tipoConta === 'barbearia' ? 'owner' : 'cliente',
+            tipo: 'owner',
           }
         }
       });
@@ -43,11 +41,9 @@ export default function Cadastro() {
         throw new Error('Cadastro realizado. Verifique seu e-mail para confirmar a conta.');
       }
 
-      // 2. Se for barbearia, invocar a RPC para criar e vincular (via service)
-      if (tipoConta === 'barbearia') {
-        const { barbeariaService } = await import('@/services/barbearia.service');
-        await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
-      }
+      // 2. Criar a barbearia e vincular o perfil recém-criado a ela
+      const { barbeariaService } = await import('@/services/barbearia.service');
+      await barbeariaService.criarBarbeariaEVincular(nomeBarbearia);
 
       // Sucesso! Redirecionar para dashboard
       navigate('/dashboard');
@@ -70,25 +66,10 @@ export default function Cadastro() {
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold tracking-tight">Criar Conta</CardTitle>
           <CardDescription>
-            Escolha seu tipo de conta e preencha os dados
+            Cadastre sua barbearia e comece a usar o CutHub
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <Button 
-              variant={tipoConta === 'cliente' ? 'default' : 'outline'} 
-              onClick={() => setTipoConta('cliente')}
-            >
-              Sou Cliente
-            </Button>
-            <Button 
-              variant={tipoConta === 'barbearia' ? 'default' : 'outline'} 
-              onClick={() => setTipoConta('barbearia')}
-            >
-              Sou Barbearia
-            </Button>
-          </div>
-
           <form onSubmit={handleCadastro} className="space-y-4">
             {error && (
               <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
@@ -107,18 +88,16 @@ export default function Cadastro() {
               />
             </div>
 
-            {tipoConta === 'barbearia' && (
-              <div className="space-y-2">
-                <Label htmlFor="nomeBarbearia">Nome da Barbearia</Label>
-                <Input 
-                  id="nomeBarbearia" 
-                  placeholder="Barbearia do João" 
-                  value={nomeBarbearia}
-                  onChange={(e) => setNomeBarbearia(e.target.value)}
-                  required 
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="nomeBarbearia">Nome da Barbearia</Label>
+              <Input 
+                id="nomeBarbearia" 
+                placeholder="Barbearia do João" 
+                value={nomeBarbearia}
+                onChange={(e) => setNomeBarbearia(e.target.value)}
+                required 
+              />
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
@@ -156,6 +135,10 @@ export default function Cadastro() {
               Faça login
             </Link>
           </div>
+          <p className="text-center text-xs text-muted-foreground">
+            É cliente de uma barbearia? Peça o cadastro diretamente a ela — a área
+            do cliente ainda não está disponível.
+          </p>
         </CardFooter>
       </Card>
     </div>

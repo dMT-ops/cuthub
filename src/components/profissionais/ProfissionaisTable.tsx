@@ -25,8 +25,10 @@ interface ProfissionaisTableProps {
   onEdit: (profissional: any) => void;
   onNew: () => void;
   onRetry: () => void;
-  /** Falso quando o usuário não está vinculado a uma barbearia (admin_supremo). */
+  /** Falso quando o usuário não pode operar numa barbearia (ver `podeOperar`). */
   podeCadastrar?: boolean;
+  /** Motivo do bloqueio, vindo do AuthContext — texto pronto para o title. */
+  motivoBloqueio?: string | null;
 }
 
 export function ProfissionaisTable({
@@ -46,7 +48,8 @@ export function ProfissionaisTable({
   onEdit,
   onNew,
   onRetry,
-  podeCadastrar = true
+  podeCadastrar = true,
+  motivoBloqueio = null
 }: ProfissionaisTableProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
@@ -98,7 +101,7 @@ export function ProfissionaisTable({
             e engoliria o tooltip nativo. */}
         <span
           className="w-full sm:w-auto"
-          title={podeCadastrar ? undefined : 'Admin não opera dentro de uma barbearia específica'}
+          title={motivoBloqueio ?? undefined}
         >
           <Button onClick={onNew} disabled={!podeCadastrar} className="w-full">
             <Plus className="mr-2 h-4 w-4" />

@@ -101,7 +101,13 @@ npm run lint   → 0 erros, 16 warnings (mesma linha de base anterior)
 
 ## 6. Pendências herdadas
 
-Continuam abertas, sem relação com esta fase: `UNIQUE (agendamento_id)`, `CHECK (horario_fechamento > horario_abertura)`, decisão sobre estorno de lançamento, cálculo de comissão, UI de bloqueios, reagendamento, `authService.obterPerfil` engolindo erro e code splitting por rota.
+**Fechadas depois desta fase** (auditoria de 2026-09-17, registrada em `docs/_pair-engineering/log.md`):
+
+- ~~`UNIQUE (agendamento_id)`~~ — fechado pela migration `00013`, porém como **índice único parcial** escopado a `tipo = 'entrada' AND categoria = 'atendimento'`. Um `UNIQUE` simples passaria nos dados de hoje e impediria o lançamento de comissão, que aponta para o mesmo agendamento.
+- ~~`CHECK (horario_fechamento > horario_abertura)`~~ — fechado pela migration `00013`. Limitação conhecida: impede barbearia que atravessa a meia-noite.
+- ~~`authService.obterPerfil` engolindo erro~~ — passa a lançar falha de leitura e usa `maybeSingle`, separando "não tem perfil" de "não consegui ler". O `ProtectedRoute` deixou de liberar o painel com perfil ausente.
+
+**Continuam abertas:** decisão sobre estorno de lançamento, cálculo de comissão, UI de bloqueios, reagendamento e code splitting por rota.
 
 ---
 

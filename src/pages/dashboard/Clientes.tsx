@@ -6,7 +6,7 @@ import { ClienteFormDialog } from '@/components/clientes/ClienteFormDialog';
 import { ClienteDetalheSheet } from '@/components/clientes/ClienteDetalheSheet';
 
 export default function Clientes() {
-  const { barbeariaId } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
   
   // States da Tabela e Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,7 +80,8 @@ export default function Clientes() {
         }}
         onNew={() => handleOpenForm()}
         onRetry={handleRetry}
-        podeCadastrar={!!barbeariaId}
+        podeCadastrar={podeOperar}
+        motivoBloqueio={motivoBloqueio}
       />
 
       <ClienteFormDialog

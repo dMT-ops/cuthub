@@ -6,7 +6,7 @@ import { ProfissionalFormDialog } from '@/components/profissionais/ProfissionalF
 import { ProfissionalDetalheSheet } from '@/components/profissionais/ProfissionalDetalheSheet';
 
 export default function Profissionais() {
-  const { barbeariaId } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
   
   // States da Tabela e Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,7 +76,8 @@ export default function Profissionais() {
         }}
         onNew={() => handleOpenForm()}
         onRetry={handleRetry}
-        podeCadastrar={!!barbeariaId}
+        podeCadastrar={podeOperar}
+        motivoBloqueio={motivoBloqueio}
       />
 
       <ProfissionalFormDialog

@@ -1946,3 +1946,286 @@ deploy não quebrou o que já funcionava.
 | Risco não técnico | 4 commits locais sem push |
 
 Pronto para receber o escopo.
+
+---
+
+## [CHEFE] 2026-09-17 09:19 — Respostas às PERGUNTAS 6–9 e fechamento da bateria
+
+### RESPOSTA À PERGUNTA 6 — cadastro de cliente
+
+**Aprovado: (c) + (a).**
+
+- **(c)** Remover a opção "cliente" do cadastro público. O produto não tem área do
+  cliente ainda — oferecer esse caminho é criar uma conta que não tem para onde ir.
+  O cadastro de cliente pela barbearia (migration `00012`) já existe e funciona.
+- **(a)** Implementar roteamento por papel no `ProtectedRoute`. Mesmo sem a opção
+  "cliente" no cadastro público, contas `cliente` já existem no banco (criadas
+  pelo painel). Se alguém fizer login com uma delas, precisa ser barrado do painel
+  de gestão. Uma página de espera honesta basta: _"Sua conta é de cliente. A área
+  do cliente ainda não está disponível."_
+
+**Ordem de execução: (c) primeiro, (a) em seguida.**
+
+---
+
+### RESPOSTA À PERGUNTA 7 — `obterPerfil` engolindo erro
+
+**Aprovado: (a) + (b).**
+
+- **(a)** Propagar o erro — consistência com os outros 10 services e com o
+  princípio de "fail fast" que guiou toda a bateria.
+- **(b)** `ProtectedRoute` passa a exigir `perfil` carregado. Ninguém entra no app
+  em estado ambíguo.
+
+A UI deve oferecer "tentar de novo" quando a leitura do perfil falhar.
+
+---
+
+### RESPOSTA À PERGUNTA 8 — centralizar guard `!barbeariaId`
+
+**Aprovado.** Criar `podeOperar` (ou equivalente) no `AuthContext`, devolvendo o
+booleano e o motivo correto. Trocar as 5 cópias por uma chamada. A string
+_"Admin não opera dentro de uma barbearia específica"_ é factualmente errada para
+clientes — precisa ser corrigida junto.
+
+---
+
+### RESPOSTA À PERGUNTA 9 — infraestrutura de testes
+
+**Aprovado: (a) nesta fase.**
+
+Vitest + Testing Library para hooks e guards. É o que esta bateria inteira mexeu
+e o que mais precisa de cobertura. Playwright fica para quando houver ambiente de
+homologação.
+
+---
+
+### REGISTROS MENORES — aprovados
+
+1. **Atualizar a lista de pendências da FASE-9 §6** — marcar como fechados os
+   itens que a migration `00013` já resolveu.
+2. **Criar `.gitattributes`** com `* text=auto` — em commit próprio, como o
+   engenheiro sugeriu.
+
+---
+
+### INSTRUÇÕES PARA O ENGENHEIRO — CHECKLIST DE FECHAMENTO
+
+Antes de avançar para a nova fase, executar nesta ordem:
+
+1. ✅ ~~Padronização dos 5 hooks~~ — já feito
+2. ✅ ~~Guard da Jornada~~ — já feito
+3. **PERGUNTA 6(c)** — Remover opção "cliente" do cadastro público (`Cadastro.tsx`)
+4. **PERGUNTA 6(a)** — Roteamento por papel no `ProtectedRoute` (barrar `cliente`
+   do painel, página de espera honesta)
+5. **PERGUNTA 7** — `obterPerfil` propaga erro + `ProtectedRoute` exige perfil +
+   UI com "tentar de novo"
+6. **PERGUNTA 8** — Centralizar guard em `podeOperar` no `AuthContext`, corrigir
+   string, trocar 5 cópias
+7. **PERGUNTA 9** — Vitest + Testing Library para hooks e guards
+8. **Registro menor 1** — Atualizar pendências da FASE-9 §6
+9. **Registro menor 2** — `.gitattributes` com `* text=auto` (commit próprio)
+10. **Commit e push** — commitar tudo, fazer push da branch `feat/fase-implantacao`
+
+Depois disso a bateria está fechada e estamos prontos para a nova fase.
+
+### DECISÃO SOBRE PUSH
+
+**Fazer push agora.** 4 commits locais sem backup é risco desnecessário. Push da
+branch `feat/fase-implantacao` para `origin` assim que o checklist acima estiver
+commitado.
+
+### PROCESSOS VITE ÓRFÃOS
+
+Pode matar as portas 5174, 5178, 5179, 5181. Manter só a 5180 que está ativa.
+
+---
+
+## [OPUS 5] 2026-09-17 — Checklist de fechamento: itens 3 a 8 executados
+
+### CONTEXTO
+
+Respostas às PERGUNTAS 6–9 recebidas. Executei os itens 3 a 8 do checklist. O
+item 9 (`.gitattributes`) vai em commit próprio, como combinado, e o 10 (push)
+logo em seguida.
+
+---
+
+### ITEM 3 — Cadastro público deixa de criar conta de cliente
+
+`src/pages/Cadastro.tsx`: o seletor "Sou Cliente / Sou Barbearia" saiu. O
+cadastro público agora cria **só conta de barbearia** — `signUp` com
+`tipo: 'owner'`, nome da barbearia obrigatório e `criarBarbeariaEVincular`
+deixando de ser condicional. Ninguém mais sai do cadastro sem `barbearia_id`.
+
+No rodapé entrou uma frase honesta em vez do caminho que não existe:
+
+> É cliente de uma barbearia? Peça o cadastro diretamente a ela — a área do
+> cliente ainda não está disponível.
+
+**Um defeito que encontrei no mesmo arquivo e NÃO corrigi** (`Cadastro.tsx:40-42`):
+
+```ts
+if (!session) {
+  throw new Error('Cadastro realizado. Verifique seu e-mail para confirmar a conta.');
+}
+```
+
+É uma **mensagem de sucesso lançada como erro** — cai no `catch` e é renderizada
+na caixa vermelha de erro. Hoje não aparece porque a confirmação de e-mail está
+desligada no stack local e a sessão sempre volta. **Ligar confirmação de e-mail
+em produção faz todo cadastro bem-sucedido terminar numa mensagem vermelha.** Não
+mexi porque muda o fluxo de cadastro (precisa de um estado de sucesso, não de
+erro) e isso é decisão de produto. Registro como pendência conhecida — é o tipo
+de coisa que só aparece no dia da implantação.
+
+---
+
+### ITEM 4 — Roteamento por papel no `ProtectedRoute`
+
+**Divergência declarada: usei lista de permitidos, não de barrados.**
+
+A instrução era barrar `cliente`. Implementei:
+
+```ts
+const PAPEIS_DO_PAINEL: TipoUsuario[] = ['owner', 'admin_supremo'];
+```
+
+Motivo: o enum `tipo_usuario` tem **quatro** valores — `admin_supremo`, `owner`,
+`cliente` e `profissional`. Barrar nominalmente só `cliente` deixaria
+`profissional` entrar por omissão, e ele também não tem área própria (FASE-9 §7).
+Pior: qualquer papel novo acrescentado ao enum no futuro **nasceria com acesso
+total ao painel**, silenciosamente. É o mesmo raciocínio que você aprovou na
+TAREFA 2 — o guard testa a pré-condição, não enumera atores.
+
+Cada papel barrado recebe a explicação certa, com botão de sair. `profissional`
+recebe o texto equivalente ao de cliente.
+
+---
+
+### ITEM 5 — `obterPerfil` para de engolir erro
+
+`auth.service.ts` passou a usar **`maybeSingle()`** em vez de `single()`. Esse
+detalhe é o que torna a separação possível: com `single()`, zero linhas **já é
+um erro**, então não haveria como distinguir "não tem perfil" de "não consegui
+ler". Com `maybeSingle()`, ausência devolve `null` e só falha de verdade lança.
+
+`AuthContext` ganhou `erroPerfil`. Numa falha de leitura o perfil anterior é
+descartado e o erro fica exposto — não vira mais "usuário sem barbearia".
+`recarregarPerfil` faz o mesmo tratamento e limpa o erro quando dá certo.
+
+`ProtectedRoute` agora tem quatro portas, nesta ordem: carregando → sem sessão →
+**erro de leitura** (com "Tentar de novo" e "Sair") → **sem perfil** (conta sem
+linha em `usuario_perfil`, sem retry porque tentar de novo não resolveria) →
+papel sem acesso. Só depois disso o `<Outlet />`.
+
+---
+
+### ITEM 6 — Guard centralizado em `podeOperar`
+
+`AuthContext` expõe `podeOperar` e `motivoBloqueio`, derivados num `useMemo`
+sobre `perfil`. **As 7 cópias da string sumiram** — `grep` por
+"Admin não opera dentro de uma barbearia específica" em `src/` → 0 ocorrências.
+
+O motivo agora é o correto para cada caso:
+
+| situação | motivo exibido |
+|---|---|
+| perfil não carregado | "Seu perfil não foi carregado." |
+| `admin_supremo` | "Administrador não opera dentro de uma barbearia específica" |
+| sem `barbearia_id` | "Sua conta não está vinculada a uma barbearia" |
+| pode operar | `null` |
+
+As duas tabelas apresentacionais (`ClientesTable`, `ProfissionaisTable`)
+continuam sem chamar `useAuth` — mantive a convenção e passei `motivoBloqueio`
+por prop, ao lado do `podeCadastrar` que já existia. Os outros três pontos
+(`Servicos`, `Financeiro`, `JornadaTrabalho`) já usavam `useAuth` e leem direto.
+
+---
+
+### ITEM 7 — Vitest + Testing Library: 17 testes, e eles têm dente
+
+Instalados `vitest`, `@testing-library/react`, `@testing-library/jest-dom`,
+`@testing-library/dom` e `jsdom`. Configuração em `vite.config.ts` (ambiente
+jsdom, `globals`, setup com `cleanup` entre testes), scripts `test` e
+`test:watch`, e `include: ['src/**/*.test.{ts,tsx}']` — os `test_*.ts` da raiz
+são scripts manuais contra o stack local e ficariam quebrados se entrassem.
+
+| arquivo | cobre |
+|---|---|
+| `src/lib/auth/ProtectedRoute.test.tsx` | 8 testes — login, owner, admin, cliente barrado, profissional barrado, erro de perfil com retry, conta sem perfil, spinner |
+| `src/lib/auth/AuthContext.test.tsx` | 5 testes — `podeOperar` para cada papel, motivo correto, erro de leitura não virando "sem barbearia", limpeza do erro na releitura |
+| `src/hooks/useHorarios.test.tsx` | 4 testes — identidade estável da jornada (o laço da TAREFA 3) e rejeição ao salvar sem barbearia (DESCOBERTA 11) |
+
+**Verifiquei que os testes pegam as regressões, em vez de só passarem.**
+Reintroduzi os bugs de propósito e conferi que a suíte quebra:
+
+```
+# useHorarios com `|| []` e `Promise.resolve()` de volta
+× devolve a MESMA referência de jornada entre renders enquanto não há dados
+× mantém a referência estável também com a query habilitada e ainda carregando
+× falha alto ao salvar sem barbearia, em vez de fingir sucesso
+  Tests  3 failed | 1 passed (4)
+
+# PAPEIS_DO_PAINEL afrouxado para incluir cliente e profissional
+× barra a conta de cliente e explica o porquê
+× barra a conta de profissional
+  Tests  2 failed | 6 passed (8)
+```
+
+Depois de restaurar os dois arquivos, `git diff` neles voltou a ficar vazio e a
+suíte voltou a 17/17. **Um teste que nunca viu o bug não prova nada** — agora
+sabemos que estes viram.
+
+---
+
+### ITEM 8 — Pendências da FASE-9 §6 atualizadas
+
+Fecharam **três**, não duas. Além do `UNIQUE` e do `CHECK` (migration `00013`),
+o `authService.obterPerfil` engolindo erro — que estava na mesma lista — foi
+fechado agora pelo item 5. Registrei cada um com o que de fato foi feito,
+incluindo que o `UNIQUE` virou índice parcial e que o `CHECK` impede barbearia
+que atravessa a meia-noite.
+
+Continuam abertas: estorno, comissão, UI de bloqueios, reagendamento e code
+splitting por rota.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 3 arquivos, 17 testes, todos passando
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros (exit 0)
+npx oxlint                              -> 0 erros, 16 warnings (baseline preservada)
+npm run build                           -> ✓ 3553 modules transformed, built in 5.05s
+```
+
+**O que continua sem validação em runtime:** não abri o navegador. O
+`ProtectedRoute` agora tem cinco caminhos de render e os testes cobrem os cinco,
+mas ninguém viu a tela. A diferença em relação às baterias anteriores é que
+**agora existe rede de segurança automatizada** — antes não havia nenhuma.
+
+---
+
+### ESTADO DO CHECKLIST
+
+| # | item | estado |
+|---|---|---|
+| 1-2 | hooks e Jornada | ✅ commitado antes |
+| 3 | cadastro sem opção cliente | ✅ |
+| 4 | roteamento por papel | ✅ (lista de permitidos — divergência declarada) |
+| 5 | `obterPerfil` + `ProtectedRoute` + retry | ✅ |
+| 6 | `podeOperar` centralizado | ✅ |
+| 7 | Vitest + Testing Library | ✅ 17 testes |
+| 8 | pendências da FASE-9 | ✅ |
+| 9 | `.gitattributes` | em commit próprio, a seguir |
+| 10 | push | a seguir |
+
+---
+
+### PENDÊNCIA NOVA REGISTRADA
+
+`Cadastro.tsx:40-42` lança mensagem de sucesso como erro quando a confirmação de
+e-mail está ligada. Invisível hoje, garantido no dia da implantação. Precisa de
+decisão de produto: tela de "confira seu e-mail" em vez de caixa vermelha.

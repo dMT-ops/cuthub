@@ -19,7 +19,7 @@ type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
 type CategoriaLancamento = Database['public']['Enums']['categoria_lancamento'];
 
 export default function Financeiro() {
-  const { barbeariaId } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
 
   const [mesReferencia, setMesReferencia] = useState(() => new Date());
   const [tipo, setTipo] = useState<'todos' | TipoLancamento>('todos');
@@ -54,8 +54,8 @@ export default function Financeiro() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
-        <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
-          <Button onClick={() => setFormOpen(true)} disabled={!barbeariaId}>
+        <span title={motivoBloqueio ?? undefined}>
+          <Button onClick={() => setFormOpen(true)} disabled={!podeOperar}>
             <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
           </Button>
         </span>

@@ -23,7 +23,7 @@ const DIAS_SEMANA = [
 ];
 
 export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
-  const { barbeariaId } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
   const { horarios, isLoading, salvarJornada, isSalvando } = useHorarios(profissionalId, barbeariaId);
   
   const [faixas, setFaixas] = useState<any[]>([]);
@@ -98,8 +98,8 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
         title="Nenhum horário definido"
         description="Este profissional ainda não tem uma jornada de trabalho configurada."
         action={
-          <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
-            <Button onClick={() => setIsEditing(true)} disabled={!barbeariaId}>Definir Jornada</Button>
+          <span title={motivoBloqueio ?? undefined}>
+            <Button onClick={() => setIsEditing(true)} disabled={!podeOperar}>Definir Jornada</Button>
           </span>
         }
       />
@@ -111,8 +111,8 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
       <div className="flex justify-between items-center pb-2 border-b">
         <h3 className="font-medium">Horários de Atendimento</h3>
         {!isEditing ? (
-          <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
-            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} disabled={!barbeariaId}>Editar Jornada</Button>
+          <span title={motivoBloqueio ?? undefined}>
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} disabled={!podeOperar}>Editar Jornada</Button>
           </span>
         ) : (
           <div className="space-x-2">
@@ -121,8 +121,8 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
               setLocalError('');
               setFaixas(horarios.map(h => ({ ...h })));
             }}>Cancelar</Button>
-            <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
-              <Button size="sm" onClick={handleSave} disabled={isSalvando || !barbeariaId}>
+            <span title={motivoBloqueio ?? undefined}>
+              <Button size="sm" onClick={handleSave} disabled={isSalvando || !podeOperar}>
                 {isSalvando ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
             </span>
