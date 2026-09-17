@@ -2,10 +2,18 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { endOfDay } from 'date-fns';
 import { dashboardService } from '@/services/dashboard.service';
+import type { PontoFaturamento } from '@/services/dashboard.service';
 import { agendamentosService } from '@/services/agendamentos.service';
 
 const DIAS_NO_GRAFICO = 30;
 const LIMITE_PROXIMOS = 5;
+
+/**
+ * Referência estável para a lista ainda não carregada. Ver useHorarios.ts:
+ * `query.data || []` cria um array novo a cada render enquanto `data` for
+ * undefined, e uma dep instável em useEffect vira laço de renderização.
+ */
+const FATURAMENTO_VAZIO: PontoFaturamento[] = [];
 
 export function useDashboard(barbeariaId: string | null | undefined) {
   // Congela o instante da montagem: sem isso, cada render geraria uma queryKey nova
@@ -41,7 +49,7 @@ export function useDashboard(barbeariaId: string | null | undefined) {
 
   return {
     indicadores: indicadores.data,
-    faturamentoDiario: faturamento.data ?? [],
+    faturamentoDiario: faturamento.data ?? FATURAMENTO_VAZIO,
     proximosAgendamentos,
     diasNoGrafico: DIAS_NO_GRAFICO,
     isLoading: indicadores.isLoading || faturamento.isLoading || proximos.isLoading,

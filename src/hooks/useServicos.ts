@@ -3,6 +3,14 @@ import { servicosService } from '@/services/servicos.service';
 import type { Database } from '@/types/database.types';
 
 type ServicoInsert = Database['public']['Tables']['servico']['Insert'];
+type Servico = Database['public']['Tables']['servico']['Row'];
+
+/**
+ * Referência estável para a lista ainda não carregada. Ver useHorarios.ts:
+ * `query.data || []` cria um array novo a cada render enquanto `data` for
+ * undefined, e uma dep instável em useEffect vira laço de renderização.
+ */
+const SERVICOS_VAZIOS: Servico[] = [];
 
 export function useServicos(
   barbeariaId: string | null | undefined,
@@ -40,7 +48,7 @@ export function useServicos(
   });
 
   return {
-    servicos: query.data || [],
+    servicos: query.data ?? SERVICOS_VAZIOS,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

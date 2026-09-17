@@ -1,9 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeiroService } from '@/services/financeiro.service';
-import type { AtendimentoAReceber, ListarLancamentosOptions } from '@/services/financeiro.service';
+import type { AtendimentoAReceber, LancamentoComDetalhes, ListarLancamentosOptions } from '@/services/financeiro.service';
 import type { Database } from '@/types/database.types';
 
 type LancamentoInsert = Database['public']['Tables']['lancamento_financeiro']['Insert'];
+
+/**
+ * Referência estável para a lista ainda não carregada. Ver useHorarios.ts:
+ * `query.data || []` cria um array novo a cada render enquanto `data` for
+ * undefined, e uma dep instável em useEffect vira laço de renderização.
+ */
+const LANCAMENTOS_VAZIOS: LancamentoComDetalhes[] = [];
+const ATENDIMENTOS_VAZIOS: AtendimentoAReceber[] = [];
 
 export function useFinanceiro(
   barbeariaId: string | null | undefined,
@@ -35,7 +43,7 @@ export function useFinanceiro(
   });
 
   return {
-    lancamentos: query.data || [],
+    lancamentos: query.data ?? LANCAMENTOS_VAZIOS,
     resumo: queryResumo.data,
     isLoading: query.isLoading || queryResumo.isLoading,
     isError: query.isError || queryResumo.isError,
@@ -58,7 +66,7 @@ export function useAtendimentosAReceber(
   });
 
   return {
-    atendimentos: (query.data || []) as AtendimentoAReceber[],
+    atendimentos: query.data ?? ATENDIMENTOS_VAZIOS,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

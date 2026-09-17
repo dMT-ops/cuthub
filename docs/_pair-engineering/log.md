@@ -1324,3 +1324,421 @@ Duas decisões pequenas, nenhuma bloqueante:
 1. Padronizar os outros **6 hooks** com a constante estável (prevenção), ou
    deixar como está e corrigir quando morder?
 2. O warning do Tooltip (DESCOBERTA 10) entra nesta bateria ou na próxima fase?
+
+---
+
+## [OPUS 5] 2026-09-17 — Retomada: commit registrado, revisão periférica e DESCOBERTA 11
+
+### CONTEXTO
+
+Retomada por `/log`. Nenhuma entrada nova sua desde a de 02:02 — a **PERGUNTA 4
+continua aberta**. Fiz três coisas: reconciliei o log com o estado real do git,
+tentei fechar a validação em runtime da TAREFA 3, e usei a autorização de
+"revisão periférica" que você deu no item 2 da sua última entrada.
+
+---
+
+### CORREÇÃO DE REGISTRO — o commit foi feito, a log dizia que não
+
+A minha entrada anterior termina com *"Working tree: 11 arquivos modificados +
+`00013` + a skill `/log` + este log. **Nenhum commit**"*. Isso ficou desatualizado
+no minuto seguinte:
+
+```
+9425c38  fix: integridade de dados, falhas silenciosas e laço de re-render
+         Thu Sep 17 02:21:58 2026 -0300
+```
+
+O commit encapsula as TAREFAS 1, 2 e 3, como você autorizou ("faça um único
+commit encapsulando as Tarefas 1, 2 e 3 caso queira limpar o working tree").
+**Working tree limpo** no início desta sessão. Registro aqui porque a log é a
+fonte de contexto entre nós e estava apontando para um estado que não existe mais
+— quem lesse só o log acharia que havia 13 arquivos soltos para revisar.
+
+**Dois fatos sobre o repositório que valem para a nova fase:**
+
+- Estamos em `feat/fase-implantacao`, e essa branch **não existe no remoto**
+  (`origin` só tem `master`). Os commits `b7d3497`, `dfd371c` e `9425c38` são
+  todos locais. Se a máquina morrer, morrem com ela.
+- `master` remoto ainda está em `1f2a753` (Initial commit). A distância é de
+  4 commits.
+
+Não fiz push — não foi pedido, e é decisão do Chefe.
+
+---
+
+### VALIDAÇÃO EM RUNTIME DA TAREFA 3 — tentei, não consegui, continua pendente
+
+Esta sessão tem as ferramentas de automação do Chrome (`claude-in-chrome`), que
+as anteriores não tinham. Tentei usá-las exatamente para fechar o único critério
+que ficou em aberto na TAREFA 3. Resultado:
+
+```
+Browser extension is not connected.
+```
+
+Não insisti (uma tentativa, sem retry cego). **O estado do fix continua o que eu
+declarei antes: confirmado por construção, não observado em runtime.** Não vou
+registrar como validado.
+
+O ambiente está de pé para quem quiser conferir:
+
+- Dev server respondendo em **`http://localhost:5180`** (HTTP 200).
+- Stack Supabase local saudável (`supabase_db_cuthub` up 19h).
+- Migration `00013` confirmada aplicada — reli o catálogo agora:
+  `lancamento_atendimento_unico_por_agendamento` está lá como
+  `UNIQUE, btree (agendamento_id) WHERE agendamento_id IS NOT NULL AND tipo = 'entrada' AND categoria = 'atendimento'`.
+
+Repro de 30 segundos (inalterado): logar como `admin@cuthub.com` / `senha123` →
+**Profissionais → abrir um profissional → "Jornada de Trabalho"**. Com o fix, a
+seção renderiza vazia e o console fica limpo; sem ele, estoura
+`Maximum update depth exceeded`.
+
+Se o Chefe conectar a extensão do Claude no Chrome, eu faço essa verificação
+sozinho na próxima rodada e fecho o critério de vez.
+
+---
+
+### DESCOBERTA 11 — a jornada de trabalho avisava "salva com sucesso" sem salvar nada
+
+Achado da revisão periférica. É a **mesma família da TAREFA 2** (falha silenciosa
+quando não há barbearia), mas um grau pior: ali o app não fazia nada e não dizia
+nada; aqui o app não fazia nada e **dizia que tinha feito**.
+
+**`src/hooks/useHorarios.ts:26`** (antes):
+
+```ts
+mutationFn: (faixasNovas: any[]) => {
+  if (!barbeariaId || !profissionalId) return Promise.resolve();
+  ...
+```
+
+`Promise.resolve()` é um **sucesso**. A cadeia inteira trata como tal:
+
+1. `salvarMutation.mutateAsync` resolve.
+2. `onSuccess` dispara e invalida `['horarios', profissionalId]`.
+3. `JornadaTrabalho.tsx:86-88` segue reto para
+   `toast.success('Jornada salva com sucesso!')` e fecha o modo de edição.
+
+O usuário monta a jornada inteira, clica em salvar, **vê a confirmação verde, o
+formulário sai do modo de edição — e nada foi para o banco.** No refresh seguinte
+a jornada volta ao que era.
+
+Quem cai nisso: `admin_supremo`, que tem `barbearia_id = NULL` (DESCOBERTA 6). É
+o mesmo ator do resto da bateria. E a seção da Jornada é justamente a que ele
+consegue abrir, porque não tem o guard de botão que a TAREFA 2 colocou nos
+módulos de criação.
+
+**Fix aplicado** — falhar alto em vez de mentir:
+
+```ts
+// Falhar alto, não em silêncio: resolver aqui fazia o handler de
+// JornadaTrabalho exibir "Jornada salva com sucesso!" sem nada ter sido
+// gravado. admin_supremo tem barbearia_id nulo e caía exatamente nisso.
+if (!barbeariaId || !profissionalId) {
+  return Promise.reject(new Error('Barbearia não identificada.'));
+}
+```
+
+`handleSave` já tem `try/catch` que joga a mensagem em `localError` e a renderiza
+no bloco de erro da seção — **não precisei tocar no componente**. O usuário passa
+a ver "Barbearia não identificada." no lugar do falso sucesso.
+
+Escolhi `Promise.reject` em vez de `throw` dentro do `mutationFn` por consistência
+com o `return` que já estava ali e porque o React Query trata os dois igual. A
+mensagem é a mesma string que a TAREFA 2 padronizou nos outros três submits — os
+quatro pontos falam a mesma língua.
+
+**Por que isto é "bug óbvio" e não refatoração:** 1 arquivo, +6/-1, nenhuma
+mudança de assinatura, nenhum componente tocado, e está exatamente dentro do
+escopo que você já aprovou duas vezes (falha silenciosa quando `barbeariaId` é
+nulo). Se discordar, reverter é uma linha.
+
+---
+
+### O QUE MAIS OLHEI NA REVISÃO PERIFÉRICA — e não encontrei defeito
+
+Registro o que foi **descartado**, para ninguém refazer:
+
+| área | o que verifiquei | veredito |
+|---|---|---|
+| `financeiro.service.ts` | fix da TAREFA 1 no lugar; `resumo` e `listarLancamentos` com filtro de tenant | ok |
+| Recorte de período do Financeiro | `startOfMonth`/`endOfMonth` + `toISOString`; `endOfMonth` inclui 23:59:59.999, o último dia **não** é cortado | ok |
+| `data_lancamento` | é `timestamptz`, não `date` — comparar com `toISOString()` está correto | ok |
+| `Financeiro.tsx` | `periodo` e `filtros` são `useMemo` com deps corretas; nada instável indo para queryKey | ok |
+| `disponibilidade.service.ts` | mesma condição de status do constraint GIST (`cancelado`/`faltou` liberam); janela `lt fimDia` / `gt inicioDia` correta para sobreposição | ok |
+| `storage.service.ts:32` | o `return` mudo e o `catch` que engole erro são **intencionais e documentados** (limpeza de arquivo antigo não deve derrubar o fluxo) | ok |
+| `catch` vazio em todo `src/` | zero ocorrências | ok |
+| demais `if (!x) return` | 12 ocorrências, todas guardas legítimas de effect/handler (`!open`, `!over`, `!detalhes`) | ok |
+
+**Três observações de ambiente, nenhuma é bug de código:**
+
+1. **Não existe nenhuma infraestrutura de teste no projeto.** Sem vitest, jest,
+   Playwright ou Puppeteer em `package.json`; os scripts são só `dev`, `build`,
+   `lint`, `preview`. É por isso que toda validação de comportamento desta
+   bateria dependeu de alguém abrir o navegador. Não é algo para resolver de
+   afogadilho, mas é a razão estrutural de o mesmo critério ficar em aberto três
+   vezes seguidas. Vale uma decisão antes da nova fase.
+2. **Cinco instâncias do Vite penduradas** (portas 5174, 5178, 5179, 5180, 5181).
+   Só a 5180 responde. As outras são processos órfãos de sessões anteriores,
+   segurando porta e memória. Não mexi — matar processo é destrutivo e não foi
+   pedido.
+3. `supabase_vector_cuthub` está em **`Restarting`** há minutos. É o coletor de
+   logs do stack local; não afeta app, banco, auth nem storage (todos healthy).
+   Registro porque é a explicação provável se alguém for procurar logs pelo
+   Studio e não achar.
+
+---
+
+### VALIDAÇÃO
+
+```
+npx tsc --noEmit -p tsconfig.app.json  -> 0 erros (exit 0)
+npx oxlint                              -> 0 erros, 16 warnings (baseline preservada)
+npm run build                           -> ✓ 3553 modules transformed, built in 4.42s
+git diff --stat                         -> 1 arquivo, +6 / -1
+```
+
+Conferi que o diff não carrega mudança de fim de linha nem refatoração de carona.
+
+---
+
+### ESTADO
+
+| item | estado |
+|---|---|
+| TAREFAS 1, 2 e 3 | concluídas e **commitadas** em `9425c38` |
+| TAREFA 3 — runtime | **ainda não observado**; extensão do Chrome desconectada |
+| DESCOBERTA 11 (jornada) | **corrigida**, no working tree, **sem commit** |
+| PERGUNTA 4 | **aberta** desde a minha entrada anterior |
+
+Working tree: **1 arquivo** (`src/hooks/useHorarios.ts`). Segurando o commit até
+você avaliar a DESCOBERTA 11, como combinado.
+
+---
+
+### PERGUNTAS ABERTAS PARA [OPUS 4.6]
+
+**PERGUNTA 4 (repetida, ainda sem resposta):**
+
+1. Padronizar os outros hooks com a constante estável (prevenção do laço), ou
+   deixar como está e corrigir quando morder? Levantamento atualizado: sobraram
+   **5 pontos** — `useAgendamentos.ts:52`, `useDashboard.ts:44`,
+   `useFinanceiro.ts:38`, `useFinanceiro.ts:61`, `useServicos.ts:43`.
+2. O warning do Tooltip (DESCOBERTA 10, `SidebarItem.tsx:47`) entra nesta bateria
+   ou na próxima fase?
+
+**PERGUNTA 5 (nova, pequena):** a seção "Jornada de Trabalho" **não tem** o guard
+de botão que a TAREFA 2 colocou nos quatro módulos de criação — o admin consegue
+editar as faixas e clicar em salvar, e agora recebe um erro honesto em vez de um
+falso sucesso. Aplico também o `disabled` + `title` nos botões de Editar/Salvar
+da Jornada (consistência com a TAREFA 2), ou o erro explícito já basta para esta
+bateria?
+
+Nenhuma das duas bloqueia. Em stand-by para a nova fase.
+
+---
+
+## [CHEFE] 2026-09-17 09:03 — Respostas e direcionamento
+
+### STATUS RECONHECIDO
+
+| Item | Estado |
+|---|---|
+| TAREFAS 1, 2 e 3 | ✅ Concluídas e commitadas em `9425c38` |
+| TAREFA 3 — runtime | ⏸️ Não validada em runtime (extensão Chrome desconectada) |
+| DESCOBERTA 11 (jornada — falso sucesso) | ✅ Corrigida, no working tree, **sem commit** |
+| Branch `feat/fase-implantacao` | ⚠️ Só local, sem push para `origin` |
+
+---
+
+### RESPOSTA À PERGUNTA 4
+
+1. **Padronizar os 5 hooks restantes com a constante estável** — **SIM, corrigir
+   agora.** São 5 pontos cirúrgicos, o padrão já está estabelecido pela TAREFA 3,
+   e deixar para "quando morder" significa deixar 5 bombas-relógio de
+   `Maximum update depth` espalhadas. O custo de fazer agora é baixo; o custo de
+   debugar quando morderem em produção é alto.
+
+2. **Warning do Tooltip (`SidebarItem.tsx:47`)** — **próxima fase.** É um warning
+   cosmético do React, não causa falha funcional nem silenciosa. Misturar com esta
+   bateria (que é toda sobre integridade de dados e falhas silenciosas) suja o
+   escopo.
+
+---
+
+### RESPOSTA À PERGUNTA 5
+
+**Aplicar `disabled` + `title` nos botões da Jornada** — **SIM, aplique.** A
+DESCOBERTA 11 já mostrou que a Jornada é o módulo que o `admin_supremo` consegue
+acessar justamente por faltar o guard. O `Promise.reject` agora dá um erro
+honesto, mas a experiência ideal é nem deixar o admin chegar lá — consistência
+com os 4 módulos da TAREFA 2. É uma mudança pequena e alinhada com o que já foi
+aprovado.
+
+---
+
+### INSTRUÇÕES PARA O ENGENHEIRO
+
+1. **Padronizar os 5 hooks** (`useAgendamentos.ts:52`, `useDashboard.ts:44`,
+   `useFinanceiro.ts:38`, `useFinanceiro.ts:61`, `useServicos.ts:43`) com a
+   constante estável — mesma abordagem da TAREFA 3.
+2. **Aplicar guard de botão na Jornada** — `disabled` + `title` nos botões
+   Editar/Salvar, consistente com a TAREFA 2.
+3. **Commitar tudo junto** — o fix do `useHorarios.ts` (DESCOBERTA 11) + guard
+   de UI da Jornada + padronização dos 5 hooks formam uma unidade coesa.
+4. **Tooltip (`SidebarItem.tsx:47`)** — NÃO entra nesta bateria. Fica para a
+   próxima fase.
+
+### RECOMENDAÇÕES ACEITAS
+
+- **Push** — vou considerar antes da nova fase.
+- **Processos Vite órfãos** — vou limpar quando possível.
+
+---
+
+## [OPUS 5] 2026-09-17 — Bateria fechada: 5 hooks padronizados + guard da Jornada
+
+### CONTEXTO
+
+Respostas do Chefe às PERGUNTAS 4 e 5 recebidas (entrada de 09:03). Executei os
+três itens das instruções. **Tooltip ficou de fora**, como determinado.
+
+---
+
+### ITEM 1 — Padronização dos 5 hooks
+
+Os cinco pontos que restavam receberam a mesma abordagem da TAREFA 3: constante
+de módulo, tipada, com o comentário explicando o porquê para que ninguém
+"simplifique" de volta para `|| []`.
+
+| arquivo | constante | tipo |
+|---|---|---|
+| `useAgendamentos.ts:59` | `AGENDAMENTOS_VAZIOS` | `AgendamentoComDetalhes[]` |
+| `useDashboard.ts:52` | `FATURAMENTO_VAZIO` | `PontoFaturamento[]` |
+| `useFinanceiro.ts:46` | `LANCAMENTOS_VAZIOS` | `LancamentoComDetalhes[]` |
+| `useFinanceiro.ts:69` | `ATENDIMENTOS_VAZIOS` | `AtendimentoAReceber[]` |
+| `useServicos.ts:51` | `SERVICOS_VAZIOS` | `Servico[]` |
+
+Verificação: `grep -rn "data || \[\]" src/hooks/` → **0 ocorrências** fora do
+texto dos comentários. O padrão morreu no projeto inteiro.
+
+**Três detalhes que valem registro:**
+
+1. **Nenhum service precisou ser alterado.** `PontoFaturamento`,
+   `LancamentoComDetalhes`, `AtendimentoAReceber` e `AgendamentoComDetalhes` já
+   eram exportados. `Servico` não era — em vez de mexer no
+   `servicos.service.ts` só para exportar um tipo usado num placeholder, derivei
+   localmente no hook (`Database['public']['Tables']['servico']['Row']`), que é
+   exatamente o que o service faz internamente. Zero superfície nova.
+
+2. **Um cast redundante caiu junto.** `useFinanceiro.ts:69` era
+   `(query.data || []) as AtendimentoAReceber[]`. O `as` só existia porque o
+   `[]` cru estragava a inferência; com a constante tipada, `query.data` já vem
+   como `AtendimentoAReceber[]` do `queryFn` e o cast sumiu. **Menos uma asserção
+   de tipo escondendo o que o compilador poderia checar sozinho.**
+
+3. **Não toquei em `useAgendamentos.ts:82`** (`for (const a of query.data ?? [])`,
+   dentro do `useMemo`). Aquele array é descartado na própria iteração, não é
+   devolvido e não pode virar dep de effect nenhum. Trocar ali seria ruído sem
+   ganho.
+
+---
+
+### ITEM 2 — Guard de botão na Jornada de Trabalho
+
+Mesmo padrão da TAREFA 2 (`<span title>` por fora, porque
+`disabled:pointer-events-none` do Button do shadcn engole o `title` nativo), com
+a mesma string de mensagem dos outros quatro módulos.
+
+**Foram três botões, não dois** — e o terceiro é o que realmente importa:
+
+| linha | botão | por que entrou |
+|---|---|---|
+| `JornadaTrabalho.tsx:102` | **Definir Jornada** (EmptyState) | o único que o admin chega a ver |
+| `JornadaTrabalho.tsx:115` | Editar Jornada | o que o Chefe pediu |
+| `JornadaTrabalho.tsx:126` | Salvar Alterações | o que o Chefe pediu |
+
+O motivo de o "Definir Jornada" ser o botão decisivo: com `barbeariaId` nulo a
+query fica `enabled: false`, `horarios` fica vazio, e a linha 94
+(`if (!isEditing && horarios.length === 0)`) manda o componente para o
+**EmptyState**. Ou seja, **o admin nunca vê o "Editar Jornada"** — ele cai no
+EmptyState e o único caminho para o modo de edição é o botão de lá. Blindar
+Editar/Salvar e deixar esse aberto travaria a porta da frente e deixaria a dos
+fundos escancarada.
+
+No "Salvar Alterações" a condição virou `disabled={isSalvando || !barbeariaId}`,
+preservando o estado de carregamento que já existia.
+
+**"Cancelar" ficou de fora, de propósito:** ele só sai do modo de edição e
+restaura o rascunho a partir de `horarios`. Nunca escreve nada. Desabilitar
+seria prender o usuário no modo de edição sem saída.
+
+---
+
+### ITEM 3 — Commit
+
+Tudo junto, como pedido: DESCOBERTA 11 (`useHorarios.ts`) + guard de UI da
+Jornada + padronização dos 5 hooks.
+
+**Incluí também `.agents/rules/comunicacao-com-engenheiro.md`**, que estava
+untracked na árvore. O irmão dele (`.agents/rules/senior-engineer.md`) já é
+versionado, então deixar um dos dois fora do git significaria que um clone novo
+recebe metade das regras de colaboração. Se a intenção era mantê-lo fora,
+`git rm --cached` resolve.
+
+---
+
+### VALIDAÇÃO
+
+```
+npx tsc --noEmit -p tsconfig.app.json  -> 0 erros (exit 0)
+npx oxlint                              -> 0 erros, 16 warnings (baseline preservada)
+npm run build                           -> ✓ 3553 modules transformed, built in 2.27s
+```
+
+Diff revisado linha a linha antes do commit: 6 arquivos de código, só as
+mudanças descritas acima, sem refatoração de carona.
+
+**Cuidado que o diff exigiu — o repositório tem fins de linha mistos.**
+`useDashboard.ts`, `useFinanceiro.ts`, `useServicos.ts` e `JornadaTrabalho.tsx`
+são **CRLF**; `useAgendamentos.ts` e `useHorarios.ts` são **LF**. A primeira
+tentativa de patch inseriu blocos com `\n` em arquivo CRLF e teria produzido um
+arquivo de terminadores misturados — refiz detectando o terminador de cada
+arquivo. **Nenhuma linha aparece no diff só por mudança de fim de linha**, o que
+foi conferido no `git diff` completo.
+
+Fica o registro para a nova fase: sem `.gitattributes` com `* text=auto`, esse
+risco volta em qualquer edição programática. O git já avisa
+(`LF will be replaced by CRLF`) nos dois arquivos LF a cada `git diff`.
+
+---
+
+### ESTADO
+
+| item | estado |
+|---|---|
+| TAREFAS 1, 2 e 3 | concluídas, commitadas em `9425c38` |
+| DESCOBERTA 11 (falso sucesso na jornada) | **concluída e commitada** |
+| Padronização dos 5 hooks (PERGUNTA 4.1) | **concluída e commitada** |
+| Guard de botão na Jornada (PERGUNTA 5) | **concluída e commitada** |
+| Tooltip (DESCOBERTA 10) | **adiado para a próxima fase**, por decisão do Chefe |
+| TAREFA 3 — validação em runtime | **continua em aberto** (extensão do Chrome desconectada) |
+| Branch `feat/fase-implantacao` | **continua só local**, agora com 4 commits à frente de `origin/master` |
+
+Working tree limpo. **Esta bateria está fechada.**
+
+---
+
+### DUAS COISAS QUE CONTINUAM PENDENTES E NÃO SÃO MINHAS PARA DECIDIR
+
+1. **Push.** O Chefe respondeu "vou considerar antes da nova fase". Registro o
+   número atualizado: são agora **4 commits locais** que não existem em lugar
+   nenhum além desta máquina.
+2. **Validação em runtime.** Continua sendo o único critério de aceite que
+   atravessou três baterias sem ser fechado, e a causa estrutural é a ausência
+   de qualquer infraestrutura de teste no projeto. Se a nova fase for de
+   implantação, isso deixa de ser incômodo e vira risco: não há como afirmar que
+   um deploy não quebrou nada.
+
+Em stand-by para a nova fase.

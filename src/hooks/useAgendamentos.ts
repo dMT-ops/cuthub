@@ -7,6 +7,13 @@ import type { Database } from '@/types/database.types';
 type AgendamentoInsert = Database['public']['Tables']['agendamento']['Insert'];
 type StatusAgendamento = Database['public']['Enums']['status_agendamento'];
 
+/**
+ * Referência estável para a lista ainda não carregada. Ver useHorarios.ts:
+ * `query.data || []` cria um array novo a cada render enquanto `data` for
+ * undefined, e uma dep instável em useEffect vira laço de renderização.
+ */
+const AGENDAMENTOS_VAZIOS: AgendamentoComDetalhes[] = [];
+
 export function useAgendamentos(barbeariaId: string | null, inicio?: string, fim?: string) {
   const queryClient = useQueryClient();
 
@@ -49,7 +56,7 @@ export function useAgendamentos(barbeariaId: string | null, inicio?: string, fim
   });
 
   return {
-    agendamentos: query.data || [],
+    agendamentos: query.data ?? AGENDAMENTOS_VAZIOS,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

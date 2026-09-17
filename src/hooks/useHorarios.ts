@@ -23,7 +23,12 @@ export function useHorarios(profissionalId: string | null | undefined, barbearia
 
   const salvarMutation = useMutation({
     mutationFn: (faixasNovas: any[]) => {
-      if (!barbeariaId || !profissionalId) return Promise.resolve();
+      // Falhar alto, não em silêncio: resolver aqui fazia o handler de
+      // JornadaTrabalho exibir "Jornada salva com sucesso!" sem nada ter sido
+      // gravado. admin_supremo tem barbearia_id nulo e caía exatamente nisso.
+      if (!barbeariaId || !profissionalId) {
+        return Promise.reject(new Error('Barbearia não identificada.'));
+      }
       const atuais = query.data ?? JORNADA_VAZIA;
       return horariosService.salvarJornada(barbeariaId, profissionalId, atuais, faixasNovas);
     },

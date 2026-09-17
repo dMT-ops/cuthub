@@ -97,7 +97,11 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
         icon={Clock}
         title="Nenhum horário definido"
         description="Este profissional ainda não tem uma jornada de trabalho configurada."
-        action={<Button onClick={() => setIsEditing(true)}>Definir Jornada</Button>}
+        action={
+          <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
+            <Button onClick={() => setIsEditing(true)} disabled={!barbeariaId}>Definir Jornada</Button>
+          </span>
+        }
       />
     );
   }
@@ -107,7 +111,9 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
       <div className="flex justify-between items-center pb-2 border-b">
         <h3 className="font-medium">Horários de Atendimento</h3>
         {!isEditing ? (
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Editar Jornada</Button>
+          <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} disabled={!barbeariaId}>Editar Jornada</Button>
+          </span>
         ) : (
           <div className="space-x-2">
             <Button variant="ghost" size="sm" onClick={() => {
@@ -115,9 +121,11 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
               setLocalError('');
               setFaixas(horarios.map(h => ({ ...h })));
             }}>Cancelar</Button>
-            <Button size="sm" onClick={handleSave} disabled={isSalvando}>
-              {isSalvando ? 'Salvando...' : 'Salvar Alterações'}
-            </Button>
+            <span title={barbeariaId ? undefined : 'Admin não opera dentro de uma barbearia específica'}>
+              <Button size="sm" onClick={handleSave} disabled={isSalvando || !barbeariaId}>
+                {isSalvando ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </span>
           </div>
         )}
       </div>
