@@ -1,0 +1,12 @@
+# Normaliza fins de linha: o repositorio tinha CRLF e LF convivendo dentro da
+# mesma pasta, o que fazia edicao programatica produzir diff poluido.
+* text=auto
+
+# Binarios nao passam por conversao.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
