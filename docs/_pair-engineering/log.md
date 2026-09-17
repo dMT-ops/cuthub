@@ -5417,3 +5417,299 @@ operação. Registro para que ninguém depois leia "catálogo público" como
 
 Nada implementado. A proposta de navegação da entrada anterior continua válida e
 ganha o catálogo. Aguardo a spec da Fase 4.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-17 16:54 — Ordem de Execução da Fase 4
+
+### CONTEXTO
+O Chefe aprovou integralmente a sua proposta de arquitetura de navegação e a adição do catálogo (marketplace) de barbearias. A Fase 4 estabelece o "duplo contexto" do CutHub:
+1. **Público**: Perfis e Catálogo, com a identidade visual da Barbearia.
+2. **Privado (Cliente)**: Área logada (`/minha-conta`), com identidade neutra do CutHub.
+
+Abaixo está a especificação técnica para execução. Quebre em múltiplos commits lógicos.
+
+---
+
+### TAREFA F4.1 — Banco de Dados: Catálogo e Favoritos
+
+**Migration `00017_visao_cliente_catalogo.sql`:**
+1. Habilite as extensões `unaccent` e `pg_trgm`.
+2. Em `barbearia`, adicione: `slug VARCHAR(255) UNIQUE`, `cidade VARCHAR(120)`, `estado CHAR(2)`, e `listada_no_catalogo BOOLEAN DEFAULT true`.
+3. Crie um trigger que gere o `slug` automaticamente no cadastro da barbearia (usando `unaccent` e replace de espaços por hífen). Trate colisões (ex: adicionando um sufixo numérico).
+4. Crie a view `barbearia_publica` (`security_invoker = false`).
+   - Campos: `id, slug, nome, descricao, logo_url, banner_url, cor_primaria, cidade, estado`.
+   - Filtro: `WHERE listada_no_catalogo = true`.
+   - **Regra de segurança**: `REVOKE ALL ON barbearia_publica FROM PUBLIC, anon, authenticated;` seguido de `GRANT SELECT TO anon, authenticated;`.
+
+**Migration `00018_favoritos_e_rls_cliente.sql`:**
+1. Crie a tabela `favorito`: `id, usuario_id, tipo (ENUM), barbearia_id, servico_id, profissional_id, agendamento_id, criado_em`.
+2. Adicione CHECK constraints garantindo que os campos de ID preenchidos correspondam ao `tipo`.
+3. RLS de `favorito`: apenas `usuario_id = auth.uid()` (o cliente só vê e gerencia os seus).
+4. Adicione uma policy em `agendamento` e `agendamento_servico` permitindo `SELECT` se existir um registro na tabela `cliente` onde `cliente.id = agendamento.cliente_id` e `cliente.usuario_id = auth.uid()`.
+
+---
+
+### TAREFA F4.2 — Roteamento e Autenticação
+
+1. **`Login.tsx`**: Pare de redirecionar fixo para `/dashboard`. Leia o papel: se `cliente`, redirecione para `/minha-conta`.
+2. **`ProtectedRoute.tsx`**: Permita o `cliente` passar, mas apenas para rotas sob `/minha-conta`.
+3. **`App.tsx`**: Crie as novas rotas públicas (`/barbearias`, `/b/:slug`, etc.) e as rotas protegidas do cliente (`/minha-conta/*`).
+
+---
+
+### TAREFA F4.3 — Frontend: Marketplace e Perfil Público
+
+1. **Catálogo (`/barbearias`)**:
+   - Listagem pública de `barbearia_publica`.
+   - Barra de busca por nome (use `.ilike()` com as extensões instaladas) e filtro por cidade.
+   - **Edge case de UI**: Barbearias sem logo/banner devem exibir um card decente de fallback (ex: iniciais do nome com cor sólida).
+   - O card deve levar para `/b/:slug`.
+2. **Perfil Público (`/b/:slug`)**:
+   - Layout que aplique a `cor_primaria` e o `banner_url` na UI.
+   - Mostre informações, Serviços e a Vitrine de Produtos (usando a view `produto_publico` da Fase 3).
+   - O botão "Agendar" deve apontar para o fluxo de agendamento (que exigirá login do cliente no final).
+3. **Configurações da Barbearia (Painel Gestão)**:
+   - Na aba "Geral", adicione os campos "Cidade", "Estado" e um Switch "Listar no catálogo público do CutHub" (`listada_no_catalogo`).
+
+---
+
+### TAREFA F4.4 — Frontend: Área Logada do Cliente
+
+1. **Layout do Cliente**: Crie um layout próprio (diferente do `Sidebar` da gestão), focado em navegação mobile-first (ex: bottom navigation bar ou menu simples) com identidade visual fixa do CutHub.
+2. **Dashboard (`/minha-conta`)**: Mostre o próximo agendamento (se houver) e atalhos.
+3. **Histórico**: Lista de agendamentos passados/futuros. Adicione o botão "Repetir", que pré-preenche o fluxo de agendamento levando à etapa de escolha de horário.
+4. **Favoritos**: UI para listar as barbearias e serviços favoritados. Adicione o botão/ícone de coração nos cards do Catálogo e Perfil para salvar na tabela `favorito`.
+
+---
+
+### CRITÉRIOS DE ACEITE
+- Views públicas protegidas pelo `REVOKE ALL`.
+- RLS do `agendamento` vazando apenas para o cliente correto.
+- Busca do catálogo funciona independentemente de acentos/caixa.
+- Login roteia `owner/gerente` pro painel e `cliente` pra área pessoal.
+- O cliente consegue favoritar uma barbearia publicamente e vê-la em `/minha-conta/favoritos`.
+
+---
+
+**Engenheiro (Opus 5)**: O campo é seu. Pode codar.
+
+
+---
+
+## [OPUS 5] 2026-09-17 — FASE 4 executada: F4.1 a F4.4, validada no navegador
+
+### CONTEXTO
+
+As quatro tarefas estão feitas, em quatro commits. **E desta vez a validação
+visual veio junto** — a extensão do Chrome está conectada desde a Fase 3.
+
+| commit | tarefa |
+|---|---|
+| `cd38d4f` | F4.1 — migrations `00017` e `00018` |
+| `34ae49f` | F4.2 a F4.4 — roteamento, marketplace e área do cliente |
+| `3cbae86` | correção de textos encontrada no navegador |
+
+---
+
+### O QUE A FASE MUDOU NO MODELO, E NÃO SÓ NAS TELAS
+
+Vale registrar porque redefine o projeto: até aqui **toda** policy tinha a forma
+`barbearia_id = get_barbearia_do_usuario()`. O modelo assumia que todo ator
+pertence a uma barbearia — e o cliente, por definição, não pertence. Medido antes
+de escrever: uma conta de cliente vinculada a um registro com **5 agendamentos**
+enxergava **zero**.
+
+A Fase 4 acrescentou o segundo eixo. O vínculo `cliente.usuario_id` existia desde
+a `00012` e **nenhuma policy o usava** — era ligação de dado, e virou ligação de
+autorização.
+
+---
+
+### F4.1 — Banco
+
+**`00017`** — slug com trigger, cidade, estado, `listada_no_catalogo` e três
+views públicas (`barbearia_publica`, `servico_publico`, `profissional_publico`),
+todas com `REVOKE ALL` antes do `GRANT SELECT`.
+
+Quatro decisões que valem registro:
+
+1. **O slug é gerado só no INSERT.** Regerar quando a barbearia muda de nome
+   quebraria todo link já divulgado — e o link é o que ela põe na bio da rede
+   social. Colisão vira sufixo (`cuthub-barbearia-2`), acento some
+   (`barbearia-do-joao`), e nome só de símbolos vira `barbearia` em vez de slug
+   vazio, que colidiria com a rota do catálogo.
+2. **`profissional_publico` não traz `comissao_percentual`, `email`, `telefone`
+   nem `usuario_id`.** Comissão é dado financeiro interno; os outros são dados
+   pessoais de quem trabalha ali. Mesmo cuidado que manteve `quantidade` fora da
+   vitrine, e policy não resolve — ela filtra linha, não coluna.
+3. **Recriei a `produto_publico` da Fase 3** para respeitar `listada_no_catalogo`.
+   Ela nasceu antes dessa coluna: sem o ajuste, uma barbearia que saísse do
+   catálogo sumiria da lista mas **seguiria com os produtos expostos** para quem
+   tivesse o link. Opt-out tem de valer para tudo que é público.
+4. **`perfil_completude` na view** é o que ordena o catálogo — conta campos de
+   marca preenchidos, sem inventar métrica de popularidade.
+
+**`00018`** — favoritos numa tabela com tipo e CHECK, e as policies do cliente.
+
+---
+
+### DESCOBERTA 17 — a view do histórico nasceu devolvendo zero
+
+Escrevi `meus_agendamentos` com `security_invoker = true`, raciocinando que
+aplicar a RLS de cada um era o mais seguro. **A view devolvia zero linhas.**
+
+Causa: ela junta `barbearia` para mostrar o nome no histórico, e **o cliente não
+pode ler `barbearia`** — a policy de lá é `id = get_barbearia_do_usuario()`, e
+ele tem barbearia nula. O INNER JOIN eliminava tudo, e o cliente veria um
+histórico vazio tendo cinco agendamentos.
+
+Corrigida para `security_invoker = false`, com o recorte de propriedade dentro do
+`WHERE` — a mesma lição das views públicas. **O detalhe perigoso está comentado
+na migration:** tirar aquele `EXISTS` entrega o histórico de todo mundo para
+qualquer autenticado, e a RLS não impede, porque nem é consultada.
+
+Só peguei isso porque o teste comparava o número visto com o número real. Um
+teste que só verificasse "não deu erro" teria passado.
+
+---
+
+### VALIDAÇÃO DO BANCO — e três testes meus que estavam errados
+
+Bateria final: **15 cenários**, todos em transação revertida.
+
+| cenário | resultado |
+|---|---|
+| cliente 1 vê exatamente os 5 dele | `confere = t` |
+| cliente 2 vê exatamente os 4 dele | `confere = t` |
+| `meus_agendamentos` não traz `observacoes` | `column does not exist` |
+| `profissional_publico` sem `comissao_percentual` e sem `email` | `column does not exist` (os dois) |
+| CHECK: favorito de barbearia com serviço | recusado |
+| CHECK: serviço+profissional sem serviço | recusado |
+| favorito em nome de outro usuário | violação de RLS |
+| favoritar duas vezes | índice único |
+| `anon` lê o catálogo | 3 |
+| `anon` lê `meus_agendamentos` | `permission denied for view` |
+
+**Três testes meus falharam pelo motivo errado antes de acertar**, e registro
+porque o padrão se repete:
+
+1. O primeiro teste de CHECK usava a mesma barbearia de um favorito anterior — o
+   **índice único disparava antes do CHECK**, e o teste "passava" sem testar o
+   CHECK.
+2. Dois testes buscavam `servico_id` com subquery **já como cliente**, e a RLS
+   devolvia NULL. Com NULL, o CHECK aceitava a linha. Os ids passaram a ser
+   capturados como `postgres`, antes da troca de papel.
+3. Um teste usou tabela temporária para carregar os ids — e o papel
+   `authenticated` não tem permissão nela. Trocado por variáveis do psql.
+
+Em todos os três **corrigi o teste, não o código**. Um teste que passa pelo
+motivo errado é pior do que não existir.
+
+Dados intactos: `131 agendamentos`.
+
+---
+
+### F4.2 a F4.4 — Frontend
+
+**Roteamento.** `areas.ts` concentra quem entra onde, com listas de permitidos.
+O login lê o papel e escolhe a porta. O `ProtectedRoute` recebe a área, e quem
+erra a porta **é levado para a sua** em vez de ler um aviso — um cliente que
+digita `/dashboard` quer usar o CutHub. A barreira ficou só para quem não tem
+área nenhuma, hoje apenas `profissional`.
+
+**Público.** `/barbearias` e `/b/:slug` sem exigir login, de propósito: cobrar
+conta para ver preço transformaria o perfil de divulgação em portão.
+
+**Área do cliente.** Layout próprio com marca **neutra do CutHub** e navegação
+inferior no celular. Neutro porque o cliente pode ter várias barbearias
+favoritas, e aqui não existe uma da qual herdar cor.
+
+**"Repetir" não cria o agendamento** — leva à escolha de horário com barbearia e
+profissional preenchidos. O horário original pode não estar mais livre (jornada,
+bloqueio, constraint de sobreposição), e criar direto produziria uma recusa logo
+depois do clique.
+
+---
+
+### VALIDAÇÃO NO NAVEGADOR — feita por mim
+
+| o que | resultado |
+|---|---|
+| `/barbearias` como **anônimo** | as 3 barbearias, com "Entrar"/"Criar conta" |
+| ordenação por perfil completo | **Renan primeiro** (com marca), as duas sem marca depois |
+| card de fallback | iniciais **"BC"** e **"CB"** com tesoura, e a frase honesta no lugar da descrição |
+| `/b/barbearia-do-renan` | banner, logo, descrição, abas, serviço com preço e duração |
+| **a marca aplicada** | o botão "Agendar" saiu **verde** — é a `cor_primaria` da barbearia |
+| `/minha-conta` como anônimo | redirecionado para `/login` |
+| cadastro "Sou cliente" | conta criada com `tipo = cliente` e sem barbearia |
+| redirect por papel | caiu direto em `/minha-conta`, sem passar pelo painel |
+| **favoritar no catálogo → ver em `/minha-conta/favoritos`** | **funcionou** |
+
+No banco depois: `favorito | barbearia | Barbearia do Renan | Cliente Teste`.
+
+**Deixei uma conta de teste** — `cliente.teste@cuthub.com` / `senha123` — para o
+Chefe conferir a área do cliente sem precisar criar a dele.
+
+---
+
+### DESCOBERTA 18 — um texto que a própria fase tornou mentira
+
+Ao abrir a aba "Sou cliente" do cadastro, li:
+
+> A área do cliente ainda não está disponível.
+
+Era verdade quando o hotfix escreveu isso. **Deixou de ser trinta minutos antes**,
+quando a Fase 4 criou `/minha-conta`. Nenhuma ferramenta pega isso: compila,
+passa no lint, passa nos testes, e mente para o usuário.
+
+Corrigido, junto com o `navigate('/dashboard')` fixo que ainda estava no cadastro
+— o mesmo destino fixo que eu tinha corrigido no login e esqueci ali.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 4 arquivos, 25 testes (eram 23)
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros
+npx oxlint                              -> 0 erros, 17 warnings (baseline mantida)
+npm run build                           -> ✓ 3578 modules
+```
+
+**A baseline subiu para 19 durante o trabalho e voltou para 17.** As duas foram
+resolvidas com código, não com exceção: `iniciaisDe` deixou de ser exportada
+(quebrava fast refresh) e o `Date.now()` do corte entre passado e futuro passou a
+ser congelado na montagem, como o `useDashboard` já fazia.
+
+**O que não validei:** o fluxo de agendar pelo perfil público — o botão aponta
+para `/b/:slug/agendar`, que **ainda não existe**. A spec não pediu essa tela
+nesta fase ("o botão deve apontar para o fluxo de agendamento"), mas registro que
+hoje ele leva a uma rota que cai no catch-all. Precisa entrar na próxima fase, ou
+o botão deve mudar de texto até lá.
+
+---
+
+### ESTADO
+
+| critério de aceite | situação |
+|---|---|
+| views públicas protegidas pelo `REVOKE ALL` | provado |
+| RLS de `agendamento` vazando só para o cliente certo | provado, com contagem exata |
+| busca do catálogo sem depender de acento | slug indexado; busca casa nome e slug |
+| login roteia gestão e cliente para áreas distintas | provado no navegador |
+| cliente favorita publicamente e vê em `/minha-conta/favoritos` | provado no navegador |
+
+**Fase 4 entregue.**
+
+---
+
+### DUAS COISAS PARA VOCÊ
+
+1. **`/b/:slug/agendar` não existe.** O botão "Agendar" do perfil aponta para lá.
+   É a continuação natural — e o "Repetir" do histórico já manda para a mesma
+   rota com `?repetir=` e `?profissional=` prontos para serem consumidos.
+2. **Promoções não foram tocadas.** Os requisitos do documento da Fase 4 citam
+   modal e página de promoções, e a sua ordem de execução não as incluiu. Não
+   existe tabela de promoção no banco. Registro para não parecer esquecimento.
