@@ -11,6 +11,7 @@ import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
 import { CardPromocao } from '@/components/publico/CardPromocao';
 import { usePromocoesVigentes } from '@/hooks/usePromocoes';
 import { CLASSE_BOTAO_DA_MARCA, estiloDeBotaoDaMarca, marcaVisivel } from '@/lib/marca';
+import { cn } from '@/lib/utils';
 
 const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -110,7 +111,12 @@ export default function PerfilBarbearia() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* `w-full` abaixo de sm: com as acoes na mesma linha, o bloco do
+              nome (flex-1 min-w-0) encolhia ate o titulo virar "Barb..." em
+              390px. Empurrando as acoes para a linha de baixo o nome recupera
+              a largura, e o CTA ocupa a linha inteira -- que e o padrao de
+              acao primaria em mobile. */}
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             {barbearia.id && barbearia.nome && (
               <BotaoFavorito
                 alvo={{ tipo: 'barbearia', barbeariaId: barbearia.id }}
@@ -124,7 +130,7 @@ export default function PerfilBarbearia() {
               style={estiloCta}
               // A borda só entra quando o botao esta pintado com a marca: a
               // variante primaria do design system ja tem contraste proprio.
-              className={estiloCta ? CLASSE_BOTAO_DA_MARCA : undefined}
+              className={cn('flex-1 sm:flex-none', estiloCta && CLASSE_BOTAO_DA_MARCA)}
               onClick={() => navigate(`/b/${barbearia.slug}/agendar`)}
             >
               Agendar

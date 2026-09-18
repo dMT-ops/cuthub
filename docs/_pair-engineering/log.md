@@ -6652,3 +6652,95 @@ da escolha já mata a classe do problema, e bloquear a marca de um cliente pagan
 
 Continua em aberto a pergunta da Fase 5: **para onde vamos a seguir?** Console
 "Mão de Deus", Financeiro ou notificações.
+
+---
+
+## [OPUS 5] 2026-09-18 — Ressalva de mobile fechada: agora foi visto, não deduzido
+
+### POR QUE VOLTEI NISSO ANTES DE COMEÇAR QUALQUER FASE NOVA
+
+Na Fase 5.5 eu escrevi, em nota de método, que **não tinha observado o layout
+renderizado em mobile** — a ferramenta de resize reportava sucesso e o
+`innerWidth` continuava 1920. Eu tinha compensado lendo as classes do grid e
+concluindo por construção. Era evidência sólida, mas não era ter visto a tela, e
+eu registrei a distinção justamente para não deixar isso passar como verificado.
+
+Fechei agora. Reproduzi o mesmo defeito da ferramenta (`resize_window` devolve
+"successfully resized" e o viewport continua 1920) e usei outro caminho: um
+**iframe de 390px na mesma origem**. Media query do Tailwind avalia contra o
+viewport do iframe, então o layout mobile é renderizado de verdade — não é
+simulação de classe, é o navegador aplicando os breakpoints.
+
+### O QUE A TELA MOSTROU E O CÓDIGO NÃO MOSTRAVA
+
+**Bug novo, real, em 386px:** o nome da barbearia aparecia como **"Barb…"** no
+perfil público.
+
+O header é `flex flex-wrap`, e a intenção era que as ações quebrassem para a
+linha de baixo quando não coubessem. Não quebravam: o bloco do nome é
+`flex-1 min-w-0`, e um item que pode encolher até zero **nunca força o wrap** —
+ele cede a largura toda para o avatar (80px) e para o par favorito + "Agendar"
+(~160px), e o `truncate` engole o título. Por isso a leitura de classes não
+pegou: cada classe está certa, o defeito está na interação entre `flex-1` e
+`flex-wrap`.
+
+É um dos edge cases que a sua própria spec da Fase 5.5 listou ("nome de
+barbearia muito longo (quebra de linha no header)"). Só que não precisava de
+nome longo: **"Barbearia do Renan" já estourava.**
+
+**Correção** (`src/pages/publico/PerfilBarbearia.tsx`): o bloco de ações recebe
+`w-full sm:w-auto` — abaixo de `sm` ele ocupa a linha inteira e empurra a si
+mesmo para baixo, devolvendo a largura ao nome; de `sm` para cima nada muda. O
+CTA ganhou `flex-1 sm:flex-none`, então em mobile ele ocupa a linha toda, que é
+o padrão de ação primária em tela pequena.
+
+### MEDIÇÕES, TRÊS LARGURAS, RENDERIZADAS
+
+| | 386px | 764px | 1362px |
+|---|---|---|---|
+| nome | **"Barbearia do Renan"** inteiro | inteiro | inteiro |
+| truncado | **não** (era sim) | não | não |
+| CTA | 310px, linha própria | 118px, mesma linha | 118px, mesma linha |
+| avatar sobre o banner | **4 de 4 pontos** | 4 de 4 | 4 de 4 |
+| grid principal | 1 coluna | 1 coluna | 880px + 320px |
+| overflow horizontal | nenhum | nenhum | nenhum |
+| elementos mais largos que a tela | 0 | 0 | 0 |
+
+### O QUE MAIS FOI CONFERIDO EM 386px
+
+- **Catálogo**: coluna única (`grid gap-6 sm:grid-cols-2 lg:grid-cols-3
+  2xl:grid-cols-4` resolve para 339px, uma coluna). O `2xl:grid-cols-4` que
+  entrou na Fase 5.5 não toca em mobile, como eu tinha afirmado.
+- **Área do cliente logada** (`/minha-conta`, autenticado como
+  `cliente.teste@cuthub.com`): `main` ocupa os 371px úteis, nav de desktop com
+  `display: none`, barra inferior de 5 abas presente (Início, Agenda, Favoritos,
+  Ofertas, Explorar), a coluna lateral "Ofertas nas suas barbearias" empilha
+  abaixo do conteúdo. Zero overflow.
+- Confirmei também que o anel do CTA (`CLASSE_BOTAO_DA_MARCA`) está aplicado de
+  fato: `box-shadow` traz `oklab(... / 0.25) 0 0 0 1px`. Cheguei a ver
+  "transparente" numa primeira medição — era truncamento da minha própria leitura
+  em 60 caracteres, não ausência do anel.
+
+**Nota de procedimento:** para testar a área logada do cliente eu troquei a
+sessão do navegador e **restaurei a do `ownera@cuthub.com` ao final** —
+conferido, a aba continua logada como o dono. Nenhum dado foi alterado no banco.
+
+```
+tsc           -> 0 erros
+npm test      -> 34 testes passando
+oxlint        -> 0 erros, nenhum warning novo (PerfilBarbearia.tsx: 0)
+npm run build -> ok
+```
+
+### SOBRE O PRÓXIMO PASSO
+
+Continua aberta a pergunta que fechou a Fase 5.5: **Mão de Deus**, **Financeiro**
+ou **notificações**. Minha leitura, para ajudar a decidir e não para decidir por
+você: o Financeiro já tem 114 lançamentos e 4 operações de service no banco, é o
+que tem mais fundação pronta; notificações é a única das três que **adiciona
+dependência externa** (provedor de e-mail/WhatsApp) e por isso é a que custa mais
+caro para começar; a Mão de Deus é a de maior risco de segurança, porque envolve
+atravessar tenants de propósito — e a nossa RLS hoje é justamente o contrário
+disso, então ela vai exigir desenho de autorização, não só telas.
+
+Aguardo o rumo.
