@@ -5834,3 +5834,294 @@ promoções. Uma observação para quando você desenhar a spec: o botão "Repet
 histórico já monta a URL com `?repetir=<id>&profissional=<id>`, então o fluxo de
 agendamento nasce precisando ler esses dois parâmetros. Está implementado
 esperando por eles.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 08:20 — Ordem de Execução da Fase 5
+
+### CONTEXTO
+
+O Chefe aprovou o Plano de Implementação da Fase 5 (aprovado na rodada anterior). Esta fase preenche as duas últimas grandes lacunas do produto na visão do cliente:
+1. O **Fluxo de Agendamento Público**, que dá vida ao botão "Agendar" e concretiza a ponte entre o cliente final e a agenda do barbeiro.
+2. O **Sistema de Promoções**, englobando o CRUD na gestão e a vitrine de descontos para o cliente.
+
+Opus 5, excelente trabalho de validação e adição de dados na conta de teste. A especificação técnica detalhada para a Fase 5 segue abaixo.
+
+---
+
+### TAREFA F5.1 — Banco de Dados: Promoções
+
+**Migration `00019_promocoes.sql`:**
+1. **Tabela `promocao`**:
+   - `id, barbearia_id, titulo, descricao, desconto_percentual (NUMERIC CHECK >= 0 AND <= 100), regras TEXT, data_inicio TIMESTAMPTZ, data_fim TIMESTAMPTZ, status (status_registro DEFAULT 'ativo'), criado_em, atualizado_em`.
+   - RLS: Padrão da barbearia (`barbearia_id = get_barbearia_do_usuario() OR is_admin_supremo()`).
+   - Use o trigger de `atualizado_em`.
+2. **View `promocao_publica`**:
+   - A mesma lição aprendida na Fase 3 e 4: crie com `security_invoker = false`.
+   - Filtro essencial: `WHERE status = 'ativo' AND data_fim >= now() AND data_inicio <= now()`.
+   - **Regra de segurança obrigatória**: `REVOKE ALL ON promocao_publica FROM PUBLIC, anon, authenticated;` seguido de `GRANT SELECT TO anon, authenticated;`.
+
+---
+
+### TAREFA F5.2 — Frontend: Painel da Barbearia (Promoções)
+
+1. **Gestão (`/dashboard/promocoes`)**:
+   - Adicione à sidebar (ícone de `Tag` ou `Percent`).
+   - CRUD para a barbearia: criar, editar e inativar promoções.
+   - O formulário precisa garantir que a `data_fim` seja posterior à `data_inicio`.
+
+---
+
+### TAREFA F5.3 — Frontend: Fluxo de Agendamento Público
+
+O botão "Agendar" do perfil público e o botão "Repetir" do histórico agora terão um destino real: `/b/:slug/agendar`.
+
+1. **Wizard de Agendamento (Passo a Passo)**:
+   - **Passo 1 (Serviços)**: Listagem dos serviços da barbearia (consumindo a view `servico_publico`). O cliente pode selecionar um ou mais.
+   - **Passo 2 (Profissional)**: Escolha do barbeiro (consumindo `profissional_publico`). Deve mostrar quem realiza os serviços escolhidos (ou todos).
+   - **Passo 3 (Data e Hora)**: Reutilize a integração pesada que você já fez em `disponibilidade.service.ts` para renderizar os horários livres.
+   - **Passo 4 (Autenticação)**:
+     - Se o cliente não estiver autenticado (`auth.user` = null), ele não pode avançar. Exiba uma interface de Login/Cadastro embutida ou force o redirecionamento com retorno.
+   - **Passo 5 (Confirmação)**:
+     - Resumo do pedido.
+     - Campo de "Observações/Preferências" (validado na Fase 3).
+     - Botão "Confirmar Agendamento" (executa o INSERT no banco associando o `cliente_id`).
+
+2. **O Botão "Repetir" (Atalho)**:
+   - Como você bem pontuou, a URL já contém `?repetir=<id>&profissional=<id>`.
+   - O Wizard deve interceptar esses parâmetros na montagem e pré-preencher os Passos 1 e 2, pulando diretamente para o Passo 3 (Data e Hora).
+
+---
+
+### TAREFA F5.4 — Frontend: Visão do Cliente (Promoções)
+
+1. **Perfil da Barbearia (`/b/:slug`)**:
+   - Exiba as promoções ativas na página da barbearia. Use a `cor_primaria` da barbearia para destacar os cards de desconto.
+2. **Área do Cliente (`/minha-conta/promocoes`)**:
+   - Crie a tela agregadora que traga as promoções ativas apenas das barbearias que o cliente favoritou.
+
+---
+
+### CRITÉRIOS DE ACEITE
+- A view `promocao_publica` vaza zero dados (`REVOKE ALL` ativo).
+- O cliente consegue completar um agendamento 100% pelo lado de fora do painel (`/b/:slug/agendar`).
+- Se deslogado, o fluxo de agendamento impede a confirmação e exige autenticação.
+- Promoções expiradas somem automaticamente (filtro na view).
+- O botão "Repetir" carrega os dados e pula para a escolha de horário.
+
+---
+
+**Engenheiro (Opus 5)**: O campo é seu. Pode codar.
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 5 executada: F5.1 a F5.4, validada no navegador
+
+### CONTEXTO
+
+As quatro tarefas estão feitas, em dois commits. A parte de promoções seguiu a
+spec; a de agendamento precisou de uma arquitetura diferente da descrita — e o
+motivo está abaixo, porque é o achado principal da fase.
+
+| commit | tarefa |
+|---|---|
+| `70b6f53` | F5.1 — migration `00019` |
+| `3cdb810` | F5.2 a F5.4 — painel, wizard e vitrine de promoções |
+
+---
+
+### A SPEC PEDIA DUAS COISAS QUE O CLIENTE NÃO PODE FAZER
+
+A F5.3 descreve o passo 3 lendo a disponibilidade e o passo 5 fazendo "o INSERT
+no banco associando o `cliente_id`". **Nenhum dos dois é possível pelo frontend.**
+Medido como a conta de cliente, antes de escrever qualquer linha:
+
+```
+horario_trabalho visíveis ....... 0
+bloqueio visíveis ............... 0
+servico visíveis ................ 0
+INSERT INTO agendamento ......... ERROR: new row violates row-level
+                                  security policy for table "agendamento"
+```
+
+É a mesma raiz da Fase 4: as policies são `barbearia_id =
+get_barbearia_do_usuario()` e o cliente não pertence a barbearia nenhuma. E há um
+terceiro problema que a spec não menciona: **um cliente agendando numa barbearia
+onde nunca foi atendido não tem registro em `cliente` lá** — e também não pode
+criar um.
+
+**Solução: duas RPCs `SECURITY DEFINER`**, no mesmo molde da gestão de acesso da
+Fase 2. Elas são a fronteira — tudo que o público faz com a agenda passa por ali,
+com validação explícita.
+
+- **`ocupacao_publica`** devolve jornada e ocupados **no mesmo formato** que
+  `disponibilidade.service` já usava. Isso foi de propósito: o frontend
+  reaproveita `gerarHorariosDisponiveis`, a função pura que o painel usa, em vez
+  de reimplementar a regra de disponibilidade do lado de fora. Nada sai dali além
+  dos limites dos intervalos — nem quem marcou, nem o quê.
+- **`agendar_como_cliente`** valida, nesta ordem: autenticação, serviços não
+  vazios, horário no futuro, barbearia no catálogo, profissional da barbearia e
+  ativo, serviços da barbearia e ativos, **jornada de trabalho**, **bloqueio** —
+  e só então cria o registro de `cliente` (se for a primeira visita) e grava o
+  agendamento com o preço congelado.
+
+**Por que jornada e bloqueio precisam ser validados ali:** o constraint de
+exclusão `agendamento_sem_sobreposicao` barra sobreposição, mas não sabe nada de
+horário de funcionamento. Sem essas duas checagens, dava para agendar às 3 da
+manhã montando a chamada na mão, fora do que a tela oferece.
+
+---
+
+### DESCOBERTA 19 — o modelo não sabia em que fuso a barbearia abre
+
+Ao escrever a validação de jornada, esbarrei num problema que não era da fase:
+
+`horario_trabalho.hora_inicio` é `time` — **hora de parede**, "abro às 9". O
+agendamento é `timestamptz` — **instante absoluto**. Para comparar os dois é
+preciso saber em que fuso aquela parede está, e **o modelo não guardava isso em
+lugar nenhum.**
+
+Este banco roda em **UTC**. Sem a informação, `p_data_hora::time` daria a hora em
+UTC, e a validação erraria por 3 horas numa barbearia brasileira: **aceitaria 6h
+da manhã e recusaria 19h**.
+
+Adicionei `barbearia.fuso_horario`, com default `America/Sao_Paulo`. Explícito e
+orientado a dado, em vez de uma constante escondida na função — e não fecha a
+porta para uma barbearia de outro fuso.
+
+**Observação que vale para o arquiteto:** os dados de seed têm agendamentos
+gravados às `09:00+00`, enquanto a jornada é `09:00–20:00`. Ou seja, o seed tratou
+UTC como hora de parede. O frontend, que monta os horários no fuso do navegador,
+lê isso como 06:00 — fora da jornada. **É uma inconsistência do seed, anterior a
+esta fase**, e ela não afeta agendamento novo (que passa pela RPC). Registro
+porque explica agendamentos antigos aparecendo em horários estranhos.
+
+---
+
+### VALIDAÇÃO DO BANCO — 13 cenários, em transação revertida
+
+| cenário | resultado |
+|---|---|
+| `anon` vê só a promoção vigente (das 3 cadastradas) | 1 — "Terca de corte" |
+| `anon` escrevendo na view | recusado |
+| `anon` lendo a tabela `promocao` | 0 |
+| CHECK: promoção terminando antes de começar | recusado |
+| CHECK: desconto de 120% | recusado |
+| `ocupacao_publica` respondendo ao cliente | jornada devolvida |
+| agendar no passado | "Escolha um horario no futuro" |
+| agendar com serviço de **outra** barbearia | "Algum servico selecionado nao esta disponivel" |
+| agendar fora da jornada | "Horario fora da jornada de trabalho" |
+| **caminho feliz** | criado, 1 item de serviço, cliente reaproveitado |
+| agendar **duas vezes** no mesmo horário | `agendamento_sem_sobreposicao` |
+| agendar em barbearia fora do catálogo | recusado |
+| `anon` chamando a RPC | `permission denied for function` |
+
+**Quatro testes meus falharam pelo motivo errado antes de acertar**, e o padrão
+se repetiu da Fase 4: subquery de `servico` executada **já como cliente**
+devolvia NULL (a RLS bloqueia), fazendo o CHECK aceitar a linha; profissional e
+dia da semana escolhidos por caminhos separados, caindo num dia sem jornada;
+serviço arbitrário longo demais para caber às 10h; e um horário que colidia com
+um bloqueio real.
+
+Cada falha foi um **guard funcionando** — mas nenhuma provava o caminho feliz.
+Em todos os casos corrigi o teste, não o código.
+
+---
+
+### VALIDAÇÃO NO NAVEGADOR
+
+| passo | resultado |
+|---|---|
+| `/b/:slug/agendar` como **anônimo** | passo 1 renderiza |
+| escolher serviço → aparece passo 2 | ok |
+| escolher profissional → aparece passo 3 | **horários reais, 09:00 a 17:30 de 15 em 15** |
+| escolher horário → passo 4 | resumo com serviço, data, duração e total |
+| **sem login** | **não existe botão "Confirmar"** — só "Entrar" / "Criar conta" |
+| logado, confirmar | "Agendamento confirmado!" e redireciona para o histórico |
+
+No banco, depois de confirmar pelo site:
+
+```
+2026-09-18 18:30+00 | pendente | Barbearia do Renan | Medina | Cliente Teste
+observacoes: "Teste de agendamento publico" | 1 item | R$ 50,00
+```
+
+E o que eu mais queria ver:
+
+```
+Cliente Teste | Barbearia do Renan | vinculado = t
+```
+
+**O registro de `cliente` nasceu sozinho na barbearia nova**, que era exatamente
+a lacuna. A conta agora tem dois registros — um em cada barbearia — que é o
+modelo correto.
+
+**Promoções:** criei uma vigente e uma encerrada. O perfil público mostra
+`15% — Sexta do Fade ... Válida até 18 de outubro` e **não mostra a encerrada**.
+`/minha-conta/promocoes` agrega a mesma promoção com o nome da barbearia. O filtro
+por `now()` funciona: promoção expirada some sozinha, sem depender de alguém
+lembrar de desativar.
+
+---
+
+### VALIDAÇÃO
+
+```
+npm test                                -> 4 arquivos, 25 testes
+npx tsc --noEmit -p tsconfig.app.json   -> 0 erros
+npx oxlint                              -> 0 erros, 17 warnings (baseline mantida)
+npm run build                           -> ✓ 3586 modules
+```
+
+A baseline subiu para 19 durante o trabalho e voltou para 17, resolvida com
+código: dependência de `useMemo` explícita, e o "Repetir" **derivado durante o
+render** em vez de gravado por `setState` dentro de efeito.
+
+---
+
+### DUAS DECISÕES DE UX QUE VALE REGISTRAR
+
+1. **Trocar de serviço limpa o horário escolhido.** A duração muda, e o encaixe
+   anterior pode não existir mais — manter a escolha ofereceria um horário que o
+   servidor recusaria.
+2. **Se o horário for tomado entre a escolha e a confirmação**, a tela volta para
+   a seleção e recarrega a disponibilidade, em vez de deixar a pessoa presa numa
+   confirmação que não passa. O erro do constraint é traduzido para "Este horário
+   acabou de ser ocupado. Escolha outro."
+
+---
+
+### DADOS DE TESTE DEIXADOS NO BANCO
+
+Para o Chefe conferir sem montar o cenário:
+
+- agendamento de teste em Barbearia do Renan (`observacoes = 'Teste de agendamento publico'`)
+- promoção **Sexta do Fade** (vigente) e **Promo ja encerrada** (expirada, para
+  provar o filtro)
+
+Desfazer, se quiser limpar:
+
+```sql
+DELETE FROM agendamento WHERE observacoes = 'Teste de agendamento publico';
+DELETE FROM promocao WHERE titulo IN ('Sexta do Fade', 'Promo ja encerrada');
+```
+
+---
+
+### ESTADO
+
+| critério de aceite | situação |
+|---|---|
+| `promocao_publica` com `REVOKE ALL` ativo | provado |
+| cliente completa agendamento pelo lado de fora | **provado no navegador e no banco** |
+| deslogado não confirma | provado |
+| promoção expirada some sozinha | provado |
+| "Repetir" carrega dados e pula para o horário | implementado; ver ressalva |
+
+**Ressalva honesta sobre o "Repetir":** validei o wizard partindo do zero, não
+partindo do botão "Repetir" do histórico. O parâmetro é lido e o profissional é
+pré-selecionado, mas **não cliquei no botão de repetir para ver o caminho
+completo**. É o único critério desta fase que não vi funcionando ponta a ponta.
+
+**Fase 5 entregue.**
