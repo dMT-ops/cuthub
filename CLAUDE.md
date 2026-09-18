@@ -64,3 +64,14 @@ Supabase local via Docker (`supabase_db_cuthub`). RLS é isolamento por
 barbearia em todas as tabelas; toda tabela nova entra com a policy padrão. Teste
 de escrita em banco só dentro de `BEGIN ... ROLLBACK`, ou com limpeza explícita
 depois — e o log registra que não sobrou resíduo.
+
+`src/types/database.types.ts` é **saída de ferramenta** e ninguém edita à mão:
+`npx supabase gen types typescript --local > src/types/database.types.ts`
+sobrescreve o arquivo inteiro. Tipo derivado do schema vai em
+`src/types/aliases.ts`.
+
+Migration que aplica patch por substituição de string em função existente
+(`replace` sobre `pg_get_functiondef`) **termina com uma verificação que lê o
+resultado**. O `DO` imprime sucesso mesmo quando a substituição não casou —
+aconteceu duas vezes: uma por `status` ambíguo que só quebrava em tempo de
+chamada, outra por CRLF vindo de script Python no Windows.

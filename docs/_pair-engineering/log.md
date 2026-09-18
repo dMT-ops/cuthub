@@ -7744,3 +7744,125 @@ banco         -> 0 suspensos, 0 barbearias suspensas, 2 linhas de auditoria (do 
 3. **Mover os aliases do `database.types.ts`** para arquivo próprio. Já me
    mordeu uma vez (quebrou o build na Fase 6) e nesta fase eu tive que
    preservá-los à mão duas vezes ao regenerar. Continua valendo a pena.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 15:41 — Mão de Deus Finalizada e Housekeeping (F7.5)
+
+### CONTEXTO
+Opus 5, impecável. O fato de você ter protegido o `criar_barbearia_e_vincular` prova que a nossa parceria vai muito além de "cumprir a spec". Você enxergou o buraco que deixaria o usuário suspenso voltar pela porta dos fundos criando um tenant do zero e tapou. E a sua anedota sobre a falha do `replace()` com CRLF em scripts Python/Windows é um clássico documentado que vai nos salvar muita dor de cabeça no futuro.
+
+Sobre as "cinco RPCs sem guarda": vamos mantê-las como estão. Se o infrator já está bloqueado no App e a conta foi suspensa, as ações que ele tentar rodar por fora (PostgREST) vão estourar apenas o próprio tenant dele, não o sistema global nem outras barbearias. E, eventualmente, nós bloquearemos a emissão de novos tokens pelo Supabase Auth. Para o MVP, o agendamento e a criação de barbearia eram os alvos primários mesmo.
+
+### TAREFA F7.5 — Housekeeping de Tipagem
+Chefe, o Opus 5 relatou nas últimas duas interações que a nossa sobrecarga de "aliases manuais" dentro do `database.types.ts` (gerado automaticamente) está quebrando os builds toda vez que ele gera as migrations. Vou mandar ele limpar isso agora para fecharmos a Fase 7 com a casa perfeitamente arrumada.
+
+**Engenheiro (Opus 5):**
+1. Crie o arquivo `src/types/aliases.ts` (ou similar).
+2. Mova todas as extensões manuais de tipos (como `Cliente`, `Barbearia`, etc.) para lá.
+3. Garanta que o projeto inteiro compile usando as novas importações em vez de extraí-las do fim do arquivo auto-gerado.
+4. Feito isso, declare o fim do arco da Mão de Deus!
+
+---
+
+## [OPUS 5] 2026-09-18 — F7.5 feita, e o arco da Mão de Deus está fechado
+
+Housekeeping de tipagem concluído. Achei uma coisa ao mover que vale registrar.
+
+### DOS OITO ALIASES, SEIS NÃO SÃO USADOS POR NINGUÉM
+
+Antes de mover, contei quem importa cada um:
+
+```
+Cliente ................ 1 import
+ClienteInsert .......... 2 imports
+Profissional ........... 0
+Servico ................ 0
+Agendamento ............ 0
+LancamentoFinanceiro ... 0
+StatusAgendamento ...... 0
+Barbearia .............. 0
+```
+
+O bloco que vinha quebrando o build em toda regeneração era **75% código
+morto** — dois tipos em uso, seis carregados por inércia. Cada tela que precisa
+de um tipo do schema já escreve `Database['public']['Tables'][...]` direto, que
+é o padrão real do projeto.
+
+**Movi os oito**, como a ordem pediu, mas deixei os seis marcados em comentário
+no arquivo novo: quem quiser podar tem a lista pronta e a garantia de que não
+quebra import nenhum. Não podei por conta própria porque são o vocabulário
+óbvio do domínio e a decisão é de arquitetura, não minha.
+
+### O QUE MUDOU
+
+- **`src/types/aliases.ts`** (novo) — os oito, com o histórico escrito no topo:
+  por que não moram no arquivo gerado e o que acontecia quando moravam.
+- **`database.types.ts`** — agora é só saída de ferramenta, sem uma linha
+  manual.
+- Dois imports reapontados: `useClientes.ts` e `clientes.service.ts`. Era só
+  isso — o resto do projeto nunca dependeu do bloco.
+
+### A PROVA É A REGENERAÇÃO CRUA
+
+O critério de aceite real não é "compila", é "sobrevive ao comando que
+quebrava". Rodei o `gen types` **sem preservar nada**, direto por cima do
+arquivo — que é exatamente o que derrubou o build na Fase 6:
+
+```
+npx supabase gen types typescript --local > src/types/database.types.ts
+tsc          -> 0 erros
+npm run build -> ok
+```
+
+Antes, este mesmo comando terminava em
+`Module '@/types/database.types' has no exported member 'Cliente'`.
+
+### DUAS REGRAS QUE ENTRARAM NO `CLAUDE.md`
+
+Aproveitei que era housekeeping e escrevi no lugar onde a próxima pessoa vai
+olhar, em vez de deixar só no log:
+
+1. `database.types.ts` é saída de ferramenta, ninguém edita à mão; tipo
+   derivado do schema vai em `aliases.ts`.
+2. **Migration que aplica patch por substituição de string termina com uma
+   verificação que lê o resultado.** O `DO` imprime sucesso mesmo quando a
+   substituição não casou — me pegou duas vezes na Fase 7: uma por `status`
+   ambíguo que só quebrava em tempo de chamada, outra por CRLF vindo de script
+   Python no Windows.
+
+```
+tsc           -> 0 erros
+npm test      -> 60 testes em 8 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+```
+
+---
+
+## O ARCO DA MÃO DE DEUS ESTÁ FECHADO
+
+Fase 7 completa, F7.1 a F7.5. O que a plataforma ganhou:
+
+- **Auditoria imutável** — sem policy de UPDATE nem de DELETE, nem para o
+  admin. Quem agiu, quando, sobre o quê, com antes e depois.
+- **Kill switch real** — 5 views e 2 RPCs públicas exigem `status = ativo`, e o
+  alvo **não consegue se reativar**: era esse o furo que a spec não previa e que
+  teria deixado o botão de suspender valendo nada.
+- **Conta suspensa é bloqueio** — barreira na raiz do app e guarda no banco,
+  inclusive contra a fuga de criar uma barbearia nova.
+- **Console em URL própria**, com o admin fora da área de gestão.
+
+Registro o que **não** está fechado, para ninguém herdar isso achando que está:
+
+1. **Não vi as três telas do console renderizadas.** O efeito no banco está
+   provado e o Chefe exercitou o ciclo pela interface (está na auditoria, com o
+   nome dele), mas inspeção visual minha não houve.
+2. **Cinco RPCs de gestão seguem sem guarda de suspensão** — decisão registrada
+   do Arquiteto, com o motivo: o estrago fica no tenant do próprio infrator.
+3. **A área do profissional continua não existindo.** `profissional` e
+   `gerente` estão no enum desde o começo; `gerente` tem acesso, `profissional`
+   cai na barreira explicativa. E a decisão "profissional vê só o próprio
+   financeiro" (Fase 6) segue pendente — ela precisa entrar **junto** com essa
+   área, não depois, senão nasce vazando.

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Cliente, ClienteInsert } from '@/types/database.types';
+import type { Cliente, ClienteInsert } from '@/types/aliases';
 
 export interface ListarClientesOptions {
   busca?: string;

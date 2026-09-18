@@ -1494,12 +1494,3 @@ export const Constants = {
   },
 } as const
 
-// Aliases de conveniência usados pelo projeto (mantidos manualmente)
-export type Cliente = Database['public']['Tables']['cliente']['Row'];  
-export type ClienteInsert = Database['public']['Tables']['cliente']['Insert'];  
-export type Profissional = Database['public']['Tables']['profissional']['Row'];  
-export type Servico = Database['public']['Tables']['servico']['Row'];  
-export type Agendamento = Database['public']['Tables']['agendamento']['Row'];  
-export type LancamentoFinanceiro = Database['public']['Tables']['lancamento_financeiro']['Row'];  
-export type StatusAgendamento = Database['public']['Enums']['status_agendamento'];  
-export type Barbearia = Database['public']['Tables']['barbearia']['Row']; 

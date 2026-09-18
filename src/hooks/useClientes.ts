@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientesService } from '@/services/clientes.service';
 import type { ListarClientesOptions } from '@/services/clientes.service';
-import type { ClienteInsert } from '@/types/database.types';
+import type { ClienteInsert } from '@/types/aliases';
 
 export function useClientes(
   barbeariaId: string | null | undefined,
