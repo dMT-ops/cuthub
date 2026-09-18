@@ -7596,3 +7596,151 @@ suspenso**. Hoje ele continua entrando normalmente — a coluna é registro, nã
 bloqueio. Fechar isso é decisão de vocês: dá para barrar no `AuthContext`
 (rápido, e burlável por quem chamar a API direto) ou nas policies (correto e
 mais caro). Não implementei por conta própria porque muda o login de todo mundo.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 14:35 — Fechamento da Fase 7 (F7.4 - Trava de Suspensão)
+
+### DECISÃO ARQUITETURAL (Opção A)
+O Chefe validou e escolheu a via otimizada para o bloqueio de usuários (Frontend + RPCs críticas), evitando a degradação de performance que seria colocar um JOIN de checagem em todas as policies do banco no modelo atual.
+
+### TAREFA F7.4 — Bloqueio Real de Usuário Suspenso
+Para amarrar a ponta que ficou solta:
+
+1. **Frontend (`AuthContext.tsx` / `ProtectedRoute.tsx`)**:
+   - Adicione a checagem do `perfil.status === 'suspenso'`.
+   - Se for suspenso, bloqueie o acesso na raiz. Ele deve cair numa "Barreira" clara informando que a conta foi suspensa pela plataforma (não deixe ele entrar na área do cliente nem no dashboard de gestão).
+
+2. **Backend (Camada de RPC)**:
+   - Na function `agendar_como_cliente` (migration apropriada ou `CREATE OR REPLACE`), valide se o usuário logado tem `status = 'ativo'` em `usuario_perfil`. Se estiver suspenso, aborte a transação com um RAISE EXCEPTION claro ("Conta suspensa").
+   - Isso garante que, mesmo que o infrator tente burlar a interface e atacar a API via PostgREST direto, ele não consiga gerar "fake bookings".
+
+**Engenheiro (Opus 5)**: Pode executar a F7.4 e encerrar a Mão de Deus!
+
+---
+
+## [OPUS 5] 2026-09-18 — F7.4 entregue, e o console foi validado na prática pelo Chefe
+
+A ponta solta da Fase 7 está amarrada: conta suspensa agora é bloqueio, não só
+registro. E, ao conferir o estado do banco no fim, **encontrei a validação de
+tela que estava faltando** — feita pelo Chefe, não por mim. Começo por ela.
+
+---
+
+### O CONSOLE FOI USADO DE VERDADE, E A AUDITORIA PROVOU
+
+Fui checar se meus testes tinham deixado resíduo e a `auditoria_plataforma`
+tinha 2 linhas que **não eram minhas** — barbearia que eu nunca toquei, sem
+motivo preenchido, suspensa e reativada com 7 segundos de diferença:
+
+```
+SUSPENDER_BARBEARIA | admin@cuthub.com | Admin Supremo | {"status":"ativo"}    -> {"status":"suspenso"}
+REATIVAR_BARBEARIA  | admin@cuthub.com | Admin Supremo | {"status":"suspenso"} -> {"status":"ativo"}
+```
+
+Isso é o Chefe entrando no console e exercitando o ciclo pela interface. Vale
+como evidência de que **o caminho tela -> RPC -> auditoria funciona de ponta a
+ponta**, com autor identificado e o antes/depois gravado. Não apaguei as linhas:
+são registro legítimo de uso, não lixo de teste.
+
+**Sendo exato sobre o que ainda não vi:** eu não observei as três telas
+renderizadas. O que está provado é o efeito no banco. A aba que eu controlo
+estava deslogada (sessão de 1h expira), e continuo sem submeter senha.
+
+Resíduo dos meus testes: **zero** — 0 usuários suspensos, 0 barbearias
+suspensas, e as únicas 2 linhas de auditoria são as do Chefe.
+
+---
+
+### F7.4 — O QUE ENTROU
+
+**Frontend.** `AuthContext` ganhou `contaSuspensa` como fonte única, no mesmo
+molde de `podeOperar` — e `podeOperar` também passa a ser `false` com o motivo
+"Sua conta foi suspensa pela plataforma", para que nenhum botão de ação fique
+vivo mesmo que alguém chegue numa tela por outro caminho.
+
+No `ProtectedRoute` a barreira vem **antes da checagem de área**, de propósito:
+um cliente suspenso mandado para a área do cliente descobriria o bloqueio botão
+por botão. Agora para na raiz, com o motivo escrito e uma saída.
+
+Dois testes novos (15 no arquivo): cliente suspenso barrado antes do
+redirecionamento, e owner suspenso barrado no painel.
+
+**Banco (`00022`).** Helper `conta_suspensa()` — `STABLE`, `SECURITY DEFINER`,
+`search_path` fixo, como todas as outras — para a regra não ficar copiada.
+Aplicado em `agendar_como_cliente`, a RPC que a ordem nomeou.
+
+---
+
+### ACRESCENTEI UMA SEGUNDA RPC, E EXPLICO POR QUÊ
+
+A ordem nomeou só `agendar_como_cliente`. Pus a mesma guarda em
+**`criar_barbearia_e_vincular`**, porque ela é a fuga da própria suspensão: sem
+a checagem, o usuário suspenso **cria uma barbearia nova** e volta à plataforma
+por outra porta, com tenant limpo. Suspender deixaria de significar coisa
+alguma. É a mesma linha de código; deixar de fora seria abrir a porta ao lado
+depois de trancar a da frente.
+
+**As que deixei sem guarda, de propósito e registrado na migration:**
+`adicionar_gestor`, `alterar_papel_gestor`, `remover_gestor`,
+`cadastrar_cliente_com_conta`, `cadastrar_profissional_com_conta`. Todas exigem
+vínculo com a barbearia do chamador, então o estrago fica dentro do tenant dele
+— diferente de agendar (atinge outra barbearia) e de criar barbearia (desfaz a
+suspensão). Se você quiser as cinco, é uma linha em cada.
+
+---
+
+### A PROVA, COM CONTROLE DE VERDADE
+
+Primeira tentativa de controle não serviu: a conta ativa falhou por
+"Horario fora da jornada", que é outro motivo. Refiz com um horário dentro da
+jornada real do profissional, para a comparação ser honesta — **a mesma chamada,
+só mudando o status da conta:**
+
+| | conta ativa | conta suspensa |
+|---|---|---|
+| `agendar_como_cliente` | **agendou (`t`)** | **`Conta suspensa: entre em contato com o suporte do CutHub`** |
+
+E o resto da bateria, em transação revertida:
+
+| # | tentativa | resultado |
+|---|---|---|
+| 4 | suspenso chama `criar_barbearia_e_vincular` | **`Conta suspensa`** |
+| 5 | `conta_suspensa()` do próprio usuário | **`t`** |
+| 6 | admin tenta suspender outro `admin_supremo` | **`Nao e possivel suspender um administrador da plataforma`** |
+
+---
+
+### DOIS TROPEÇOS MEUS, REGISTRADOS
+
+1. **CRLF quebrou o patch em silêncio.** Reescrevi a migration com Python, que
+   em Windows grava `\r\n`. O `pg_get_functiondef` devolve `\n`, então a string
+   que eu procurava **deixou de casar** — o `DO` rodou sem erro nenhum e a
+   guarda simplesmente não entrou. Só apareceu porque fui conferir com
+   `ILIKE '%conta_suspensa()%'` em vez de confiar no "DO" que o psql imprimiu.
+   Convertido para LF. **Vale como regra: migration que faz patch por string
+   precisa terminar com uma verificação que lê o resultado.**
+2. **Primeiro `regexp_replace` com escapes** (`E'\\nBEGIN\\n'`) deu erro de
+   sintaxe. Troquei pelo mesmo ponto de ancoragem da outra função — as duas
+   abrem checando autenticação —, que é mais legível e não depende de escape.
+
+```
+tsc           -> 0 erros
+npm test      -> 60 testes em 8 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> 0 suspensos, 0 barbearias suspensas, 2 linhas de auditoria (do Chefe)
+```
+
+---
+
+### O QUE CONTINUA EM ABERTO
+
+1. **As cinco RPCs sem guarda** listadas acima — decisão sua.
+2. **Ver as três telas do console renderizadas.** O efeito no banco está
+   provado, inclusive pelo uso real do Chefe; falta a inspeção visual, que
+   depende de uma sessão de admin na aba que eu controlo.
+3. **Mover os aliases do `database.types.ts`** para arquivo próprio. Já me
+   mordeu uma vez (quebrou o build na Fase 6) e nesta fase eu tive que
+   preservá-los à mão duas vezes ao regenerar. Continua valendo a pena.

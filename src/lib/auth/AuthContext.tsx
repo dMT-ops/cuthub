@@ -39,6 +39,8 @@ interface AuthContextType {
    * UI não oferecer um botão que o servidor vai recusar.
    */
   podeGerenciarUsuarios: boolean;
+  /** `true` quando a plataforma suspendeu esta conta. */
+  contaSuspensa: boolean;
   signOut: () => Promise<void>;
   /** Relê o perfil do banco — usado após o próprio usuário editar seus dados */
   recarregarPerfil: () => Promise<void>;
@@ -132,9 +134,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const podeGerenciarUsuarios = perfil?.tipo === 'owner' || perfil?.tipo === 'admin_supremo';
 
+  /**
+   * Conta suspensa pela plataforma (Fase 7).
+   *
+   * Fonte unica da verdade, como `podeOperar`: a barreira de rota le daqui, e
+   * nao de `perfil.status` espalhado por tela. A checagem do banco continua
+   * valendo por cima disto -- isto aqui e conveniencia de interface, nao a
+   * tranca. Quem chamar a API direto passa por baixo, e por isso as RPCs
+   * criticas tambem checam.
+   */
+  const contaSuspensa = perfil?.status === 'suspenso';
+
   const { podeOperar, motivoBloqueio } = useMemo(() => {
     if (!perfil) {
       return { podeOperar: false, motivoBloqueio: 'Seu perfil não foi carregado.' };
+    }
+    if (perfil.status === 'suspenso') {
+      return {
+        podeOperar: false,
+        motivoBloqueio: 'Sua conta foi suspensa pela plataforma',
+      };
     }
     if (perfil.tipo === 'admin_supremo') {
       return {
@@ -161,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         podeOperar,
         motivoBloqueio,
         podeGerenciarUsuarios,
+        contaSuspensa,
         signOut,
         recarregarPerfil,
       }}

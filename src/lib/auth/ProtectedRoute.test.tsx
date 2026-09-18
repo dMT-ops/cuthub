@@ -21,6 +21,7 @@ function estadoBase(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
     podeOperar: true,
     motivoBloqueio: null,
     podeGerenciarUsuarios: true,
+    contaSuspensa: false,
     signOut: vi.fn(),
     recarregarPerfil: vi.fn(),
     ...overrides,
@@ -61,6 +62,36 @@ describe('ProtectedRoute', () => {
     useAuthMock.mockReturnValue(estadoBase());
     renderRota();
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
+  });
+
+  // F7.4: suspensao barra na raiz, antes da checagem de area. Um cliente
+  // suspenso mandado para a area do cliente descobriria o bloqueio so depois,
+  // botao por botao.
+  it('barra o cliente suspenso antes de mandar para a area dele', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'cliente', barbearia_id: null, nome: 'Cliente', status: 'suspenso' },
+        barbeariaId: null,
+        podeOperar: false,
+        contaSuspensa: true,
+      } as never)
+    );
+    renderRota('/dashboard');
+    expect(screen.queryByText('area do cliente')).not.toBeInTheDocument();
+    expect(screen.getByText('Conta suspensa')).toBeInTheDocument();
+  });
+
+  it('barra o owner suspenso no painel de gestao', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'owner', barbearia_id: 'b1', nome: 'Dono', status: 'suspenso' },
+        podeOperar: false,
+        contaSuspensa: true,
+      } as never)
+    );
+    renderRota('/dashboard');
+    expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
+    expect(screen.getByText('Conta suspensa')).toBeInTheDocument();
   });
 
   // Mudou na Fase 7, de proposito. O admin_supremo saiu de `gestao` e ganhou

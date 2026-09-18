@@ -1267,6 +1267,7 @@ export type Database = {
         Args: { p_barbearia_id: string }
         Returns: undefined
       }
+      conta_suspensa: { Args: never; Returns: boolean }
       criar_barbearia_e_vincular: { Args: { p_nome: string }; Returns: string }
       get_barbearia_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }

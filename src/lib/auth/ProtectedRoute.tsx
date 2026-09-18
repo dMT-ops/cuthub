@@ -36,7 +36,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ area = 'gestao' }: ProtectedRouteProps) {
-  const { user, perfil, loading, erroPerfil, recarregarPerfil, signOut } = useAuth();
+  const { user, perfil, loading, erroPerfil, recarregarPerfil, signOut, contaSuspensa } = useAuth();
 
   if (loading) {
     return (
@@ -77,6 +77,26 @@ export function ProtectedRoute({ area = 'gestao' }: ProtectedRouteProps) {
       <Barreira
         titulo="Conta sem perfil"
         descricao="Sua conta existe, mas não tem um perfil associado. Entre em contato com o suporte."
+        acao={
+          <Button variant="outline" onClick={() => void signOut()}>
+            Sair
+          </Button>
+        }
+      />
+    );
+  }
+
+  // Suspensao pela plataforma vem ANTES da checagem de area: um cliente
+  // suspenso nao deve ser mandado para a area do cliente para so entao
+  // descobrir que nao pode nada. Barra na raiz, com o motivo dito.
+  //
+  // Isto e conveniencia de interface, nao a tranca: quem chamar a API direto
+  // passa por baixo daqui. As RPCs criticas checam no banco (migration 00022).
+  if (contaSuspensa) {
+    return (
+      <Barreira
+        titulo="Conta suspensa"
+        descricao="Sua conta foi suspensa pela plataforma e o acesso está bloqueado. Se você acredita que isto é um engano, entre em contato com o suporte do CutHub."
         acao={
           <Button variant="outline" onClick={() => void signOut()}>
             Sair
