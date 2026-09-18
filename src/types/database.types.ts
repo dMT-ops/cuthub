@@ -165,6 +165,7 @@ export type Database = {
           criado_em: string | null
           criado_por: string | null
           estado: string | null
+          fuso_horario: string
           id: string
           listada_no_catalogo: boolean
           nome: string
@@ -175,6 +176,7 @@ export type Database = {
           criado_em?: string | null
           criado_por?: string | null
           estado?: string | null
+          fuso_horario?: string
           id?: string
           listada_no_catalogo?: boolean
           nome: string
@@ -185,6 +187,7 @@ export type Database = {
           criado_em?: string | null
           criado_por?: string | null
           estado?: string | null
+          fuso_horario?: string
           id?: string
           listada_no_catalogo?: boolean
           nome?: string
@@ -756,6 +759,63 @@ export type Database = {
           },
         ]
       }
+      promocao: {
+        Row: {
+          atualizado_em: string | null
+          barbearia_id: string
+          criado_em: string | null
+          data_fim: string
+          data_inicio: string
+          desconto_percentual: number
+          descricao: string | null
+          id: string
+          regras: string | null
+          status: Database["public"]["Enums"]["status_registro"] | null
+          titulo: string
+        }
+        Insert: {
+          atualizado_em?: string | null
+          barbearia_id: string
+          criado_em?: string | null
+          data_fim: string
+          data_inicio: string
+          desconto_percentual: number
+          descricao?: string | null
+          id?: string
+          regras?: string | null
+          status?: Database["public"]["Enums"]["status_registro"] | null
+          titulo: string
+        }
+        Update: {
+          atualizado_em?: string | null
+          barbearia_id?: string
+          criado_em?: string | null
+          data_fim?: string
+          data_inicio?: string
+          desconto_percentual?: number
+          descricao?: string | null
+          id?: string
+          regras?: string | null
+          status?: Database["public"]["Enums"]["status_registro"] | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promocao_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promocao_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia_publica"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       servico: {
         Row: {
           atualizado_em: string | null
@@ -969,6 +1029,34 @@ export type Database = {
           },
         ]
       }
+      promocao_publica: {
+        Row: {
+          barbearia_id: string | null
+          data_fim: string | null
+          data_inicio: string | null
+          desconto_percentual: number | null
+          descricao: string | null
+          id: string | null
+          regras: string | null
+          titulo: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promocao_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promocao_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia_publica"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       servico_publico: {
         Row: {
           barbearia_id: string | null
@@ -1006,6 +1094,16 @@ export type Database = {
           p_email: string
           p_nome?: string
           p_tipo?: Database["public"]["Enums"]["tipo_usuario"]
+        }
+        Returns: string
+      }
+      agendar_como_cliente: {
+        Args: {
+          p_barbearia_id: string
+          p_data_hora: string
+          p_observacoes?: string
+          p_profissional_id: string
+          p_servico_ids: string[]
         }
         Returns: string
       }
@@ -1059,6 +1157,15 @@ export type Database = {
       get_barbearia_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
+      ocupacao_publica: {
+        Args: {
+          p_dia_semana: number
+          p_fim: string
+          p_inicio: string
+          p_profissional_id: string
+        }
+        Returns: Json
+      }
       perfil_por_email: { Args: { p_email: string }; Returns: string }
       remover_gestor: { Args: { p_usuario_id: string }; Returns: undefined }
       slug_disponivel: {

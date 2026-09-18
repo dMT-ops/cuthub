@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { CalendarDays, Heart, Home, LogOut, Scissors, Store } from 'lucide-react';
+import { CalendarDays, Heart, Home, LogOut, Percent, Scissors, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -9,6 +9,7 @@ const ITENS = [
   { to: '/minha-conta', label: 'Início', icon: Home, end: true },
   { to: '/minha-conta/agendamentos', label: 'Agenda', icon: CalendarDays },
   { to: '/minha-conta/favoritos', label: 'Favoritos', icon: Heart },
+  { to: '/minha-conta/promocoes', label: 'Ofertas', icon: Percent },
   { to: '/barbearias', label: 'Explorar', icon: Store },
 ];
 
@@ -80,7 +81,7 @@ export function ClienteLayout() {
 
       {/* Navegação inferior no celular */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/95 backdrop-blur md:hidden">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {ITENS.map(({ to, label, icon: Icone, end }) => (
             <NavLink
               key={to}

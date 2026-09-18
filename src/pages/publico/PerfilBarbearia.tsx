@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, MapPin, PackageOpen, Scissors } from 'lucide-react';
 
@@ -7,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePerfilPublico } from '@/hooks/useCatalogo';
 import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia';
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
+import { CardPromocao } from '@/components/publico/CardPromocao';
+import { usePromocoesVigentes } from '@/hooks/usePromocoes';
 
 const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -14,6 +17,12 @@ export default function PerfilBarbearia() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { perfil, naoEncontrada, isLoading, isError, error } = usePerfilPublico(slug);
+  // Id extraído antes do useMemo para a dependência ser exatamente o que a
+  // memoização usa. A lista precisa de identidade estável: array literal novo a
+  // cada render viraria queryKey nova e refetch em loop.
+  const barbeariaId = perfil?.barbearia.id ?? null;
+  const idsParaPromocao = useMemo(() => (barbeariaId ? [barbeariaId] : []), [barbeariaId]);
+  const { promocoes } = usePromocoesVigentes(idsParaPromocao);
 
   if (isLoading) {
     return (
@@ -108,7 +117,28 @@ export default function PerfilBarbearia() {
         </header>
 
         {barbearia.descricao && (
-          <p className="max-w-2xl pb-8 text-muted-foreground">{barbearia.descricao}</p>
+          <p className="max-w-2xl pb-6 text-muted-foreground">{barbearia.descricao}</p>
+        )}
+
+        {promocoes.length > 0 && (
+          <section className="pb-8">
+            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+              {promocoes.length === 1 ? 'Promoção no ar' : 'Promoções no ar'}
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {promocoes.map((p) => (
+                <CardPromocao
+                  key={p.id}
+                  titulo={p.titulo}
+                  descricao={p.descricao}
+                  regras={p.regras}
+                  desconto={p.desconto_percentual}
+                  dataFim={p.data_fim}
+                  cor={cor}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         <Tabs defaultValue="servicos" className="pb-16">
