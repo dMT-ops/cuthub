@@ -18,7 +18,7 @@ export type Area = 'gestao' | 'cliente' | 'admin';
  * acesso total por omissão.
  */
 export const PAPEIS_POR_AREA: Record<Area, TipoUsuario[]> = {
-  gestao: ['owner', 'gerente'],
+  gestao: ['owner', 'gerente', 'profissional'],
   cliente: ['cliente'],
   admin: ['admin_supremo'],
 };
@@ -30,11 +30,22 @@ export const ROTA_DA_AREA: Record<Area, string> = {
 };
 
 /**
+ * Rota inicial por papel, quando ela difere da porta da área.
+ *
+ * O profissional entra em `gestao` desde a Fase 8, mas não pelo índice: o
+ * `/dashboard` é o painel de métricas da loja, que não é dele. Ele cai na
+ * agenda, que é o trabalho dele.
+ */
+const ROTA_INICIAL_DO_PAPEL: Partial<Record<TipoUsuario, string>> = {
+  profissional: '/dashboard/agenda',
+};
+
+/**
  * Para onde este papel vai depois do login.
  *
- * `null` significa "não tem área ainda" — hoje só `profissional`, que existe no
- * enum desde o início e nunca ganhou tela própria. Quem devolve `null` cai na
- * barreira explicativa, e não numa rota que não existe.
+ * `null` significa "não tem área ainda". Desde a Fase 8 os cinco papéis do
+ * enum têm destino; fica como rede para o próximo papel que alguém acrescente
+ * ao banco sem decidir onde ele entra.
  */
 export function areaDoPapel(tipo: TipoUsuario | null | undefined): Area | null {
   if (!tipo) return null;
@@ -46,6 +57,9 @@ export function areaDoPapel(tipo: TipoUsuario | null | undefined): Area | null {
 
 /** Rota inicial do papel, ou `null` quando ele não tem área. */
 export function rotaInicialDoPapel(tipo: TipoUsuario | null | undefined): string | null {
+  const especifica = tipo ? ROTA_INICIAL_DO_PAPEL[tipo] : undefined;
+  if (especifica) return especifica;
+
   const area = areaDoPapel(tipo);
   return area ? ROTA_DA_AREA[area] : null;
 }

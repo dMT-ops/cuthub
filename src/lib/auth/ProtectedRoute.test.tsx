@@ -182,18 +182,21 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
-  // Continua barrado: e o unico papel do enum que ainda nao tem area propria,
-  // entao nao ha para onde redirecionar.
-  it('barra a conta de profissional, que não tem área nenhuma', () => {
+  // Mudou na Fase 8: o profissional entrou na area de gestao e deixou de ser
+  // o papel sem lugar. O ProtectedRoute agora o deixa passar; quem decide QUAL
+  // tela ele abre e o GuardaDoDashboard, com a lista de navigation.config.
+  // A barreira "area ainda nao disponivel" continua existindo como rede para
+  // o proximo papel que alguem acrescente ao enum sem lhe dar area.
+  it('deixa o profissional entrar na area de gestao', () => {
     useAuthMock.mockReturnValue(
       estadoBase({
         perfil: { id: 'u1', tipo: 'profissional', barbearia_id: 'b1', nome: 'Barbeiro' },
-        podeOperar: false,
+        tipo: 'profissional',
+        podeOperar: true,
       } as never)
     );
-    renderRota();
-    expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
-    expect(screen.getByText(/área do profissional ainda não está disponível/i)).toBeInTheDocument();
+    renderRota('/dashboard');
+    expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
   it('não deixa entrar quando a leitura do perfil falhou, e oferece tentar de novo', () => {

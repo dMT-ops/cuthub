@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './lib/auth/AuthContext';
 import { ProtectedRoute } from './lib/auth/ProtectedRoute';
+import { GuardaDoDashboard } from './lib/auth/GuardaDoDashboard';
 import { ThemeProvider } from './components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -83,7 +84,12 @@ function App() {
               </Route>
 
               {/* Rotas Protegidas */}
+              {/* Dois guardas em serie, com perguntas diferentes: o primeiro
+                  diz quem entra na area de gestao, o segundo diz qual papel
+                  abre qual tela dentro dela. O profissional passa no primeiro
+                  e e barrado no segundo em Servicos, Produtos e afins. */}
               <Route path="/dashboard" element={<ProtectedRoute area="gestao" />}>
+                <Route element={<GuardaDoDashboard />}>
                 <Route element={<DashboardLayout />}>
                   <Route index element={<DashboardHome />} />
                   <Route path="agenda" element={<AgendaHome />} />
@@ -94,6 +100,7 @@ function App() {
                   <Route path="promocoes" element={<Promocoes />} />
                   <Route path="financeiro" element={<Financeiro />} />
                   <Route path="configuracoes" element={<Configuracoes />} />
+                </Route>
                 </Route>
               </Route>
 

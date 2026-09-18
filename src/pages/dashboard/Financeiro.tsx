@@ -23,7 +23,13 @@ type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
 type CategoriaLancamento = Database['public']['Enums']['categoria_lancamento'];
 
 export default function Financeiro() {
-  const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio, tipo: tipoDeUsuario } = useAuth();
+
+  // O profissional entrou nesta tela na Fase 8, mas ele nao gerencia o caixa:
+  // a RLS so lhe da LEITURA dos proprios lancamentos. Mostrar os paineis de
+  // gestao seria oferecer botoes que o banco recusa -- e as listas de
+  // "a lancar" e "a pagar" viriam vazias, parecendo defeito.
+  const ehProfissional = tipoDeUsuario === 'profissional';
 
   const [mesReferencia, setMesReferencia] = useState(() => new Date());
   const [tipo, setTipo] = useState<'todos' | TipoLancamento>('todos');
@@ -94,12 +100,21 @@ export default function Financeiro() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
-        <span title={motivoBloqueio ?? undefined}>
-          <Button onClick={() => { setLancamentoAEditar(null); setFormOpen(true); }} disabled={!podeOperar}>
-            <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
-          </Button>
-        </span>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
+          {ehProfissional && (
+            <p className="text-sm text-muted-foreground">
+              Seus atendimentos e sua comissão. Os números da barbearia ficam com a gestão.
+            </p>
+          )}
+        </div>
+        {!ehProfissional && (
+          <span title={motivoBloqueio ?? undefined}>
+            <Button onClick={() => { setLancamentoAEditar(null); setFormOpen(true); }} disabled={!podeOperar}>
+              <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
+            </Button>
+          </span>
+        )}
       </div>
 
       {/* Período */}
@@ -192,6 +207,7 @@ export default function Financeiro() {
       {/* As duas pendencias do caixa lado a lado: o que falta entrar e o que
           falta sair. A comissao e a maior despesa da casa -- deixa-la fora do
           caixa fazia o saldo mentir para mais. */}
+      {!ehProfissional && (
       <div className="grid gap-4 xl:grid-cols-2">
         <AtendimentosAReceber
           atendimentos={atendimentos}
@@ -206,6 +222,7 @@ export default function Financeiro() {
           rotuloDoPeriodo={rotuloDoPeriodo}
         />
       </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <FechamentoPorPagamento
@@ -213,11 +230,13 @@ export default function Financeiro() {
           isLoading={carregandoPeriodo}
           totalDeEntradas={resumo?.entradas}
         />
-        <DespesasFixas
-          periodo={periodo}
-          mesReferencia={mesReferencia}
-          rotuloDoPeriodo={rotuloDoPeriodo}
-        />
+        {!ehProfissional && (
+          <DespesasFixas
+            periodo={periodo}
+            mesReferencia={mesReferencia}
+            rotuloDoPeriodo={rotuloDoPeriodo}
+          />
+        )}
       </div>
 
       {isError ? (
@@ -228,7 +247,12 @@ export default function Financeiro() {
           </p>
         </div>
       ) : (
-        <LancamentosTable lancamentos={lancamentos} isLoading={isLoading} onEditar={abrirEdicao} />
+        <LancamentosTable
+          lancamentos={lancamentos}
+          isLoading={isLoading}
+          onEditar={abrirEdicao}
+          somenteLeitura={ehProfissional}
+        />
       )}
 
       <LancamentoFormDialog

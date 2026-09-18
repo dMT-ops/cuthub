@@ -40,9 +40,16 @@ interface LancamentosTableProps {
   lancamentos: LancamentoComDetalhes[];
   isLoading: boolean;
   onEditar: (lancamento: LancamentoComDetalhes) => void;
+  /** Esconde a coluna de acoes: o profissional le o proprio caixa, nao o edita. */
+  somenteLeitura?: boolean;
 }
 
-export function LancamentosTable({ lancamentos, isLoading, onEditar }: LancamentosTableProps) {
+export function LancamentosTable({
+  lancamentos,
+  isLoading,
+  onEditar,
+  somenteLeitura,
+}: LancamentosTableProps) {
   const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
   const { excluirLancamento, isExcluindo } = useFinanceiro(barbeariaId);
   const [aExcluir, setAExcluir] = useState<LancamentoComDetalhes | null>(null);
@@ -92,7 +99,7 @@ export function LancamentosTable({ lancamentos, isLoading, onEditar }: Lancament
             <TableHead>Profissional</TableHead>
             <TableHead>Pagamento</TableHead>
             <TableHead className="text-right">Valor</TableHead>
-            <TableHead className="w-[52px]" />
+            {!somenteLeitura && <TableHead className="w-[52px]" />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -130,6 +137,7 @@ export function LancamentosTable({ lancamentos, isLoading, onEditar }: Lancament
                 >
                   {isEntrada ? '+' : '−'} {formatarMoeda(Number(lancamento.valor))}
                 </TableCell>
+                {!somenteLeitura && (
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -151,6 +159,7 @@ export function LancamentosTable({ lancamentos, isLoading, onEditar }: Lancament
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
+                )}
               </TableRow>
             );
           })}

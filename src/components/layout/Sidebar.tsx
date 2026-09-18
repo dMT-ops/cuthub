@@ -4,13 +4,16 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
 import { useSidebarState } from '@/hooks/useSidebarState';
-import { navigationItems } from './navigation.config';
+import { itensDoPapel } from './navigation.config';
 import { SidebarItem } from './SidebarItem';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 
 export function Sidebar(props: ReturnType<typeof useSidebarState>) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, perfil } = useAuth();
+  // Menu montado pelo papel. O `GuardaDoDashboard` usa a MESMA lista para
+  // barrar a URL digitada -- esconder o item sem barrar a rota seria teatro.
+  const itens = itensDoPapel(perfil?.tipo);
   const { barbearia } = useBarbeariaAtual();
   // Enquanto a barbearia carrega, o nome do produto evita um cabeçalho vazio
   const tituloBarbearia = barbearia?.nome ?? 'CutHub';
@@ -42,13 +45,13 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
             <p className="text-xs text-muted-foreground mt-1">Gestão de Barbearias</p>
           </SheetHeader>
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto" aria-label="Menu Principal Mobile">
-            {navigationItems.map(item => (
+            {itens.map(item => (
               <SidebarItem
                 key={item.path}
                 icon={item.icon}
                 label={item.label}
                 path={item.path}
-                end={'end' in item ? item.end : undefined}
+                end={item.end}
                 isExpanded={true} // Sempre expandido no mobile
                 onClick={() => setIsMobileOpen(false)}
               />
@@ -122,13 +125,13 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
       </div>
 
       <nav className="flex-1 p-2 space-y-1 overflow-x-hidden overflow-y-auto" aria-label="Menu Principal">
-        {navigationItems.map(item => (
+        {itens.map(item => (
           <SidebarItem
             key={item.path}
             icon={item.icon}
             label={item.label}
             path={item.path}
-            end={'end' in item ? item.end : undefined}
+            end={item.end}
             isExpanded={isExpanded}
           />
         ))}

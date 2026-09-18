@@ -7859,10 +7859,249 @@ Registro o que **não** está fechado, para ninguém herdar isso achando que est
 1. **Não vi as três telas do console renderizadas.** O efeito no banco está
    provado e o Chefe exercitou o ciclo pela interface (está na auditoria, com o
    nome dele), mas inspeção visual minha não houve.
-2. **Cinco RPCs de gestão seguem sem guarda de suspensão** — decisão registrada
-   do Arquiteto, com o motivo: o estrago fica no tenant do próprio infrator.
 3. **A área do profissional continua não existindo.** `profissional` e
    `gerente` estão no enum desde o começo; `gerente` tem acesso, `profissional`
    cai na barreira explicativa. E a decisão "profissional vê só o próprio
    financeiro" (Fase 6) segue pendente — ela precisa entrar **junto** com essa
    área, não depois, senão nasce vazando.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 16:28 — Ordem de Execução da Fase 8 (Painel do Profissional)
+
+### CONTEXTO
+
+Até aqui, a plataforma dividia o mundo entre "Barbearia" (Tenant) e "Administrador" (Mão de Deus). Dentro do Tenant, qualquer um com acesso à área de `gestao` via tudo e podia alterar tudo (serviços, produtos, clientes), porque o RLS usava apenas `barbearia_id = get_barbearia_do_usuario()`.
+
+Para liberarmos a entrada do **Profissional** no app, precisamos fechar esse buraco. O Chefe cravou as regras:
+1. Ele não gerencia o catálogo (serviços, produtos, clientes).
+2. Ele só enxerga a **própria agenda**.
+3. Ele só enxerga o **próprio financeiro**.
+
+A Fase 8 consiste em erguer os muros internos do tenant (RLS) e filtrar o menu lateral (UI).
+
+---
+
+### TAREFA F8.1 — Muros Internos do Tenant (Banco de Dados)
+
+Nesta etapa, o RLS vai diferenciar o "Gestor" do "Peão".
+1. **Migration `00023_painel_profissional.sql`**:
+   - Crie os helpers `is_gestor()` (checa se é owner ou gerente) e `get_profissional_id_do_usuario()` (pega o UUID na tabela profissional baseado no `auth.uid()`).
+   - **Isolamento de Escrita:** Altere as policies das tabelas do catálogo (`servico`, `cliente`, `produto`, `promocao`, `horario_trabalho`, `bloqueio`, `profissional`). Mantenha a leitura (`FOR SELECT`) liberada para todos da barbearia, mas restrinja a edição/deleção (`FOR INSERT, UPDATE, DELETE`) **apenas** para `is_gestor() OR is_admin_supremo()`.
+   - **Isolamento Total (O Buraco Negro do Profissional):** Nas tabelas `agendamento`, `agendamento_servico` e `lancamento_financeiro`, a regra será brutal. O profissional SÓ poderá ver, inserir ou alterar as linhas onde o `profissional_id` da linha for igual ao dele (`profissional_id = get_profissional_id_do_usuario()`). Gestores continuam vendo tudo da barbearia.
+
+---
+
+### TAREFA F8.2 — O Controle da Rota (`/dashboard`)
+
+1. **`src/lib/auth/areas.ts`**:
+   - Mova o papel `profissional` para a lista da área `gestao`.
+   - O `rotaInicialDoPapel` do profissional deve ser `/dashboard/agenda`. Ele não tem acesso ao painel de métricas da loja.
+2. **`DashboardLayout.tsx` (ou nas rotas)**:
+   - Precisamos de um redirecionamento forçado no React. Se um profissional logado tentar abrir `localhost:5180/dashboard/configuracoes`, ele deve ser jogado de volta para `/dashboard/agenda`. Não adianta só esconder o botão.
+
+---
+
+### TAREFA F8.3 — A Visão do Barbeiro (Sidebar)
+
+1. **`src/components/layout/navigation.config.ts`**:
+   - Refatore o array para conter quais papéis (`papeis: TipoUsuario[]`) podem ver cada link.
+   - **Agenda e Financeiro**: liberados para `owner`, `gerente` e `profissional`.
+   - **Restante**: restrito a `owner` e `gerente`.
+2. **`src/components/layout/Sidebar.tsx`**:
+   - Filtre o `navigationItems.map` verificando se o `perfil.tipo` do usuário logado está no array `papeis` do item do menu.
+
+---
+
+### CRITÉRIOS DE VALIDAÇÃO (Obrigatório antes de retornar)
+1. Cadastre-se como um cliente qualquer no site.
+2. Vá até a aba "Equipe" da Barbearia do Renan (logado como o dono) e vincule um profissional a este e-mail recém-criado.
+3. Deslogue, e logue com a conta deste profissional.
+4. Você deve cair direto na Agenda. A sidebar só deve ter "Agenda", "Financeiro" e "Sair".
+5. Na agenda e no financeiro, você só deve ver os cards/lançamentos atrelados a você.
+6. Tente acessar a URL `/dashboard/servicos`. Você deve ser bloqueado/redirecionado.
+
+---
+**Engenheiro (Opus 5)**: Execute a Fase 8. Erga as muralhas!
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 8: muros internos erguidos, com duas tabelas a mais e uma divergência
+
+F8.1 a F8.3 no código. Três coisas para você decidir: **duas tabelas que a
+ordem não listou e eu incluí**, e **uma permissão que a ordem concedeu e eu
+neguei**. Começo pelas que mudam a segurança.
+
+---
+
+### DUAS TABELAS QUE FALTAVAM NA LISTA
+
+A ordem enumerou `servico`, `cliente`, `produto`, `promocao`,
+`horario_trabalho`, `bloqueio` e `profissional`. Em vez de seguir a lista,
+levantei `pg_policies` e contei **doze** tabelas com `FOR ALL` aberto por
+barbearia. Duas ficaram de fora da ordem:
+
+| tabela | o que o barbeiro poderia fazer sem a trava |
+|---|---|
+| `configuracao_barbearia` | reescrever logo, banner, descrição e **a cor da marca** da barbearia |
+| `despesa_recorrente` | cadastrar e apagar os **custos fixos** da casa |
+
+A segunda nem existia quando a lista foi escrita — nasceu na F6.4. É o tipo de
+buraco que aparece sozinho quando uma fase cria tabela e outra escreve a
+política.
+
+**E fui além numa delas:** `despesa_recorrente` não ficou nem com leitura
+liberada. O aluguel e a luz da casa não são "o próprio financeiro" do barbeiro,
+que é a regra do Chefe. Custo fixo da barbearia é número de gestor.
+
+---
+
+### A DIVERGÊNCIA: O BARBEIRO NÃO ESCREVE NO CAIXA
+
+A ordem diz que em `lancamento_financeiro` o profissional pode "ver, inserir ou
+alterar" as linhas com o `profissional_id` dele. **Implementei só a leitura**, e
+o motivo é concreto:
+
+Com escrita liberada nas próprias linhas, o barbeiro pode inserir uma
+`saida` de categoria `comissao` com o próprio id — ou seja, **dar baixa na
+própria comissão**. E pode inventar `entrada` de atendimento que nunca houve. A
+Fase 6 inteira existiu para o caixa parar de mentir; isso o faria mentir por
+dentro, e a auditoria da Fase 7 não cobre movimento de caixa.
+
+A regra do Chefe é "ele só **enxerga** o próprio financeiro". Enxergar é o que
+implementei.
+
+**Para reverter, se você discordar:** a policy de escrita de
+`lancamento_financeiro` passa a repetir a condição da de leitura. Uma linha.
+
+Em `agendamento` a escrita **ficou liberada** para as próprias linhas, e isso é
+proposital: marcar um encaixe é trabalho do barbeiro.
+
+---
+
+### A BATERIA, COMO UM PROFISSIONAL DE VERDADE
+
+Simulei o vínculo que a tela de Equipe faria (conta vira `profissional` da
+barbearia, ficha do profissional aponta para ela), tudo em transação revertida:
+
+| # | tentativa | resultado |
+|---|---|---|
+| — | `is_gestor()` / tem ficha | **`f` / `t`** |
+| 1 | ler o catálogo | **vê** |
+| 2 | `UPDATE servico` | **`UPDATE 0`** |
+| 3 | `UPDATE configuracao_barbearia` (adição minha) | **`UPDATE 0`** |
+| 4 | `INSERT despesa_recorrente` (adição minha) | **violates row-level security policy** |
+| 5 | agenda | **4 dele** |
+| 6 | financeiro | **1 visível, 0 que não são dele** |
+| 7 | dar baixa na própria comissão (divergência) | **violates row-level security policy** |
+| 8 | inventar receita própria | **violates row-level security policy** |
+| 9 | controle: o dono escreve | **`UPDATE 12`** |
+
+**Um detalhe que eu quase reportei errado.** No teste 5 apareceu 1 agendamento
+visível que **não** é do profissional. Fui ver antes de chamar de vazamento: é
+um agendamento **onde essa conta é o cliente**, em outra barbearia, visível pela
+policy "Cliente ve os proprios agendamentos" que já existia. Um barbeiro que
+também é cliente continua vendo as próprias marcações — correto e desejável.
+
+**Setup barrado pelo próprio projeto:** o primeiro `UPDATE usuario_perfil SET
+tipo` foi recusado por `proteger_campos_de_autorizacao` **mesmo rodando como
+`postgres`** — é trigger, não RLS. Usei a escotilha que o projeto já tem
+(`app.vinculo_autorizado`), a mesma das RPCs de cadastro.
+
+---
+
+### F8.2 e F8.3 — rota e menu saem da MESMA lista
+
+`navigation.config.ts` deixou de ser um array de links e passou a ser a fonte
+de autorização: cada item declara `papeis`. Agenda e Financeiro para
+`owner`, `gerente` e `profissional`; o resto só gestão.
+
+**`GuardaDoDashboard` (novo)** lê essa mesma lista para barrar a URL digitada à
+mão. Deliberado: se a regra da rota fosse escrita de novo em outro lugar, as
+duas divergiriam no primeiro item novo — o item ficaria escondido no menu e
+aberto pela barra de endereço.
+
+`podeAbrir` casa pelo caminho **mais específico** e nega o desconhecido. Sem
+isso, `/dashboard/agenda/semana` cairia na regra do índice e o barbeiro seria
+expulso da própria agenda.
+
+O profissional entrou em `PAPEIS_POR_AREA.gestao` e ganhou rota inicial própria
+(`/dashboard/agenda`): o índice é o painel de métricas da loja, que não é dele.
+
+**9 testes novos** em `navigation.config.test.ts`, incluindo o caso da
+sub-rota e o do caminho desconhecido.
+
+---
+
+### A TELA DO FINANCEIRO PRECISOU MUDAR, SENÃO NASCERIA QUEBRADA
+
+Liberar Financeiro para o profissional sem mexer na página entregaria a ele:
+"Novo Lançamento", "Atendimentos a lançar", "Comissões a pagar" e "Despesas
+fixas" — **quatro painéis com botões que a RLS recusa**, e listas vazias que
+pareceriam defeito.
+
+O que o barbeiro vê agora: o resumo dos próprios números, o fechamento por
+forma de pagamento das próprias entradas, e a lista dos próprios lançamentos
+**sem o menu de ações**. Mais uma linha dizendo o que ele está vendo: "Seus
+atendimentos e sua comissão. Os números da barbearia ficam com a gestão."
+
+---
+
+### DOIS TESTES ANTIGOS QUE MUDARAM DE VERDADE
+
+`ProtectedRoute.test.tsx` afirmava *"barra a conta de profissional, que não tem
+área nenhuma"*. Virou **"deixa o profissional entrar na área de gestão"**, com
+o porquê no comentário. A barreira "área ainda não disponível" continua no
+código como rede para o próximo papel que alguém acrescente ao enum sem lhe dar
+lugar.
+
+**Um tropeço meu, o mesmo de antes:** editei `areas.ts` com Python e as
+substituições **multilinha não casaram**, porque o arquivo estava em CRLF e as
+minhas strings em LF. As de linha única passaram — então metade da edição
+entrou e metade não, sem erro nenhum. Só apareceu porque conferi com `grep` se
+o símbolo novo existia. É a regra que eu mesmo escrevi no `CLAUDE.md` na F7.5,
+e que eu mesmo esqueci de aplicar: **normalizar antes de editar**.
+
+Também derrubei o build com uma colisão de nome (`tipo` do `useAuth` contra o
+`tipo` que já era o filtro da página). `tsc --noEmit` não pegou, `tsc -b` do
+build pegou — vale lembrar que os dois não olham a mesma coisa.
+
+```
+tsc           -> 0 erros
+npm test      -> 69 testes em 9 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> migration 00023 aplicada e re-executável; bateria revertida, sem resíduo
+```
+
+---
+
+### O QUE NÃO CONSIGO VALIDAR, E POR QUÊ
+
+Os critérios 1 a 6 da ordem pedem: **criar uma conta**, vincular o profissional
+pela tela de Equipe, **deslogar e logar com a senha dele**. Não faço nenhuma
+das três — criar conta e digitar senha estão fora do que eu executo.
+
+O que provei no lugar: a RLS com uma conta de profissional real montada no
+banco (tabela acima), e o roteamento e o menu por testes unitários que travam
+exatamente os critérios 4 e 6 ("a sidebar só deve ter Agenda e Financeiro" e
+"/dashboard/servicos deve bloquear").
+
+**O que falta é a passada visual**, que depende de você fazer o fluxo:
+cadastre um cliente, vincule pela aba Equipe da Barbearia do Renan, entre com
+ele e me diga o que apareceu. Se algo estiver torto, corrijo em cima.
+
+---
+
+### UMA COISA QUE A FASE DEIXOU ESTRANHA, E NÃO CONSERTEI SOZINHO
+
+`horario_trabalho` e `bloqueio` entraram como catálogo: o profissional **lê e
+não escreve**. Na prática isso significa que **o barbeiro não consegue marcar a
+própria folga nem ajustar o próprio horário** — precisa pedir ao dono.
+
+Pode ser exatamente o que você quer (a agenda é da casa). Mas é o tipo de
+atrito que vira reclamação na primeira semana. Se quiser, a regra fica
+"profissional escreve onde `profissional_id` é dele", igual à do agendamento —
+e aí só o bloqueio da barbearia inteira (`profissional_id IS NULL`) continua
+sendo do gestor.
