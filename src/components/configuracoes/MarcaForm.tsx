@@ -7,11 +7,11 @@ import { ImagePlus, Trash2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useMarca } from '@/hooks/useMarca';
+import { SeletorDeCor } from './SeletorDeCor';
 import type { Database } from '@/types/database.types';
 
 type ConfiguracaoBarbearia = Database['public']['Tables']['configuracao_barbearia']['Row'];
@@ -211,21 +211,16 @@ export function MarcaForm({ configuracao, isLoading }: MarcaFormProps) {
                 control={form.control}
                 name="tema_cor_primaria"
                 render={({ field }) => (
-                  <FormItem className="max-w-xs">
+                  <FormItem className="max-w-xl">
                     <FormLabel>Cor principal</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <FormControl>
-                        <Input placeholder="#F0B323" {...field} />
-                      </FormControl>
-                      <span
-                        aria-hidden="true"
-                        className="h-9 w-9 shrink-0 rounded-md border"
-                        style={
-                          HEX.test(field.value) ? { backgroundColor: field.value } : undefined
-                        }
-                      />
-                    </div>
-                    <FormDescription>Hexadecimal de 6 dígitos.</FormDescription>
+                    <FormControl>
+                      <SeletorDeCor valor={field.value} onChange={field.onChange} />
+                    </FormControl>
+                    <FormDescription>
+                      Usada no seu perfil público. Antes ela era só digitada, e
+                      dava para escolher um tom que deixava o botão de agendar
+                      ilegível sem ninguém perceber.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

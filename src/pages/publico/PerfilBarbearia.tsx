@@ -10,7 +10,7 @@ import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
 import { CardPromocao } from '@/components/publico/CardPromocao';
 import { usePromocoesVigentes } from '@/hooks/usePromocoes';
-import { estiloDeBotaoDaMarca, marcaVisivel } from '@/lib/marca';
+import { CLASSE_BOTAO_DA_MARCA, estiloDeBotaoDaMarca, marcaVisivel } from '@/lib/marca';
 
 const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -122,6 +122,9 @@ export default function PerfilBarbearia() {
             <Button
               size="lg"
               style={estiloCta}
+              // A borda só entra quando o botao esta pintado com a marca: a
+              // variante primaria do design system ja tem contraste proprio.
+              className={estiloCta ? CLASSE_BOTAO_DA_MARCA : undefined}
               onClick={() => navigate(`/b/${barbearia.slug}/agendar`)}
             >
               Agendar

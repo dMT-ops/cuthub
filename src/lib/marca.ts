@@ -81,3 +81,90 @@ export function marcaVisivel(cor: string | null | undefined, fundoEscuro = true)
   if (l === null) return false;
   return razaoDeContraste(l, fundoEscuro ? 0.02 : 0.95) >= 1.6;
 }
+
+/**
+ * Fundos das duas versões do tema, de `index.css`.
+ * Claro: `0 0% 98%`. Escuro: `0 0% 3%`.
+ */
+const FUNDO_CLARO = '#fafafa';
+const FUNDO_ESCURO = '#080808';
+
+/**
+ * A cor consegue ser vista **como botão** contra o fundo da página?
+ *
+ * Esta checagem é diferente da de legibilidade do rótulo, e ela faltava na
+ * primeira versão deste arquivo. O efeito da falta foi medido no navegador:
+ * `#111111`, `#0A0A0A` e `#2B2B2B` passavam sem aviso, porque texto branco sobre
+ * quase-preto tem contraste altíssimo — mas o botão inteiro sumia no fundo
+ * escuro da página. Era exatamente o sintoma original: "parece desabilitado".
+ *
+ * O piso de 3.0 é o do WCAG 1.4.11 para componentes de interface.
+ */
+export function contrasteComOFundo(cor: string | null | undefined): {
+  claro: number;
+  escuro: number;
+} | null {
+  const l = luminancia(cor ?? '');
+  const lClaro = luminancia(FUNDO_CLARO);
+  const lEscuro = luminancia(FUNDO_ESCURO);
+  if (l === null || lClaro === null || lEscuro === null) return null;
+
+  return {
+    claro: razaoDeContraste(l, lClaro),
+    escuro: razaoDeContraste(l, lEscuro),
+  };
+}
+
+/**
+ * Abaixo disto o preenchimento do botão não se separa do fundo da página: é um
+ * retângulo da mesma cor da tela, e o olho lê como "desligado".
+ *
+ * Não é o 3.0 do WCAG 1.4.11 de propósito, e o número saiu de medição, não de
+ * gosto. As duas pontas que o piso precisa separar são estreitas: a pior falha
+ * real é `#2B2B2B`, que dá **1.41** contra o fundo escuro e some mesmo; o
+ * melhor caso bom é `#F0B323` — a cor padrão do CutHub — que dá **1.80** contra
+ * o fundo claro e é um botão amarelo perfeitamente visível num fundo branco.
+ * Qualquer piso de 3.0 reprovaria a nossa própria cor e a maioria dos amarelos
+ * e laranjas de barbearia, e um aviso que acusa o caso bom é pior do que aviso
+ * nenhum: ensina a ignorá-lo. 1.6 cai entre as duas pontas e é o mesmo limiar
+ * que `marcaVisivel` já usa para decidir se a marca dá para enxergar.
+ *
+ * O 3.0 de 1.4.11 continua sendo obrigação nossa — quem paga por ele é a borda
+ * de `CLASSE_BOTAO_DA_MARCA`, que delimita o botão nos dois temas
+ * independentemente da cor escolhida.
+ */
+const PISO_CONTRA_O_FUNDO = 1.6;
+
+/**
+ * Borda do botão pintado com a marca.
+ *
+ * `foreground/25` resolve os dois temas com uma classe só: sobre um botão
+ * escuro no tema escuro o anel é claro, e sobre um botão claro no tema claro
+ * ele é escuro. Sem isto, um preenchimento de baixo contraste não teria nenhum
+ * limite visível e falharia o WCAG 1.4.11.
+ */
+export const CLASSE_BOTAO_DA_MARCA = 'ring-1 ring-foreground/25';
+
+/**
+ * Aviso para quem está escolhendo a cor, ou `null` quando está tudo bem.
+ *
+ * Informa, não bloqueia: a cor é da barbearia, e a decisão é dela. O que não
+ * pode acontecer é ela descobrir o problema meses depois, pelo cliente que não
+ * achou o botão.
+ */
+export function avisoDeContraste(cor: string | null | undefined): string | null {
+  if (!estiloDeBotaoDaMarca(cor)) {
+    return 'Esta cor não permite um texto legível em cima dela — nem preto nem branco alcançam o contraste mínimo.';
+  }
+
+  const c = contrasteComOFundo(cor);
+  if (!c) return null;
+
+  if (c.escuro < PISO_CONTRA_O_FUNDO) {
+    return 'Esta cor é quase preta: no tema escuro o botão de agendar se mistura com o fundo da página e passa despercebido.';
+  }
+  if (c.claro < PISO_CONTRA_O_FUNDO) {
+    return 'Esta cor é quase branca: no tema claro o botão de agendar se mistura com o fundo da página e passa despercebido.';
+  }
+  return null;
+}
