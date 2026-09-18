@@ -6744,3 +6744,143 @@ atravessar tenants de propósito — e a nossa RLS hoje é justamente o contrár
 disso, então ela vai exigir desenho de autorização, não só telas.
 
 Aguardo o rumo.
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 6 (Financeiro/Caixa): investigação antes da ordem de execução
+
+O Chefe escolheu **Financeiro / Caixa** como próxima frente. Investiguei o
+estado real antes de propor qualquer coisa. Tudo abaixo foi medido no banco e
+lido no código, não estimado.
+
+---
+
+### O QUE JÁ EXISTE (mais do que eu esperava)
+
+`lancamento_financeiro`: 12 colunas, RLS no padrão do projeto, índice
+`(barbearia_id, data_lancamento DESC)`, check `valor > 0` e o índice único
+parcial `lancamento_atendimento_unico_por_agendamento` da migration `00013` —
+um agendamento não vira receita duas vezes.
+
+Enums prontos: `tipo_lancamento` (entrada/saida), `categoria_lancamento`
+(atendimento, venda_produto, aluguel, insumos, salario, **comissao**, outro),
+`forma_pagamento` (dinheiro, pix, credito, debito, outro).
+
+UI: `Financeiro.tsx` (201 linhas) com filtro por mês/tipo/categoria, três cards
+de resumo, tabela e o `AtendimentosAReceber` — que lista atendimento concluído
+sem receita lançada. **Esse componente está correto e é bem pensado**: o
+comentário no service explica que só `entrada + atendimento` marca o agendamento
+como lançado, senão um lançamento de comissão apontando para o mesmo agendamento
+esconderia a receita para sempre. Backlog atual: **1 de 96** concluídos sem
+receita. O mecanismo funciona.
+
+---
+
+### O FURO: R$ 3.640,75 de custo real que o caixa não enxerga
+
+**`categoria = 'comissao'` existe no enum, existe no formulário, e tem ZERO
+lançamentos.** Ao mesmo tempo, `profissional.comissao_percentual` está
+preenchido em todos os profissionais (40% a 60%).
+
+A comissão *é* calculada — mas em outro lugar e com outra base.
+`profissionaisService.obterDesempenho` (`profissionais.service.ts:145`) calcula
+`faturamento * comissaoPerc / 100` a partir dos **agendamentos concluídos**, e
+mostra o número dentro do `ProfissionalDetalheSheet`. Ele nunca toca no caixa.
+
+São **duas verdades que não se falam**:
+
+| | base | onde aparece | vira lançamento? |
+|---|---|---|---|
+| comissão do desempenho | agendamento concluído | sheet do profissional | **não** |
+| caixa | lançamento confirmado pelo gestor | Financeiro | — |
+
+Consequência, medida no banco:
+
+```
+entradas ............ R$ 7.285,00
+saidas .............. R$ 3.343,00   (aluguel 3.000 + salario 343)
+saldo exibido ....... R$ 3.942,00
+comissao devida ..... R$ 3.640,75   <- nao esta em lugar nenhum
+saldo real .......... R$   301,25
+```
+
+**O saldo mostrado é 13x o saldo real.** A maior despesa de uma barbearia —
+a comissão do barbeiro — é a única que o sistema calcula e não registra. Para
+um gestor decidindo se pode comprar uma cadeira nova, esse número é pior do que
+não ter número.
+
+Por profissional, com a receita que já está no caixa:
+
+| profissional | % | receita | comissão devida |
+|---|---|---|---|
+| João C. | 50% | 2.410,00 | **1.205,00** |
+| Lucas S. | 60% | 1.350,00 | 810,00 |
+| Pedro H. | 50% | 1.450,00 | 725,00 |
+| Marcos B. | 45% | 1.395,00 | 627,75 |
+| Alberto | 40% | 285,00 | 114,00 |
+| Carlos | 40% | 185,00 | 74,00 |
+
+(`Pituco` está com 100% de comissão no seed — dado de teste, mas o formulário
+aceita, então vale confirmar se 100% é intencionalmente permitido.)
+
+---
+
+### MAIS TRÊS BURACOS, MENORES E REAIS
+
+1. **Lançamento não pode ser corrigido nem apagado.** O service tem
+   `listarLancamentos`, `criarLancamento`, `resumo` e
+   `listarAtendimentosAReceber` — e mais nada. A RLS é `FOR ALL`, então o banco
+   permite; falta só a camada do app. Digitou R$ 500 em vez de R$ 50, o erro é
+   permanente e contamina o resumo para sempre. Num caixa isso é grave.
+2. **`forma_pagamento` é gravada e nunca somada.** 94 entradas em pix, 1 débito,
+   1 dinheiro — e **5 entradas (R$ 245,00) sem forma nenhuma**. Não existe
+   fechamento por forma de pagamento, que é justamente como se confere a gaveta
+   no fim do dia contra o extrato do pix.
+3. **Despesa recorrente é redigitada.** 20 lançamentos de aluguel, todos
+   R$ 150,00, um por mês. Nenhum conceito de recorrência.
+
+---
+
+### O QUE EU PROPONHO (para você transformar em ordem de execução)
+
+Em ordem de valor por esforço, na minha leitura:
+
+- **F6.1 — Comissão vira lançamento.** Uma tela de "comissões a pagar" no mesmo
+  padrão do `AtendimentosAReceber` que já funciona: lista o que cada
+  profissional tem a receber **com base na receita efetivamente lançada no
+  caixa**, e o gestor confirma o pagamento, gerando `saida + comissao` com
+  `profissional_id`. Mesma filosofia do resto do módulo — o caixa só registra o
+  que o gestor confirma. Não exige mudança de schema.
+- **F6.2 — Editar e estornar lançamento.** Minha recomendação é **estorno**, não
+  `UPDATE`: um caixa que reescreve o passado não é auditável. Mas isso é decisão
+  de produto e pode ser exagero para o porte do cliente — ver PERGUNTA 2.
+- **F6.3 — Fechamento do dia por forma de pagamento.** Reaproveita dado que já
+  está gravado; é só agregação e uma tela.
+- **F6.4 — Despesa recorrente.** Essa exige schema novo, então é a que eu
+  deixaria por último.
+
+---
+
+### PERGUNTAS ANTES DE EXECUTAR
+
+**PERGUNTA 1 — a comissão deve seguir a receita lançada ou o atendimento
+concluído?** Hoje o sheet do profissional usa "concluído" e o caixa usa
+"lançado". São números diferentes e os dois vão aparecer na tela. Minha
+recomendação: **a comissão segue o caixa** (só se deve comissão sobre dinheiro
+que entrou) e o sheet do profissional passa a usar a mesma base, para o sistema
+parar de dar duas respostas para a mesma pergunta. Se você preferir manter as
+duas visões, elas precisam de rótulos que expliquem a diferença.
+
+**PERGUNTA 2 — erro de digitação: editar ou estornar?** Estorno preserva
+auditoria e é o certo contabilmente; edição é o que o dono de uma barbearia de
+bairro espera de um app. Dá para ter os dois (editar até o fechamento do dia,
+estornar depois), ao custo de mais complexidade.
+
+**PERGUNTA 3 — quem pode ver o Financeiro?** Hoje a RLS é por barbearia, não por
+papel: **um profissional com conta vinculada enxerga o faturamento inteiro da
+casa e a comissão dos colegas.** Não é bug de código, é o modelo atual — mas
+vale confirmar se é o desejado antes de eu colocar a folha de comissões de todo
+mundo numa tela. Se não for, isso vira requisito de autorização por papel e
+muda o tamanho da fase.
+
+Nada foi alterado no banco nesta investigação.
