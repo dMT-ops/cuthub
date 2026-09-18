@@ -13,6 +13,8 @@ interface ComissoesAPagarProps {
   comissoes: ComissaoAPagar[];
   isLoading: boolean;
   periodo: { inicio: string; fim: string };
+  /** Data de competência do lançamento: meio-dia do último dia do mês em tela */
+  dataDaComissao: string;
   rotuloDoPeriodo: string;
 }
 
@@ -24,7 +26,13 @@ interface ComissoesAPagarProps {
  * despesa de uma barbearia e a única que o sistema calculava sem registrar --
  * o saldo do caixa ficava alto demais por causa disso.
  */
-export function ComissoesAPagar({ comissoes, isLoading, periodo, rotuloDoPeriodo }: ComissoesAPagarProps) {
+export function ComissoesAPagar({
+  comissoes,
+  isLoading,
+  periodo,
+  dataDaComissao,
+  rotuloDoPeriodo,
+}: ComissoesAPagarProps) {
   const { barbeariaId, user, podeOperar, motivoBloqueio } = useAuth();
   const { criarLancamento } = useFinanceiro(barbeariaId, periodo);
   const [pagandoId, setPagandoId] = useState<string | null>(null);
@@ -42,10 +50,11 @@ export function ComissoesAPagar({ comissoes, isLoading, periodo, rotuloDoPeriodo
         tipo: 'saida',
         categoria: 'comissao',
         valor: comissao.pendente,
-        // A data e o fim do periodo em tela, e nao "agora": a comissao pertence
-        // ao mes que a gerou. Lancar com a data de hoje jogaria a despesa de
-        // setembro dentro de outubro e o resumo dos dois meses ficaria errado.
-        data_lancamento: periodo.fim,
+        // A data e a competencia do mes em tela, e nao "agora": a comissao
+        // pertence ao mes que a gerou. Lancar com a data de hoje jogaria a
+        // despesa de setembro dentro de outubro. Ver dataDaComissao na pagina --
+        // usar o fim do periodo cru tinha o mesmo defeito, por causa do fuso.
+        data_lancamento: dataDaComissao,
         descricao: `Comissão ${comissao.percentual.toFixed(0)}% — ${comissao.profissionalNome} — ${rotuloDoPeriodo}`,
         criado_por: user?.id ?? null,
       });

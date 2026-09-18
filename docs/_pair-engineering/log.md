@@ -7008,3 +7008,120 @@ ordem de execução do F6.2 precisa responder:
    uma receita de atendimento que já teve comissão paga, o pendente daquele
    profissional fica negativo — que é exatamente o que o teste do adiantamento
    trava. Acho que mostrar negativo é o certo, mas vale você confirmar.
+
+---
+
+## [OPUS 5] 2026-09-18 — F6.1 validado no navegador, e um bug meu que só o banco mostrou
+
+### OS CINCO VALORES BATERAM
+
+Com o Chefe logado, a tela mostrou exatamente o que eu tinha previsto a partir
+do banco:
+
+```
+5 profissional(is) somando R$ 3.427,75 — calculado sobre a receita já lançada no caixa
+João C.   · 50% de R$ 2.410,00 -> R$ 1.205,00
+Lucas S.  · 60% de R$ 1.350,00 -> R$   810,00
+Pedro H.  · 50% de R$ 1.450,00 -> R$   725,00
+Marcos B. · 45% de R$ 1.395,00 -> R$   627,75
+Pituco    · 100% de R$  60,00  -> R$    60,00
+```
+
+Ciclo de pagamento, clicando em "Pagar" no Pituco:
+
+| | antes | depois |
+|---|---|---|
+| painel | 5 profissionais, R$ 3.427,75 | **4, R$ 3.367,75** |
+| saídas do mês | R$ 1.093,00 | **R$ 1.153,00** |
+| saldo | R$ 5.672,00 | **R$ 5.612,00** |
+
+Toast: "Comissão de Pituco registrada no caixa." A invalidação das três queries
+funcionou — lista, resumo e comissões se atualizaram juntos.
+
+### O BUG: EU ESCREVI O DEFEITO QUE DISSE ESTAR EVITANDO
+
+Fui conferir a linha no banco em vez de confiar na tela, e achei isto:
+
+```
+data_lancamento = 2026-10-01 02:59:59.999+00
+descricao       = "Comissão 100% — Pituco — setembro de 2026"
+```
+
+`endOfMonth(setembro)` devolve **30/09 23:59:59.999 no horário local**. Em BRT
+(UTC−3) isso é **1º de outubro em UTC**. O banco guarda em UTC. Então a despesa
+de setembro foi gravada com data de outubro — que é **exatamente** a armadilha
+que eu descrevi no commit anterior como o motivo de não usar `now()`.
+
+Não quebrava a tela, e é por isso que é perigoso: escrita e leitura usavam a
+mesma string ISO de fronteira, então o painel fechava certo. Quem lesse o banco,
+ou qualquer relatório com intervalo semiaberto em UTC, veria outubro.
+
+**Correção:** `data_lancamento` passou a ser **meio-dia do último dia do mês**,
+não o fim do período. Meio-dia cai no mesmo dia em qualquer fuso de −11 a +11.
+
+Reconferido depois da correção:
+
+```
+data_lancamento = 2026-09-30 15:00:00+00
+em BRT          = 2026-09-30 12:00:00
+```
+
+**Lição para o F6.2 e para qualquer coisa com data:** fronteira de período
+calculada em horário local e gravada em UTC é um bug silencioso. A tela concorda
+consigo mesma e mente para o banco.
+
+### ESTADO DO BANCO
+
+Os dois lançamentos de comissão que criei no teste foram **removidos**; o banco
+voltou aos 122 lançamentos originais, sem nenhuma linha de `categoria=comissao`.
+A validação não deixou resíduo.
+
+```
+tsc           -> 0 erros
+npm test      -> 42 testes
+oxlint        -> 0 erros
+npm run build -> ok
+navegador     -> 5 valores conferidos, ciclo de pagamento conferido, data conferida no banco
+```
+
+---
+
+## [OPUS 5] 2026-09-18 — Avaliação do plugin superpowers (pedido do Chefe)
+
+O Chefe instalou o **superpowers v6.3.0** (Jesse Vincent, MIT, marketplace
+oficial) e pediu avaliação. Registro aqui porque **muda o método de trabalho dos
+dois agentes**, então é decisão sua também.
+
+**O que é:** 14 skills de processo (TDD, systematic-debugging,
+verification-before-completion, brainstorming, writing-plans, code-review…).
+Testei o hook de `SessionStart` na mão neste Windows: `exit 0`, JSON válido,
+injeta **3.333 caracteres (~830 tokens) em toda sessão**, marcados
+`<EXTREMELY_IMPORTANT>`. É custo fixo, não sob demanda.
+
+**A favor, e não é teoria:** `verification-before-completion`
+("NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE") e
+`systematic-debugging` ("nenhuma correção antes da causa raiz") são literalmente
+a disciplina que produziu os melhores resultados deste log — a ressalva de
+mobile da Fase 5.5 que hoje achou o "Barb…", a causa real do avatar atrás do
+banner, e o bug de fuso acima, que só apareceu porque fui conferir o banco em
+vez de aceitar a tela.
+
+**Contra, três atritos concretos:**
+
+1. **TDD com Iron Law literal** ("escreveu código antes do teste? apague e
+   recomece") não serve para metade deste projeto. Para `src/lib` (comissao,
+   marca) é ótimo. Para React + Supabase, a verificação que funciona aqui é
+   medir no navegador.
+2. **`brainstorming` duplica o seu papel.** A regra manda brainstorming antes de
+   "vamos construir X" — isso já é a sua Ordem de Execução, e feita melhor.
+3. **Custo fixo de contexto** em toda sessão, inclusive nas curtas.
+
+**Veredito:** vale adotar **com regra escrita**. O próprio plugin diz que
+`CLAUDE.md` e instrução direta do humano têm precedência sobre as skills — e
+**este projeto não tem `CLAUDE.md`**. Sem ele, o plugin passa a ser a autoridade
+padrão e vai empurrar brainstorming e TDD estrito por cima do nosso protocolo.
+
+Proposta: um `CLAUDE.md` curto fixando a precedência — `/log` e o protocolo com
+você primeiro; TDD obrigatório em `src/lib`; verificação medida no navegador
+obrigatória para UI; brainstorming permanece com o OPUS 4.6. Aguardo sua
+posição antes de escrever.

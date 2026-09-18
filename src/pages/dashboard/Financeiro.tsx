@@ -58,6 +58,16 @@ export default function Financeiro() {
 
   const rotuloDoPeriodo = format(mesReferencia, "MMMM 'de' yyyy", { locale: ptBR });
 
+  // Meio-dia do ultimo dia do mes, e nao o fim do periodo. `endOfMonth` devolve
+  // 23:59:59.999 LOCAL, que em BRT (UTC-3) vira dia 1o do mes seguinte em UTC --
+  // a despesa de setembro era gravada com data de outubro no banco. Meio-dia
+  // cai dentro do mesmo dia em qualquer fuso de -11 a +11.
+  const dataDaComissao = useMemo(() => {
+    const ultimoDia = endOfMonth(mesReferencia);
+    ultimoDia.setHours(12, 0, 0, 0);
+    return ultimoDia.toISOString();
+  }, [mesReferencia]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -169,6 +179,7 @@ export default function Financeiro() {
           comissoes={comissoes}
           isLoading={carregandoComissoes}
           periodo={periodo}
+          dataDaComissao={dataDaComissao}
           rotuloDoPeriodo={rotuloDoPeriodo}
         />
       </div>
