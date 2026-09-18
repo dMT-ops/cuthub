@@ -8,7 +8,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useMeusAgendamentos } from '@/hooks/useMeusAgendamentos';
+import { useMemo } from 'react';
 import { useFavoritos } from '@/hooks/useFavoritos';
+import { usePromocoesVigentes } from '@/hooks/usePromocoes';
+import { useCatalogo } from '@/hooks/useCatalogo';
+import { CardPromocao } from '@/components/publico/CardPromocao';
 
 const ATALHOS = [
   { to: '/minha-conta/agendamentos', label: 'Meus agendamentos', icon: CalendarDays },
@@ -20,6 +24,20 @@ export default function MinhaConta() {
   const { perfil } = useAuth();
   const { proximo, isLoading, isError, error } = useMeusAgendamentos();
   const { favoritos } = useFavoritos();
+  const { barbearias } = useCatalogo();
+
+  // Conteúdo que já existe no sistema, trazido para preencher a coluna que
+  // sobrava em tela larga — em vez de esticar o que já estava aqui.
+  const idsFavoritos = useMemo(
+    () => Array.from(new Set(favoritos.map((f) => f.barbearia_id))),
+    [favoritos]
+  );
+  const { promocoes } = usePromocoesVigentes(idsFavoritos);
+  const porId = useMemo(() => {
+    const mapa = new Map<string, (typeof barbearias)[number]>();
+    for (const b of barbearias) if (b.id) mapa.set(b.id, b);
+    return mapa;
+  }, [barbearias]);
 
   const primeiroNome = perfil?.nome?.split(' ')[0];
 
@@ -34,6 +52,10 @@ export default function MinhaConta() {
         </p>
       </div>
 
+      {/* Em `lg` vira duas colunas; abaixo disso continua empilhado, como foi
+          validado no mobile. */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-8">
       <section>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Próximo agendamento</h2>
 
@@ -102,6 +124,30 @@ export default function MinhaConta() {
           ))}
         </div>
       </section>
+      </div>
+
+      {promocoes.length > 0 && (
+        <aside className="min-w-0 space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Ofertas nas suas barbearias
+          </h2>
+          {promocoes.slice(0, 4).map((p) => {
+            const b = p.barbearia_id ? porId.get(p.barbearia_id) : undefined;
+            return (
+              <CardPromocao
+                key={p.id}
+                titulo={p.titulo}
+                descricao={p.descricao}
+                desconto={p.desconto_percentual}
+                dataFim={p.data_fim}
+                cor={b?.cor_primaria}
+                barbearia={b?.nome}
+              />
+            );
+          })}
+        </aside>
+      )}
+      </div>
     </div>
   );
 }

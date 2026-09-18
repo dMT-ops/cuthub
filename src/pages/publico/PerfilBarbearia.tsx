@@ -10,6 +10,7 @@ import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
 import { CardPromocao } from '@/components/publico/CardPromocao';
 import { usePromocoesVigentes } from '@/hooks/usePromocoes';
+import { estiloDeBotaoDaMarca, marcaVisivel } from '@/lib/marca';
 
 const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -57,13 +58,19 @@ export default function PerfilBarbearia() {
 
   const { barbearia, servicos, profissionais, produtos } = perfil;
   const cor = barbearia.cor_primaria ?? undefined;
+  // A cor da barbearia só vira fundo de CTA quando dá para ler o rótulo em
+  // cima dela. `#008000` (a cor real de uma barbearia do banco) dava 3.85 de
+  // contraste e o botão parecia desabilitado. `undefined` devolve o botão para
+  // a variante primária do design system, que é legível por construção.
+  const estiloCta = estiloDeBotaoDaMarca(cor);
+  const corDetalhe = marcaVisivel(cor) ? cor : undefined;
 
   return (
     <div className="min-h-screen bg-background">
       <div className="relative">
         <CapaBarbearia
           bannerUrl={barbearia.banner_url}
-          corPrimaria={cor}
+          corPrimaria={corDetalhe}
           className="h-40 sm:h-56"
         />
         <Button
@@ -77,12 +84,17 @@ export default function PerfilBarbearia() {
         </Button>
       </div>
 
-      <div className="mx-auto max-w-4xl px-4 sm:px-6">
-        <header className="-mt-10 flex flex-wrap items-end gap-4 pb-6">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:max-w-6xl xl:max-w-7xl">
+        {/* `relative z-10` nao e enfeite: o banner esta num wrapper
+            `position: relative` e, na ordem de pintura do CSS, elemento
+            posicionado cobre conteudo estatico independentemente da ordem no
+            DOM. Sem isto os 40px de cima do avatar ficam ATRAS do banner --
+            confirmado por elementFromPoint na faixa de sobreposicao. */}
+        <header className="relative z-10 -mt-10 flex flex-wrap items-end gap-4 pb-6">
           <LogoBarbearia
             nome={barbearia.nome ?? ''}
             logoUrl={barbearia.logo_url}
-            corPrimaria={cor}
+            corPrimaria={corDetalhe}
             className="h-20 w-20"
           />
 
@@ -105,10 +117,11 @@ export default function PerfilBarbearia() {
                 rotulo={barbearia.nome}
               />
             )}
-            {/* A identidade da barbearia manda na cor do CTA — é o que o Chefe
-                pediu ao dizer que a visão do cliente reflete a marca dela. */}
+            {/* A identidade da barbearia manda na cor do CTA quando ela é
+                legível; quando não é, a variante primária assume. */}
             <Button
-              style={cor ? { backgroundColor: cor, color: '#0a0a0a' } : undefined}
+              size="lg"
+              style={estiloCta}
               onClick={() => navigate(`/b/${barbearia.slug}/agendar`)}
             >
               Agendar
@@ -120,12 +133,20 @@ export default function PerfilBarbearia() {
           <p className="max-w-2xl pb-6 text-muted-foreground">{barbearia.descricao}</p>
         )}
 
-        {promocoes.length > 0 && (
-          <section className="pb-8">
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              {promocoes.length === 1 ? 'Promoção no ar' : 'Promoções no ar'}
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+        {/* Em tela larga o conteudo vira duas colunas em vez de uma faixa
+            central estreita: servicos e equipe ocupam a principal, e as
+            promocoes -- que antes empurravam tudo para baixo -- passam a ocupar
+            a lateral, que estava vazia. Abaixo de `lg` continua empilhado,
+            exatamente como foi validado no mobile. */}
+        <div className="grid gap-8 pb-16 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* Coluna lateral: em `lg` ela vai para a direita; abaixo disso o
+              `order` some e as promoções voltam a aparecer antes das abas,
+              como no mobile já validado. */}
+          {promocoes.length > 0 && (
+            <aside className="min-w-0 space-y-3 lg:order-1">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                {promocoes.length === 1 ? 'Promoção no ar' : 'Promoções no ar'}
+              </h2>
               {promocoes.map((p) => (
                 <CardPromocao
                   key={p.id}
@@ -134,14 +155,14 @@ export default function PerfilBarbearia() {
                   regras={p.regras}
                   desconto={p.desconto_percentual}
                   dataFim={p.data_fim}
-                  cor={cor}
+                  cor={corDetalhe}
                 />
               ))}
-            </div>
-          </section>
-        )}
+            </aside>
+          )}
 
-        <Tabs defaultValue="servicos" className="pb-16">
+          <div className="min-w-0">
+        <Tabs defaultValue="servicos">
           <TabsList>
             <TabsTrigger value="servicos">Serviços</TabsTrigger>
             <TabsTrigger value="equipe">Equipe</TabsTrigger>
@@ -267,6 +288,8 @@ export default function PerfilBarbearia() {
             )}
           </TabsContent>
         </Tabs>
+        </div>
+        </div>
       </div>
     </div>
   );

@@ -34,7 +34,7 @@ export default function Barbearias() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6 2xl:max-w-screen-2xl">
           <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <Scissors className="h-6 w-6 text-primary" aria-hidden="true" />
             <span className="text-lg">CutHub</span>
@@ -59,7 +59,7 @@ export default function Barbearias() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 2xl:max-w-screen-2xl">
         <div className="max-w-2xl">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Barbearias no CutHub</h1>
           <p className="mt-3 text-muted-foreground">
@@ -122,7 +122,9 @@ export default function Barbearias() {
             </p>
           </div>
         ) : (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          // Mais cards por linha em vez de cards gigantes: o espaco extra
+          // mostra mais barbearia, que e o conteudo util desta tela.
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {barbearias.map((b) => (
               <article
                 key={b.id}

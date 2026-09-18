@@ -30,7 +30,7 @@ export function ClienteLayout() {
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link to="/minha-conta" className="flex items-center gap-2 font-semibold tracking-tight">
             <Scissors className="h-6 w-6 text-primary" aria-hidden="true" />
             <span className="text-lg">CutHub</span>
@@ -54,7 +54,7 @@ export function ClienteLayout() {
         </div>
 
         {/* Navegação em abas no desktop */}
-        <nav className="mx-auto hidden max-w-4xl gap-1 px-4 pb-2 sm:px-6 md:flex">
+        <nav className="mx-auto hidden w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl gap-1 px-4 pb-2 sm:px-6 md:flex">
           {ITENS.map(({ to, label, icon: Icone, end }) => (
             <NavLink
               key={to}
@@ -75,7 +75,10 @@ export function ClienteLayout() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
+      {/* Largura por breakpoint, e nao fixa: com max-w-4xl (896px) uma tela de
+          1920px deixava mais de 500px vazios de cada lado. O teto existe para
+          o texto nao virar linha de 2000px, que e ilegivel. */}
+      <main className="mx-auto w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl px-4 py-6 sm:px-6">
         <Outlet />
       </main>
 
