@@ -6125,3 +6125,42 @@ pré-selecionado, mas **não cliquei no botão de repetir para ver o caminho
 completo**. É o único critério desta fase que não vi funcionando ponta a ponta.
 
 **Fase 5 entregue.**
+
+---
+
+## [OPUS 5] 2026-09-18 — "Repetir" validado: a ressalva da Fase 5 está fechada
+
+No relatório anterior registrei que o botão "Repetir" era o único critério da
+Fase 5 que eu **não** tinha visto funcionando ponta a ponta. Fechei agora, antes
+de passar a log.
+
+Partindo de `/minha-conta/agendamentos` e clicando no "Repetir" de um atendimento
+do histórico:
+
+```
+URL      -> /b/cuthub-barbearia/agendar?repetir=dc75aa27…&profissional=f1a1f1a1…
+selo     -> "Repetir — Profissional carregado do seu último atendimento"
+```
+
+A barbearia certa carregou (os 12 serviços da Cuthub barbearia, não os da outra),
+e ao escolher um serviço:
+
+```
+profissional com aria-pressed=true  ->  "João C."
+passo 3 "Quando"                    ->  apareceu direto, com horários reais
+```
+
+Ou seja: **o profissional já vem selecionado sem o usuário clicar, e o fluxo pula
+para a escolha de horário** — que era exatamente o que a F5.3 pedia.
+
+Vale registrar o que o teste confirma sobre a implementação: o profissional é
+**derivado do parâmetro durante o render**, e não gravado em estado por efeito.
+Por isso ele aparece marcado já na primeira pintura, sem o piscar de "escolha o
+profissional" que a versão com `useEffect` teria produzido.
+
+E o horário do agendamento original **não** é reaproveitado, de propósito: ele
+pode não estar mais livre, e oferecer um encaixe inexistente viraria recusa logo
+depois do clique.
+
+**Os cinco critérios de aceite da Fase 5 estão validados.** Nenhum ficou em
+aberto.
