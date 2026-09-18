@@ -38,6 +38,9 @@ function renderRota(entrada = '/dashboard') {
         <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>
           <Route index element={<div>área do cliente</div>} />
         </Route>
+        <Route path="/admin" element={<ProtectedRoute area="admin" />}>
+          <Route index element={<div>console da plataforma</div>} />
+        </Route>
       </Routes>
     </MemoryRouter>
   );
@@ -60,7 +63,11 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 
-  it('deixa o admin_supremo entrar no painel', () => {
+  // Mudou na Fase 7, de proposito. O admin_supremo saiu de `gestao` e ganhou
+  // area propria: dentro do painel da barbearia ele nunca pode operar
+  // (`podeOperar` sempre false), entao a tela so lhe mostrava botao
+  // desabilitado. Agora /dashboard o manda para o console da plataforma.
+  it('leva o admin_supremo que entra na gestão para o console da plataforma', () => {
     useAuthMock.mockReturnValue(
       estadoBase({
         perfil: { id: 'u1', tipo: 'admin_supremo', barbearia_id: null, nome: 'Admin' },
@@ -68,7 +75,28 @@ describe('ProtectedRoute', () => {
         podeOperar: false,
       } as never)
     );
-    renderRota();
+    renderRota('/dashboard');
+    expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
+    expect(screen.getByText('console da plataforma')).toBeInTheDocument();
+  });
+
+  it('deixa o admin_supremo entrar no console da plataforma', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'admin_supremo', barbearia_id: null, nome: 'Admin' },
+        barbeariaId: null,
+        podeOperar: false,
+      } as never)
+    );
+    renderRota('/admin');
+    expect(screen.getByText('console da plataforma')).toBeInTheDocument();
+  });
+
+  // O inverso importa tanto quanto: dono de barbearia nao entra no console.
+  it('barra o owner que tenta entrar no console da plataforma', () => {
+    useAuthMock.mockReturnValue(estadoBase());
+    renderRota('/admin');
+    expect(screen.queryByText('console da plataforma')).not.toBeInTheDocument();
     expect(screen.getByText('painel de gestão')).toBeInTheDocument();
   });
 

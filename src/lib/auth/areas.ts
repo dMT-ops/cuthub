@@ -2,11 +2,15 @@ import type { Database } from '@/types/database.types';
 
 export type TipoUsuario = Database['public']['Enums']['tipo_usuario'];
 
-/** As duas áreas logadas do produto. */
-export type Area = 'gestao' | 'cliente';
+/** As três áreas logadas do produto. */
+export type Area = 'gestao' | 'cliente' | 'admin';
 
 /**
  * Quem entra em cada área.
+ *
+ * O `admin_supremo` saiu de `gestao` e ganhou area propria na Fase 7. Ele nunca
+ * operou dentro de uma barbearia (`podeOperar` ja era false para ele), entao
+ * estar em `gestao` so lhe dava uma tela onde todo botao aparecia desabilitado.
  *
  * Listas de permitidos, não de barrados — a mesma decisão da Fase 1. O enum
  * `tipo_usuario` tem cinco valores, e um papel novo acrescentado ao banco deve
@@ -14,13 +18,15 @@ export type Area = 'gestao' | 'cliente';
  * acesso total por omissão.
  */
 export const PAPEIS_POR_AREA: Record<Area, TipoUsuario[]> = {
-  gestao: ['owner', 'gerente', 'admin_supremo'],
+  gestao: ['owner', 'gerente'],
   cliente: ['cliente'],
+  admin: ['admin_supremo'],
 };
 
 export const ROTA_DA_AREA: Record<Area, string> = {
   gestao: '/dashboard',
   cliente: '/minha-conta',
+  admin: '/admin',
 };
 
 /**
@@ -34,6 +40,7 @@ export function areaDoPapel(tipo: TipoUsuario | null | undefined): Area | null {
   if (!tipo) return null;
   if (PAPEIS_POR_AREA.gestao.includes(tipo)) return 'gestao';
   if (PAPEIS_POR_AREA.cliente.includes(tipo)) return 'cliente';
+  if (PAPEIS_POR_AREA.admin.includes(tipo)) return 'admin';
   return null;
 }
 

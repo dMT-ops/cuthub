@@ -21,6 +21,12 @@ import MeusAgendamentos from './pages/cliente/MeusAgendamentos';
 import MeusFavoritos from './pages/cliente/MeusFavoritos';
 import MinhasPromocoes from './pages/cliente/MinhasPromocoes';
 
+// Console da plataforma (admin_supremo)
+import { AdminLayout } from './components/layout/AdminLayout';
+import AdminHome from './pages/admin/AdminHome';
+import AdminBarbearias from './pages/admin/AdminBarbearias';
+import AdminAuditoria from './pages/admin/AdminAuditoria';
+
 // Páginas Privadas (Dashboard)
 import DashboardLayout from './pages/dashboard/Layout';
 import DashboardHome from './pages/dashboard/DashboardHome';
@@ -62,6 +68,17 @@ function App() {
                   <Route path="agendamentos" element={<MeusAgendamentos />} />
                   <Route path="favoritos" element={<MeusFavoritos />} />
                   <Route path="promocoes" element={<MinhasPromocoes />} />
+                </Route>
+              </Route>
+
+              {/* Console da plataforma — URL separada de propósito: o admin age
+                  sobre todos os tenants, e misturar isso com /dashboard já fez
+                  ele ver uma tela onde todo botão vinha desabilitado. */}
+              <Route path="/admin" element={<ProtectedRoute area="admin" />}>
+                <Route element={<AdminLayout />}>
+                  <Route index element={<AdminHome />} />
+                  <Route path="barbearias" element={<AdminBarbearias />} />
+                  <Route path="auditoria" element={<AdminAuditoria />} />
                 </Route>
               </Route>
 

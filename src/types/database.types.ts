@@ -159,6 +159,45 @@ export type Database = {
           },
         ]
       }
+      auditoria_plataforma: {
+        Row: {
+          acao: string
+          admin_id: string | null
+          alvo_descricao: string | null
+          alvo_id: string
+          alvo_tipo: string
+          criado_em: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          id: string
+          motivo: string | null
+        }
+        Insert: {
+          acao: string
+          admin_id?: string | null
+          alvo_descricao?: string | null
+          alvo_id: string
+          alvo_tipo: string
+          criado_em?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          motivo?: string | null
+        }
+        Update: {
+          acao?: string
+          admin_id?: string | null
+          alvo_descricao?: string | null
+          alvo_id?: string
+          alvo_tipo?: string
+          criado_em?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          motivo?: string | null
+        }
+        Relationships: []
+      }
       barbearia: {
         Row: {
           cidade: string | null
@@ -170,6 +209,7 @@ export type Database = {
           listada_no_catalogo: boolean
           nome: string
           slug: string
+          status: string
         }
         Insert: {
           cidade?: string | null
@@ -181,6 +221,7 @@ export type Database = {
           listada_no_catalogo?: boolean
           nome: string
           slug: string
+          status?: string
         }
         Update: {
           cidade?: string | null
@@ -192,6 +233,7 @@ export type Database = {
           listada_no_catalogo?: boolean
           nome?: string
           slug?: string
+          status?: string
         }
         Relationships: [
           {
@@ -943,6 +985,7 @@ export type Database = {
           criado_em: string | null
           id: string
           nome: string
+          status: string
           tipo: Database["public"]["Enums"]["tipo_usuario"]
         }
         Insert: {
@@ -950,6 +993,7 @@ export type Database = {
           criado_em?: string | null
           id: string
           nome: string
+          status?: string
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
         }
         Update: {
@@ -957,6 +1001,7 @@ export type Database = {
           criado_em?: string | null
           id?: string
           nome?: string
+          status?: string
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
         }
         Relationships: [
@@ -1157,6 +1202,14 @@ export type Database = {
           p_tipo?: Database["public"]["Enums"]["tipo_usuario"]
         }
         Returns: string
+      }
+      admin_definir_status_barbearia: {
+        Args: { p_barbearia_id: string; p_motivo?: string; p_status: string }
+        Returns: undefined
+      }
+      admin_definir_status_usuario: {
+        Args: { p_motivo?: string; p_status: string; p_usuario_id: string }
+        Returns: undefined
       }
       agendar_como_cliente: {
         Args: {
