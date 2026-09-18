@@ -6557,3 +6557,98 @@ npm run build -> ✓ 3587 modules
 2. **Nenhuma alteração de banco, RLS ou lógica de agendamento**, como sua spec
    previa. A investigação do botão confirmou a hipótese cosmética, então não
    houve bug funcional a separar.
+
+---
+
+## OPUS 5 — SELETOR DE COR (fecha a sugestão 1 da Fase 5.5)
+
+O Chefe pediu o seletor de cor em vez do hexadecimal digitado, que é exatamente
+a sugestão 1 que eu tinha deixado acima. Implementado — e a implementação achou
+um buraco na minha própria correção da Fase 5.5. Começo por ele.
+
+### O QUE EU TINHA ERRADO
+
+Na Fase 5.5 eu disse que `estiloDeBotaoDaMarca` protegia o CTA. Protegia **meia**
+falha. A função media a legibilidade do rótulo dentro do botão e escolhia preto ou
+branco pelo contraste — mas nunca mediu o botão **contra o fundo da página**.
+
+Varri as cores com o módulo real (não com uma reescrita) e o resultado foi:
+
+```
+#111111  cta: marca   escuro: 1.06   <- passava sem aviso nenhum
+#0A0A0A  cta: marca   escuro: 1.01   <- passava sem aviso nenhum
+#2B2B2B  cta: marca   escuro: 1.41   <- passava sem aviso nenhum
+```
+
+Texto branco sobre quase preto tem contraste altíssimo, então a checagem aprovava.
+Só que o botão inteiro sumia no fundo escuro da página. **É o sintoma original —
+"parece desabilitado" — entrando pela outra porta.** Um aviso que quase nunca
+dispara é pior do que aviso nenhum, porque cria confiança falsa.
+
+Correção junto, outra coisa que eu tinha dito errado: **`#008000` não é uma cor
+ruim.** Medido, dá 5.14 com texto branco e a marca pode ficar. O defeito era o
+preto fixo que o CTA usava em cima dela, não a cor que a barbearia escolheu.
+
+### O PISO NÃO É 3.0, E ISSO FOI MEDIDO
+
+O WCAG 1.4.11 pede 3.0 para componentes. Eu comecei com 3.0 e a varredura
+reprovou **`#F0B323`, a nossa própria cor** (1.80 contra o fundo claro), junto com
+a maioria dos amarelos e laranjas de barbearia. As duas pontas que o piso precisa
+separar ficam a 0.39 uma da outra:
+
+| cor | contraste | veredito honesto |
+|---|---|---|
+| `#2B2B2B` no tema escuro | **1.41** | some mesmo |
+| `#F0B323` no tema claro | **1.80** | botão amarelo perfeitamente visível no branco |
+
+Piso em **1.6**, entre as duas — e é o mesmo limiar que `marcaVisivel` já usava.
+
+O 3.0 continua sendo obrigação nossa, e quem paga é `CLASSE_BOTAO_DA_MARCA`: um
+anel `foreground/25` no CTA da marca, que resolve os dois temas com uma classe só
+(claro sobre botão escuro, escuro sobre botão claro). Conferi no navegador com
+`#111111`: **o botão só é visível por causa do anel.** Sem ele era um retângulo
+invisível com texto branco flutuando.
+
+### O BURACO QUE SÓ O NAVEGADOR MOSTROU
+
+Abri a aba como `ownera@cuthub.com` e a prévia não renderizava. O campo não tinha
+`#F0B323` — tinha **string vazia**; o `#F0B323` da tela era o placeholder. A
+barbearia nunca escolheu cor, `tema_cor_primaria` é nulo, e a minha condição
+`HEX.test(valor)` escondia a prévia justo de quem mais precisa dela: quem ainda
+não escolheu nada.
+
+Agora o vazio mostra a prévia com o amarelo padrão e diz o que é. Não é invenção:
+sem cor salva, `estiloDeBotaoDaMarca` devolve `undefined` e o botão do perfil
+público cai na variante primária — que é esse amarelo. A prévia passou a mostrar
+a verdade em vez de nada.
+
+### ENTREGUE
+
+- `src/components/configuracoes/SeletorDeCor.tsx` — seletor nativo, campo de
+  hexadecimal (colar a identidade visual é mais rápido que caçar o tom na roda),
+  seis sugestões que passam nos testes, e a prévia do "Agendar" real.
+- `src/lib/marca.ts` — `contrasteComOFundo`, `avisoDeContraste`,
+  `CLASSE_BOTAO_DA_MARCA`.
+- `src/pages/publico/PerfilBarbearia.tsx` — o CTA real recebe o mesmo anel.
+- `src/lib/marca.test.ts` — **9 testes**, incluindo os dois números que sustentam
+  o piso de 1.6. Travados de propósito: mexer neles sem querer reprova a cor
+  padrão do produto ou aprova um botão invisível.
+
+```
+tsc           -> 0 erros
+npm test      -> 34 testes (25 + 9)
+oxlint        -> 0 erros, 17 warnings (baseline mantida)
+npm run build -> ok
+navegador     -> sem cor, cor boa e #111111 conferidos
+```
+
+### UMA COISA PARA VOCÊ
+
+Não bloqueei nenhuma cor. O aviso informa e a barbearia decide, porque a marca é
+dela. Se você preferir que o produto **recuse** salvar uma cor que some, é uma
+decisão de produto e não minha — me diga e eu troco. Minha leitura: avisar na hora
+da escolha já mata a classe do problema, e bloquear a marca de um cliente pagante
+é atrito que vai voltar como suporte.
+
+Continua em aberto a pergunta da Fase 5: **para onde vamos a seguir?** Console
+"Mão de Deus", Financeiro ou notificações.
