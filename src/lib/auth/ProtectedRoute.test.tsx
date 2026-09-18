@@ -159,12 +159,40 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('área do cliente')).toBeInTheDocument();
   });
 
-  // O caminho inverso: quem gerencia nao tem o que fazer na area do cliente.
-  it('leva o owner que entra na área do cliente de volta para a gestão', () => {
+  // Mudou na F8.4: a area do cliente deixou de ser exclusiva de `cliente`.
+  // Quem trabalha numa barbearia tambem e consumidor -- o barbeiro corta
+  // cabelo em outra loja, o dono agenda na propria. Barra-lo dali tirava
+  // metade da vida dele no produto.
+  it('deixa o owner entrar na área do cliente', () => {
     useAuthMock.mockReturnValue(estadoBase());
     renderRota('/minha-conta');
-    expect(screen.queryByText('área do cliente')).not.toBeInTheDocument();
-    expect(screen.getByText('painel de gestão')).toBeInTheDocument();
+    expect(screen.getByText('área do cliente')).toBeInTheDocument();
+  });
+
+  it('deixa o profissional entrar na área do cliente', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'profissional', barbearia_id: 'b1', nome: 'Barbeiro' },
+        tipo: 'profissional',
+      } as never)
+    );
+    renderRota('/minha-conta');
+    expect(screen.getByText('área do cliente')).toBeInTheDocument();
+  });
+
+  // A porta de trabalho continua fechada para quem so e cliente.
+  it('leva o cliente que entra na gestão para a área dele, ainda', () => {
+    useAuthMock.mockReturnValue(
+      estadoBase({
+        perfil: { id: 'u1', tipo: 'cliente', barbearia_id: null, nome: 'Cliente' },
+        tipo: 'cliente',
+        barbeariaId: null,
+        podeOperar: false,
+      } as never)
+    );
+    renderRota('/dashboard');
+    expect(screen.queryByText('painel de gestão')).not.toBeInTheDocument();
+    expect(screen.getByText('área do cliente')).toBeInTheDocument();
   });
 
   // O gerente entrou na lista de permitidos na Fase 2. Sem isto, a feature de

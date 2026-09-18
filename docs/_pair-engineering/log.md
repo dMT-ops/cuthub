@@ -8094,14 +8094,170 @@ ele e me diga o que apareceu. Se algo estiver torto, corrijo em cima.
 
 ---
 
-### UMA COISA QUE A FASE DEIXOU ESTRANHA, E NÃO CONSERTEI SOZINHO
+3. **A área do profissional continua não existindo.** `profissional` e
+   `gerente` estão no enum desde o começo; `gerente` tem acesso, `profissional`
+   cai na barreira explicativa. E a decisão "profissional vê só o próprio
+   financeiro" (Fase 6) segue pendente — ela precisa entrar **junto** com essa
+   área, não depois, senão nasce vazando.
 
-`horario_trabalho` e `bloqueio` entraram como catálogo: o profissional **lê e
-não escreve**. Na prática isso significa que **o barbeiro não consegue marcar a
-própria folga nem ajustar o próprio horário** — precisa pedir ao dono.
+---
+---
 
-Pode ser exatamente o que você quer (a agenda é da casa). Mas é o tipo de
-atrito que vira reclamação na primeira semana. Se quiser, a regra fica
-"profissional escreve onde `profissional_id` é dele", igual à do agendamento —
-e aí só o bloqueio da barbearia inteira (`profissional_id IS NULL`) continua
-sendo do gestor.
+## [OPUS 4.6] 2026-09-18 17:19 — Ordem de Execução F8.4 (O Fluxo Multi-Papel)
+
+### CONTEXTO
+
+O Chefe fez um teste do mundo real: logou com um e-mail novo (o app criou a conta como `cliente`) e, em outra aba logado como owner, cadastrou esse mesmo e-mail na aba Equipe como profissional.
+O resultado? O backend vinculou a conta com sucesso, mas **deixou o `usuario_perfil.tipo` como `cliente`**. O barbeiro fez login e foi jogado direto pra Área do Cliente, sem poder acessar a própria agenda.
+
+E o Chefe levantou um caso de uso vital: **um barbeiro (ou dono) também precisa poder agendar cortes em outras barbearias (ou na própria)**. Ele precisa ter o direito de ser Cliente e Profissional ao mesmo tempo, escolhendo qual "chapéu" quer usar após fazer login.
+
+### TAREFA F8.4.1 — A Promoção do Perfil (Banco de Dados)
+
+Quando uma conta já existente é vinculada à equipe, ela deve ser "promovida" na tabela raiz.
+1. **Migration `00024_promocao_de_perfil.sql`**:
+   - Faça um REPLACE na RPC `cadastrar_profissional_com_conta` (e também na `adicionar_gestor`, se existir). Após a verificação `IF v_usuario_id IS NOT NULL`, você fará um `UPDATE usuario_perfil SET tipo = 'profissional', barbearia_id = p_barbearia_id WHERE id = v_usuario_id AND tipo = 'cliente'`. (Para gestores, faça o mesmo subindo para o papel adequado).
+   - IMPORTANTE: Rode um `UPDATE` simples varrendo as tabelas `profissional` e `usuario_perfil` para corrigir os registros que já ficaram num estado defeituoso (onde o cara existe na `profissional` mas na `usuario_perfil` é `'cliente'`).
+
+### TAREFA F8.4.2 — Abertura de Fronteiras
+
+1. **`src/lib/auth/areas.ts`**:
+   - Altere o array de `PAPEIS_POR_AREA.cliente`. Hoje ele só aceita `['cliente']`. Ele deve aceitar todo mundo da barbearia: `['cliente', 'profissional', 'gerente', 'owner']`. Todo mundo tem direito de ver sua própria conta de consumidor final.
+
+### TAREFA F8.4.3 — A Tela "Chapéu" (Seletor de Acesso)
+
+1. **`src/pages/EscolherAcesso.tsx` (Novo)**:
+   - Crie uma tela super minimalista, seguindo a estética do CutHub.
+   - Título: "Como você deseja acessar o CutHub hoje?"
+   - Dois botões grandes (Cards):
+     - **Painel da Barbearia**: Redireciona para o `rotaInicialDoPapel(perfil.tipo)` (ex: `/dashboard` ou `/dashboard/agenda`).
+     - **Área do Cliente**: Redireciona para `/minha-conta`.
+2. **`src/App.tsx`**: Registre a rota protegida para `/escolher-acesso` (pode colocar na área cliente, já que todos terão acesso).
+3. **`src/pages/Login.tsx`**:
+   - Em vez de forçar o redirecionamento imediato para `rotaInicialDoPapel`, faça um desvio:
+   - Se o `tipo` do cara for `cliente`, jogue pra `/minha-conta` (vida normal, não precisa perguntar).
+   - Se o `tipo` dele for da gestão/profissional, **jogue pra `/escolher-acesso`**.
+
+---
+**Engenheiro (Opus 5)**: Resolva o bug de promoção de conta e implemente a "Escolha do Chapéu". Mande brasa!
+
+---
+
+## [OPUS 5] 2026-09-18 — F8.4: o bug de promoção corrigido e o chapéu implementado
+
+O bug que o Chefe achou em uso real era exatamente o que ele descreveu, e
+localizei o registro defeituoso antes de escrever qualquer linha.
+
+---
+
+### O BUG, E POR QUE SÓ ELE EXISTIA
+
+`adicionar_gestor` **já promovia certo** desde a Fase 2 — inclusive já usava
+`set_config('app.vinculo_autorizado', 'on', true)`. Quem não promovia era
+`cadastrar_profissional_com_conta`: ela gravava `profissional.usuario_id` e
+não tocava em `usuario_perfil`. Ficha criada, pessoa continuava `cliente`.
+
+Detalhe que teria feito a correção falhar em runtime se eu tivesse escrito no
+automático: **`SECURITY DEFINER` não desliga trigger.** O
+`proteger_campos_de_autorizacao` barra alteração de `tipo` e `barbearia_id`, e
+a promoção só passa com a escotilha `app.vinculo_autorizado` — a mesma que o
+`adicionar_gestor` já usava. Sem ela, a RPC estouraria na hora de promover.
+
+**Registro defeituoso levantado antes:** exatamente 1 — "Vitor", da Barbearia
+do Renan. Corrigido pela migration; hoje ele é `profissional` com a barbearia
+certa.
+
+---
+
+### UMA GUARDA QUE A ORDEM NÃO PEDIA
+
+A ordem mandava `UPDATE ... WHERE id = v_usuario_id AND tipo = 'cliente'`.
+Acrescentei `AND (barbearia_id IS NULL OR barbearia_id = p_barbearia_id)`, por
+dois motivos que valem a linha:
+
+1. **O dono que também corta cabelo.** Se o owner se cadastra como barbeiro da
+   própria loja, a condição `tipo = 'cliente'` já o protege — mas deixei o caso
+   explícito e testado, porque rebaixá-lo para `profissional` o **expulsaria do
+   próprio painel**.
+2. **Conta de outra barbearia não é sequestrada em silêncio** — é o mesmo
+   cuidado que `adicionar_gestor` já tinha e que o profissional não tinha.
+
+**Provado nos dois caminhos, em transação revertida:**
+
+| caso | antes | depois |
+|---|---|---|
+| cliente cadastrado como profissional | `cliente`, sem barbearia | **`profissional`, na barbearia certa** |
+| **dono** cadastrado como barbeiro da própria loja | `owner` | **`owner`** — não foi rebaixado |
+
+---
+
+### O CASO DE USO QUE MOTIVOU A FASE, MEDIDO
+
+O barbeiro da Barbearia do Renan agendando corte na Cuthub barbearia:
+
+```
+agendou ......................................... t
+aparece na area do cliente dele ................. 1
+agendamentos daquela barbearia que ele enxerga .. 1 de 122
+```
+
+E o 1 de 122 é o **dele mesmo, como cliente** (`sou_o_cliente = t`,
+`sou_o_barbeiro = f`). Ele não ganhou visão da agenda de trabalho da outra
+casa. Os muros da F8.1 continuam de pé com as fronteiras abertas.
+
+---
+
+### F8.4.2 — as fronteiras
+
+`PAPEIS_POR_AREA.cliente` passou a aceitar `cliente`, `profissional`, `gerente`
+e `owner`. `areaDoPapel` continua devolvendo `gestao` para quem gerencia,
+porque checa a gestão primeiro — a área de trabalho é que manda no login.
+
+**Um teste antigo mudou de verdade:** *"leva o owner que entra na área do
+cliente de volta para a gestão"* virou *"deixa o owner entrar na área do
+cliente"*, com o porquê no comentário. Acrescentei o mesmo para profissional e
+**mantive o inverso travado**: quem só é cliente continua sendo mandado de
+volta ao tentar `/dashboard`. A fronteira abriu num sentido só.
+
+---
+
+### F8.4.3 — a tela do chapéu
+
+`EscolherAcesso.tsx`, dois cards. Três decisões que tomei:
+
+- **Cliente puro nunca vê esta tela.** O `Login` manda direto para
+  `/minha-conta`. Perguntar "como você quer entrar?" a quem tem uma porta só é
+  atrito. E se ele digitar `/escolher-acesso`, a própria tela o redireciona em
+  vez de mostrar um card que não se aplica.
+- **O texto do card muda com o papel**: profissional lê "sua agenda e os seus
+  atendimentos"; gestão lê "agenda, equipe, catálogo e caixa".
+- O card inteiro é o link, e o `Button` dentro dele é só aparência
+  (`tabIndex={-1}`, sem `asChild`) — `<a>` dentro de `<a>` é HTML inválido.
+
+```
+tsc           -> 0 erros
+npm test      -> 71 testes em 9 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> migration 00024 aplicada, 1 perfil corrigido, testes revertidos
+```
+
+---
+
+### O QUE FALTA VER
+
+A tela do chapéu e o desvio do login **não foram vistos renderizados** — isso
+depende de fazer login, que eu não faço. O caminho de dados está provado no
+banco; o que falta é a passada visual.
+
+O teste que fecha tudo, quando você tiver ânimo: entre com a conta do **Vitor**
+(que a migration acabou de promover). Você deve cair em `/escolher-acesso` com
+os dois cards; o da barbearia leva à agenda dele, o do cliente leva à conta
+dele. Se algo estiver torto, corrijo em cima.
+
+**Uma pergunta que a fase abriu:** se o profissional for **removido da equipe**,
+nada rebaixa o `usuario_perfil` de volta para `cliente` — ele continua com
+`tipo = 'profissional'` e vinculado à barbearia, entrando no painel e vendo uma
+agenda vazia. A promoção tem caminho de ida e não tem o de volta. Não
+implementei porque envolve decidir o que acontece com o histórico dele, e isso
+é produto.

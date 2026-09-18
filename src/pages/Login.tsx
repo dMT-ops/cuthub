@@ -42,7 +42,16 @@ export default function Login() {
     // novo", que é melhor do que travar o login.
     try {
       const perfil = data.user ? await authService.obterPerfil(data.user.id) : null;
-      navigate(rotaInicialDoPapel(perfil?.tipo) ?? '/dashboard');
+      // Quem so e cliente vai direto: perguntar 'como voce quer entrar?' para
+      // quem so tem uma porta e atrito puro. Quem trabalha numa barbearia
+      // escolhe, porque tem duas vidas no produto.
+      const trabalhaNumaBarbearia =
+        perfil?.tipo === 'owner' || perfil?.tipo === 'gerente' || perfil?.tipo === 'profissional';
+      navigate(
+        trabalhaNumaBarbearia
+          ? '/escolher-acesso'
+          : (rotaInicialDoPapel(perfil?.tipo) ?? '/dashboard')
+      );
     } catch {
       navigate('/dashboard');
     }

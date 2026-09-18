@@ -17,6 +17,7 @@ import AgendarNaBarbearia from './pages/publico/AgendarNaBarbearia';
 
 // Área do cliente
 import { ClienteLayout } from './components/layout/ClienteLayout';
+import EscolherAcesso from './pages/EscolherAcesso';
 import MinhaConta from './pages/cliente/MinhaConta';
 import MeusAgendamentos from './pages/cliente/MeusAgendamentos';
 import MeusFavoritos from './pages/cliente/MeusFavoritos';
@@ -61,6 +62,13 @@ function App() {
               {/* Público: dá para montar o agendamento inteiro sem conta. O
                   login só é exigido no passo de confirmar. */}
               <Route path="/b/:slug/agendar" element={<AgendarNaBarbearia />} />
+
+              {/* Escolha do chapeu. Fica na area `cliente` porque desde a
+                  F8.4 todos os papeis logados entram nela -- e e justamente
+                  quem trabalha numa barbearia que precisa desta tela. */}
+              <Route path="/escolher-acesso" element={<ProtectedRoute area="cliente" />}>
+                <Route index element={<EscolherAcesso />} />
+              </Route>
 
               {/* Área do cliente — identidade neutra do CutHub */}
               <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>

@@ -19,7 +19,11 @@ export type Area = 'gestao' | 'cliente' | 'admin';
  */
 export const PAPEIS_POR_AREA: Record<Area, TipoUsuario[]> = {
   gestao: ['owner', 'gerente', 'profissional'],
-  cliente: ['cliente'],
+  // Todo mundo tem direito de ser consumidor: o barbeiro corta cabelo em
+  // outra barbearia, o dono agenda na propria. Quem gerencia entra aqui
+  // tambem, e `areaDoPapel` continua devolvendo `gestao` para eles porque
+  // checa a gestao primeiro -- e a area de trabalho que manda no login.
+  cliente: ['cliente', 'profissional', 'gerente', 'owner'],
   admin: ['admin_supremo'],
 };
 
