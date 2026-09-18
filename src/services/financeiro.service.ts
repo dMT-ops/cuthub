@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import { apurarComissoes } from '@/lib/comissao';
+import type { ComissaoApurada } from '@/lib/comissao';
 import type { Database } from '@/types/database.types';
 
 type LancamentoFinanceiro = Database['public']['Tables']['lancamento_financeiro']['Row'];
@@ -21,12 +23,24 @@ export interface AtendimentoAReceber {
   valor: number;
 }
 
+/**
+ * Comissão de um profissional no período, reconciliada contra o caixa.
+ *
+ * A base é a receita EFETIVAMENTE LANÇADA (entrada + atendimento), não o
+ * agendamento concluído: só se deve comissão sobre dinheiro que entrou. Esta é
+ * a mesma base usada em `profissionaisService.obterDesempenho`, de propósito —
+ * o sistema dava dois números diferentes para a mesma pergunta.
+ */
+/** Alias do tipo apurado em `@/lib/comissao` — o cálculo mora lá, testado sem banco. */
+export type ComissaoAPagar = ComissaoApurada;
+
 export interface ListarLancamentosOptions {
   inicio?: string;
   fim?: string;
   tipo?: TipoLancamento;
   categoria?: CategoriaLancamento;
 }
+
 
 export const financeiroService = {
   async listarLancamentos(barbeariaId: string, options?: ListarLancamentosOptions): Promise<LancamentoComDetalhes[]> {
@@ -150,5 +164,61 @@ export const financeiroService = {
           0
         ),
       }));
+  },
+
+  /**
+   * Quanto cada profissional tem a receber de comissão no período.
+   *
+   * Reconciliação por período, não por atendimento: o devido vem da receita
+   * lançada no intervalo, o pago vem das saídas de comissão no mesmo intervalo,
+   * e a diferença é o pendente. É o mesmo recorte do filtro de mês da tela.
+   *
+   * Ressalva registrada de propósito: o percentual aplicado é o ATUAL do
+   * profissional. Se o gestor mudar a comissão dele, os períodos passados são
+   * recalculados com o percentual novo. Guardar o percentual histórico exigiria
+   * coluna nova; enquanto não existir, o valor pago fica gravado no lançamento
+   * e é ele que vale como registro do que foi acertado.
+   */
+  async listarComissoesAPagar(barbeariaId: string, inicio: string, fim: string): Promise<ComissaoAPagar[]> {
+    const [receitasRes, pagamentosRes] = await Promise.all([
+      supabase
+        .from('lancamento_financeiro')
+        .select('valor, profissional_id, profissional:profissional ( id, nome, comissao_percentual )')
+        .eq('barbearia_id', barbeariaId)
+        .eq('tipo', 'entrada')
+        .eq('categoria', 'atendimento')
+        .not('profissional_id', 'is', null)
+        .gte('data_lancamento', inicio)
+        .lte('data_lancamento', fim),
+
+      supabase
+        .from('lancamento_financeiro')
+        .select('valor, profissional_id')
+        .eq('barbearia_id', barbeariaId)
+        .eq('tipo', 'saida')
+        .eq('categoria', 'comissao')
+        .not('profissional_id', 'is', null)
+        .gte('data_lancamento', inicio)
+        .lte('data_lancamento', fim),
+    ]);
+
+    if (receitasRes.error) throw new Error(`Falha ao apurar comissões: ${receitasRes.error.message}`);
+    if (pagamentosRes.error) throw new Error(`Falha ao verificar comissões já pagas: ${pagamentosRes.error.message}`);
+
+    const receitas = (receitasRes.data as any[])
+      .filter((linha) => linha.profissional)
+      .map((linha) => ({
+        profissionalId: linha.profissional.id as string,
+        profissionalNome: linha.profissional.nome as string,
+        percentual: Number(linha.profissional.comissao_percentual),
+        valor: Number(linha.valor),
+      }));
+
+    const pagamentos = (pagamentosRes.data as { valor: number; profissional_id: string }[]).map((p) => ({
+      profissionalId: p.profissional_id,
+      valor: Number(p.valor),
+    }));
+
+    return apurarComissoes(receitas, pagamentos);
   },
 };

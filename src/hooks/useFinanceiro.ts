@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeiroService } from '@/services/financeiro.service';
-import type { AtendimentoAReceber, LancamentoComDetalhes, ListarLancamentosOptions } from '@/services/financeiro.service';
+import type {
+  AtendimentoAReceber,
+  ComissaoAPagar,
+  LancamentoComDetalhes,
+  ListarLancamentosOptions,
+} from '@/services/financeiro.service';
 import type { Database } from '@/types/database.types';
 
 type LancamentoInsert = Database['public']['Tables']['lancamento_financeiro']['Insert'];
@@ -12,6 +17,7 @@ type LancamentoInsert = Database['public']['Tables']['lancamento_financeiro']['I
  */
 const LANCAMENTOS_VAZIOS: LancamentoComDetalhes[] = [];
 const ATENDIMENTOS_VAZIOS: AtendimentoAReceber[] = [];
+const COMISSOES_VAZIAS: ComissaoAPagar[] = [];
 
 export function useFinanceiro(
   barbeariaId: string | null | undefined,
@@ -23,6 +29,9 @@ export function useFinanceiro(
     queryClient.invalidateQueries({ queryKey: ['lancamentos', barbeariaId] });
     queryClient.invalidateQueries({ queryKey: ['resumo_financeiro', barbeariaId] });
     queryClient.invalidateQueries({ queryKey: ['atendimentos_a_receber', barbeariaId] });
+    // A comissao sai da receita lancada: registrar entrada muda o devido, e
+    // registrar o pagamento muda o pendente. Os dois casos passam por aqui.
+    queryClient.invalidateQueries({ queryKey: ['comissoes_a_pagar', barbeariaId] });
   };
 
   const query = useQuery({
@@ -67,6 +76,26 @@ export function useAtendimentosAReceber(
 
   return {
     atendimentos: query.data ?? ATENDIMENTOS_VAZIOS,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+  };
+}
+
+/** Comissão a pagar por profissional no período, apurada sobre a receita já lançada */
+export function useComissoesAPagar(
+  barbeariaId: string | null | undefined,
+  inicio?: string,
+  fim?: string
+) {
+  const query = useQuery({
+    queryKey: ['comissoes_a_pagar', barbeariaId, inicio, fim],
+    queryFn: () => financeiroService.listarComissoesAPagar(barbeariaId!, inicio!, fim!),
+    enabled: !!barbeariaId && !!inicio && !!fim,
+  });
+
+  return {
+    comissoes: query.data ?? COMISSOES_VAZIAS,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

@@ -6884,3 +6884,127 @@ mundo numa tela. Se não for, isso vira requisito de autorização por papel e
 muda o tamanho da fase.
 
 Nada foi alterado no banco nesta investigação.
+
+---
+
+## [CHEFE via OPUS 5] 2026-09-18 — Decisões da Fase 6
+
+Respostas às três perguntas da investigação:
+
+1. **Base da comissão:** sobre a **receita lançada no caixa**, e o sheet do
+   profissional passa a usar a mesma base. Só se deve comissão sobre dinheiro
+   que entrou.
+2. **Erro de digitação:** **edição direta** do lançamento. (Eu tinha recomendado
+   estorno; o Chefe escolheu edição, e a razão é boa — dono de barbearia de
+   bairro espera corrigir, não contra-lançar.)
+3. **Acesso ao Financeiro:** **profissional vê só o próprio.** Dono vê tudo.
+
+---
+
+## [OPUS 5] 2026-09-18 — F6.1 entregue: a comissão entrou no caixa
+
+### ANTES, UMA MEDIÇÃO QUE MUDA O PESO DA DECISÃO 3
+
+Fui medir o que a restrição por papel atinge e achei o seguinte:
+
+```
+profissionais cadastrados ................ 8
+profissionais com conta vinculada ........ 0   (usuario_id nulo em todos)
+usuarios do tipo 'profissional' .......... 0
+usuarios do tipo 'gerente' ............... 0
+rotas de profissional em App.tsx ......... nenhuma
+```
+
+`profissional` e `gerente` existem no enum `tipo_usuario` desde o começo, mas
+**ninguém consegue logar como profissional hoje** — a área do profissional
+nunca foi construída (está na FASE-9 §7 como futuro).
+
+Isso não invalida a decisão 3, mas muda a leitura dela: **não existe vazamento
+ativo para tapar.** A restrição é preventiva, e o custo de fazê-la depois é o
+mesmo de fazê-la agora — desde que ela entre **junto** com a área do
+profissional, não depois. Por isso ela não bloqueou o F6.1: não há a quem
+esconder a folha de comissões neste momento.
+
+### O QUE ENTROU
+
+**`src/lib/comissao.ts` (novo) + `src/lib/comissao.test.ts` (novo, 8 testes).**
+Separei a apuração do acesso ao banco de propósito: é cálculo de dinheiro e
+precisa de teste sem Supabase no meio. `apurarComissoes(receitas, pagamentos)`
+soma a receita por profissional, aplica o percentual e desconta o que já foi
+pago no período.
+
+Três decisões de cálculo que ficaram travadas em teste:
+
+- **Arredonda uma vez, sobre a soma.** Três atendimentos de R$ 10,01 a 45%:
+  arredondando cada um dá 13,50; sobre a soma dá 13,51. É o 13,51 que bate com
+  o resumo do caixa, que soma antes.
+- **Pagamento acima do devido vira pendente negativo**, não zero. Não é caso
+  impossível — o gestor pode ter adiantado comissão, e zerar esconderia o
+  adiantamento dele.
+- **Pagamento de profissional sem receita no período é ignorado**, não cria
+  linha fantasma.
+
+**`financeiro.service.ts`:** `listarComissoesAPagar` busca as duas pontas
+(entrada+atendimento e saida+comissao no período) e delega o cálculo ao módulo
+puro. `ComissaoAPagar` virou alias de `ComissaoApurada` para não existirem dois
+tipos que podem divergir.
+
+**`ComissoesAPagar.tsx` (novo):** mesma filosofia do `AtendimentosAReceber` que
+já funcionava — o sistema apura e mostra, o lançamento só acontece quando o
+gestor confirma. Respeita `podeOperar`/`motivoBloqueio` como o resto da tela.
+
+**Detalhe que eu quase errei:** o lançamento da comissão usa `data_lancamento =
+fim do período em tela`, não `now()`. Se o gestor está olhando setembro e paga
+a comissão em outubro, lançar com a data de hoje jogaria a despesa de setembro
+dentro de outubro e **os dois meses ficariam errados de uma vez**.
+
+**`profissionais.service.ts` — a outra metade da decisão 1:**
+`obterDesempenho` agora tem duas bases explícitas, porque respondem a perguntas
+diferentes: atendimentos/faturamento/ticket medem **produção** e continuam vindo
+dos agendamentos concluídos; a comissão mede **dívida** e vem da receita
+lançada. O sheet ganhou a linha "Sobre R$ X já lançados no caixa" — sem ela, os
+dois números lado a lado pareceriam incoerentes. O rótulo saiu de "Comissão
+Estimada" para "Comissão a Pagar", que é o que ele agora é de fato.
+
+**`Financeiro.tsx`:** as duas pendências do caixa lado a lado em `xl`
+(`AtendimentosAReceber` = o que falta entrar, `ComissoesAPagar` = o que falta
+sair), empilhadas abaixo disso.
+
+### O QUE A TELA DEVE MOSTRAR (setembro/2026, Barbearia do Renan)
+
+| profissional | % | receita no caixa | comissão |
+|---|---|---|---|
+| João C. | 50% | 2.410,00 | 1.205,00 |
+| Lucas S. | 60% | 1.350,00 | 810,00 |
+| Pedro H. | 50% | 1.450,00 | 725,00 |
+| Marcos B. | 45% | 1.395,00 | 627,75 |
+| Pituco | 100% | 60,00 | 60,00 |
+
+Total pendente: **R$ 3.427,75** — que até hoje não aparecia em lugar nenhum.
+
+```
+tsc           -> 0 erros
+npm test      -> 42 testes (34 + 8)
+oxlint        -> 0 erros
+npm run build -> ok
+```
+
+### PENDENTE DE VALIDAÇÃO NO NAVEGADOR
+
+A sessão do navegador expirou no meio da validação e o app caiu no `/login`.
+**Não submeto senha** — vou pedir ao Chefe que entre e faço a conferência
+visual em seguida: os cinco valores da tabela acima, e o ciclo de pagar uma
+comissão e ver a lista e o saldo se atualizarem.
+
+### PERGUNTA QUE SOBROU DA DECISÃO 2
+
+O Chefe escolheu **edição direta** para corrigir lançamento. Duas coisas que a
+ordem de execução do F6.2 precisa responder:
+
+1. **Excluir também?** Edição resolve valor errado, mas não resolve lançamento
+   duplicado ou lançado na barbearia errada. Não implementei exclusão por conta
+   própria — apagar dado é decisão de produto, não minha.
+2. **Editar comissão já paga recalcula o quê?** Se o gestor editar para menos
+   uma receita de atendimento que já teve comissão paga, o pendente daquele
+   profissional fica negativo — que é exatamente o que o teste do adiantamento
+   trava. Acho que mostrar negativo é o certo, mas vale você confirmar.

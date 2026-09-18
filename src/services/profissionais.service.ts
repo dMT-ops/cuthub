@@ -142,18 +142,40 @@ export const profissionaisService = {
     if (error) throw new Error(`Falha ao alterar status do profissional: ${error.message}`);
   },
 
+  /**
+   * Desempenho do profissional no período.
+   *
+   * Duas bases diferentes, de propósito, porque respondem a perguntas
+   * diferentes: atendimentos/faturamento/ticket medem PRODUÇÃO e vêm dos
+   * agendamentos concluídos; a comissão mede DÍVIDA e vem da receita
+   * efetivamente lançada no caixa. Antes a comissão saía do faturamento
+   * concluído, e o sistema mostrava um valor aqui e outro no Financeiro para a
+   * mesma pergunta -- só se deve comissão sobre dinheiro que entrou.
+   */
   async obterDesempenho(id: string, comissaoPerc: number, inicioIso: string, fimIso: string) {
-    // Busca agendamentos do período
-    const { data, error } = await supabase
-      .from('agendamento')
-      .select('id, agendamento_servico(preco_cobrado)')
-      .eq('profissional_id', id)
-      .eq('status', 'concluido')
-      .gte('data_hora', inicioIso)
-      .lte('data_hora', fimIso);
+    const [agendamentosRes, receitaRes] = await Promise.all([
+      supabase
+        .from('agendamento')
+        .select('id, agendamento_servico(preco_cobrado)')
+        .eq('profissional_id', id)
+        .eq('status', 'concluido')
+        .gte('data_hora', inicioIso)
+        .lte('data_hora', fimIso),
 
-    if (error) throw new Error(`Falha ao buscar desempenho: ${error.message}`);
+      supabase
+        .from('lancamento_financeiro')
+        .select('valor')
+        .eq('profissional_id', id)
+        .eq('tipo', 'entrada')
+        .eq('categoria', 'atendimento')
+        .gte('data_lancamento', inicioIso)
+        .lte('data_lancamento', fimIso),
+    ]);
 
+    if (agendamentosRes.error) throw new Error(`Falha ao buscar desempenho: ${agendamentosRes.error.message}`);
+    if (receitaRes.error) throw new Error(`Falha ao apurar a receita do profissional: ${receitaRes.error.message}`);
+
+    const data = agendamentosRes.data;
     const atendimentosConcluidos = data.length;
     let faturamentoTotal = 0;
 
@@ -163,12 +185,14 @@ export const profissionaisService = {
       });
     });
 
-    const comissaoDevida = (faturamentoTotal * comissaoPerc) / 100;
+    const receitaNoCaixa = receitaRes.data.reduce((total, l) => total + Number(l.valor), 0);
+    const comissaoDevida = Math.round(((receitaNoCaixa * comissaoPerc) / 100) * 100) / 100;
     const ticketMedio = atendimentosConcluidos > 0 ? faturamentoTotal / atendimentosConcluidos : 0;
 
     return {
       atendimentos: atendimentosConcluidos,
       faturamento: faturamentoTotal,
+      receitaNoCaixa: Math.round(receitaNoCaixa * 100) / 100,
       comissao: comissaoDevida,
       ticketMedio: ticketMedio
     };

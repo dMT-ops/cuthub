@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { useAtendimentosAReceber, useFinanceiro } from '@/hooks/useFinanceiro';
+import { useAtendimentosAReceber, useComissoesAPagar, useFinanceiro } from '@/hooks/useFinanceiro';
 import { LancamentosTable } from '@/components/financeiro/LancamentosTable';
 import { LancamentoFormDialog } from '@/components/financeiro/LancamentoFormDialog';
 import { AtendimentosAReceber } from '@/components/financeiro/AtendimentosAReceber';
+import { ComissoesAPagar } from '@/components/financeiro/ComissoesAPagar';
 import { CATEGORIAS_LANCAMENTO, ROTULO_CATEGORIA } from '@/lib/financeiro';
 import { formatarMoeda } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -49,6 +50,13 @@ export default function Financeiro() {
     periodo.inicio,
     periodo.fim
   );
+  const { comissoes, isLoading: carregandoComissoes } = useComissoesAPagar(
+    barbeariaId,
+    periodo.inicio,
+    periodo.fim
+  );
+
+  const rotuloDoPeriodo = format(mesReferencia, "MMMM 'de' yyyy", { locale: ptBR });
 
   return (
     <div className="space-y-6">
@@ -78,7 +86,7 @@ export default function Financeiro() {
             onClick={() => setMesReferencia(new Date())}
             title="Voltar para o mês atual"
           >
-            {format(mesReferencia, "MMMM 'de' yyyy", { locale: ptBR })}
+            {rotuloDoPeriodo}
           </button>
           <Button
             variant="ghost"
@@ -148,11 +156,22 @@ export default function Financeiro() {
         </div>
       </div>
 
-      <AtendimentosAReceber
-        atendimentos={atendimentos}
-        isLoading={carregandoAtendimentos}
-        periodo={periodo}
-      />
+      {/* As duas pendencias do caixa lado a lado: o que falta entrar e o que
+          falta sair. A comissao e a maior despesa da casa -- deixa-la fora do
+          caixa fazia o saldo mentir para mais. */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <AtendimentosAReceber
+          atendimentos={atendimentos}
+          isLoading={carregandoAtendimentos}
+          periodo={periodo}
+        />
+        <ComissoesAPagar
+          comissoes={comissoes}
+          isLoading={carregandoComissoes}
+          periodo={periodo}
+          rotuloDoPeriodo={rotuloDoPeriodo}
+        />
+      </div>
 
       {isError ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-card p-12 text-center">

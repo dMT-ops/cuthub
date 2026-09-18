@@ -227,10 +227,16 @@ export function ProfissionalDetalheSheet({ profissionalId, onClose, onEdit, barb
                             </div>
                             <div className="text-right">
                               <div className="flex items-center justify-end gap-2 text-muted-foreground mb-1">
-                                <span className="text-xs font-medium uppercase">Comissão Estimada</span>
+                                <span className="text-xs font-medium uppercase">Comissão a Pagar</span>
                               </div>
                               <p className="text-xl font-bold text-green-600 dark:text-green-500">
                                 {formatCurrency(detalhes.desempenho.comissao)}
+                              </p>
+                              {/* Sem esta linha os dois numeros ao lado parecem
+                                  incoerentes: o faturamento e o que ele produziu,
+                                  a comissao e sobre o que ja entrou no caixa. */}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Sobre {formatCurrency(detalhes.desempenho.receitaNoCaixa)} já lançados no caixa
                               </p>
                             </div>
                           </div>
