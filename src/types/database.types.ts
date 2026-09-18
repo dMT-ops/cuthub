@@ -374,6 +374,57 @@ export type Database = {
           },
         ]
       }
+      despesa_recorrente: {
+        Row: {
+          atualizado_em: string | null
+          barbearia_id: string
+          categoria: Database["public"]["Enums"]["categoria_lancamento"]
+          criado_em: string | null
+          descricao: string
+          dia_vencimento: number
+          id: string
+          status: Database["public"]["Enums"]["status_registro"]
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string | null
+          barbearia_id: string
+          categoria?: Database["public"]["Enums"]["categoria_lancamento"]
+          criado_em?: string | null
+          descricao: string
+          dia_vencimento: number
+          id?: string
+          status?: Database["public"]["Enums"]["status_registro"]
+          valor: number
+        }
+        Update: {
+          atualizado_em?: string | null
+          barbearia_id?: string
+          categoria?: Database["public"]["Enums"]["categoria_lancamento"]
+          criado_em?: string | null
+          descricao?: string
+          dia_vencimento?: number
+          id?: string
+          status?: Database["public"]["Enums"]["status_registro"]
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesa_recorrente_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesa_recorrente_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia_publica"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorito: {
         Row: {
           agendamento_id: string | null
@@ -542,6 +593,7 @@ export type Database = {
           criado_por: string | null
           data_lancamento: string | null
           descricao: string | null
+          despesa_recorrente_id: string | null
           forma_pagamento: Database["public"]["Enums"]["forma_pagamento"] | null
           id: string
           profissional_id: string | null
@@ -556,6 +608,7 @@ export type Database = {
           criado_por?: string | null
           data_lancamento?: string | null
           descricao?: string | null
+          despesa_recorrente_id?: string | null
           forma_pagamento?:
             | Database["public"]["Enums"]["forma_pagamento"]
             | null
@@ -572,6 +625,7 @@ export type Database = {
           criado_por?: string | null
           data_lancamento?: string | null
           descricao?: string | null
+          despesa_recorrente_id?: string | null
           forma_pagamento?:
             | Database["public"]["Enums"]["forma_pagamento"]
             | null
@@ -614,6 +668,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "usuario_perfil"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_financeiro_despesa_recorrente_id_fkey"
+            columns: ["despesa_recorrente_id"]
+            isOneToOne: false
+            referencedRelation: "despesa_recorrente"
             referencedColumns: ["id"]
           },
           {
@@ -1378,7 +1439,6 @@ export const Constants = {
     },
   },
 } as const
-
 
 // Aliases de conveniência usados pelo projeto (mantidos manualmente)
 export type Cliente = Database['public']['Tables']['cliente']['Row'];  

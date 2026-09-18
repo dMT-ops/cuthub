@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useProfissionais } from '@/hooks/useProfissionais';
+import type { LancamentoComDetalhes } from '@/services/financeiro.service';
 import {
   CATEGORIAS_POR_TIPO,
   FORMAS_PAGAMENTO,
@@ -21,13 +22,18 @@ import {
 } from '@/lib/financeiro';
 
 const SEM_PROFISSIONAL = 'nenhum';
+// Lancamentos antigos tem forma_pagamento nula. Sem esta opcao, abrir a edicao
+// de um deles ja mostrava "Dinheiro" selecionado e salvar gravava Dinheiro sem
+// o gestor ter escolhido nada -- justo no fluxo que o fechamento por forma de
+// pagamento indica para corrigir os nulos.
+const SEM_FORMA = 'nao_informada';
 
 const lancamentoSchema = z.object({
   tipo: z.enum(['entrada', 'saida']),
   categoria: z.enum(['atendimento', 'venda_produto', 'aluguel', 'insumos', 'salario', 'comissao', 'outro']),
   valor: z.coerce.number().positive('O valor precisa ser maior que zero'),
   data: z.string().min(1, 'Informe a data'),
-  forma_pagamento: z.enum(['dinheiro', 'pix', 'credito', 'debito', 'outro']),
+  forma_pagamento: z.enum(['dinheiro', 'pix', 'credito', 'debito', 'outro', SEM_FORMA]),
   profissional_id: z.string().optional(),
   descricao: z.string().max(255, 'Máximo de 255 caracteres').optional(),
 });
@@ -37,11 +43,18 @@ type LancamentoFormValues = z.infer<typeof lancamentoSchema>;
 interface LancamentoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Quando presente, o dialogo edita este lancamento em vez de criar um novo */
+  lancamentoAEditar?: LancamentoComDetalhes | null;
 }
 
-export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialogProps) {
+export function LancamentoFormDialog({
+  open,
+  onOpenChange,
+  lancamentoAEditar,
+}: LancamentoFormDialogProps) {
   const { barbeariaId, user } = useAuth();
-  const { criarLancamento, isCriando } = useFinanceiro(barbeariaId);
+  const { criarLancamento, isCriando, atualizarLancamento, isAtualizando } = useFinanceiro(barbeariaId);
+  const editando = !!lancamentoAEditar;
   const { profissionais } = useProfissionais(barbeariaId, { status: 'ativo' });
 
   const form = useForm<LancamentoFormValues>({
@@ -62,6 +75,24 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
 
   useEffect(() => {
     if (!open) return;
+
+    if (lancamentoAEditar) {
+      form.reset({
+        tipo: lancamentoAEditar.tipo,
+        categoria: lancamentoAEditar.categoria,
+        valor: Number(lancamentoAEditar.valor),
+        // `yyyy-MM-dd` do date-fns usa o fuso LOCAL. Usar toISOString().slice(0,10)
+        // aqui devolveria o dia anterior para qualquer hora antes das 03:00 em BRT.
+        data: lancamentoAEditar.data_lancamento
+          ? format(new Date(lancamentoAEditar.data_lancamento), 'yyyy-MM-dd')
+          : format(new Date(), 'yyyy-MM-dd'),
+        forma_pagamento: lancamentoAEditar.forma_pagamento ?? SEM_FORMA,
+        profissional_id: lancamentoAEditar.profissional_id ?? SEM_PROFISSIONAL,
+        descricao: lancamentoAEditar.descricao ?? '',
+      });
+      return;
+    }
+
     form.reset({
       tipo: 'entrada',
       categoria: 'atendimento',
@@ -71,7 +102,7 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
       profissional_id: SEM_PROFISSIONAL,
       descricao: '',
     });
-  }, [open, form]);
+  }, [open, form, lancamentoAEditar]);
 
   // Trocar de tipo pode deixar a categoria incoerente (ex.: "aluguel" como entrada)
   useEffect(() => {
@@ -81,29 +112,48 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
     }
   }, [categoriasDisponiveis, form]);
 
+  // `comissao` e categoria de saida, mas o lancamento gerado pelo painel de
+  // comissoes precisa continuar editavel sem que o select a esconda.
+  const categoriasNoSelect = useMemo(() => {
+    const atual = lancamentoAEditar?.categoria;
+    if (atual && !categoriasDisponiveis.includes(atual)) {
+      return [atual, ...categoriasDisponiveis];
+    }
+    return categoriasDisponiveis;
+  }, [categoriasDisponiveis, lancamentoAEditar]);
+
   const onSubmit = async (values: LancamentoFormValues) => {
     if (!barbeariaId) {
       toast.error('Barbearia não identificada.');
       return;
     }
 
+    const camposDoFormulario = {
+      tipo: values.tipo,
+      categoria: values.categoria,
+      valor: values.valor,
+      // O input date entrega apenas o dia; preserva-se a hora atual do registro
+      data_lancamento: new Date(`${values.data}T${format(new Date(), 'HH:mm:ss')}`).toISOString(),
+      forma_pagamento: values.forma_pagamento === SEM_FORMA ? null : values.forma_pagamento,
+      profissional_id: values.profissional_id === SEM_PROFISSIONAL ? null : values.profissional_id || null,
+      descricao: values.descricao?.trim() || null,
+    };
+
     try {
-      await criarLancamento({
-        barbearia_id: barbeariaId,
-        tipo: values.tipo,
-        categoria: values.categoria,
-        valor: values.valor,
-        // O input date entrega apenas o dia; preserva-se a hora atual do registro
-        data_lancamento: new Date(`${values.data}T${format(new Date(), 'HH:mm:ss')}`).toISOString(),
-        forma_pagamento: values.forma_pagamento,
-        profissional_id: values.profissional_id === SEM_PROFISSIONAL ? null : values.profissional_id || null,
-        descricao: values.descricao?.trim() || null,
-        criado_por: user?.id ?? null,
-      });
-      toast.success('Lançamento registrado com sucesso!');
+      if (lancamentoAEditar) {
+        await atualizarLancamento({ id: lancamentoAEditar.id, patch: camposDoFormulario });
+        toast.success('Lançamento atualizado.');
+      } else {
+        await criarLancamento({
+          ...camposDoFormulario,
+          barbearia_id: barbeariaId,
+          criado_por: user?.id ?? null,
+        });
+        toast.success('Lançamento registrado com sucesso!');
+      }
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao registrar o lançamento');
+      toast.error(error.message || 'Erro ao salvar o lançamento');
     }
   };
 
@@ -111,7 +161,7 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Novo Lançamento</DialogTitle>
+          <DialogTitle>{editando ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -152,7 +202,7 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categoriasDisponiveis.map((cat) => (
+                        {categoriasNoSelect.map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {ROTULO_CATEGORIA[cat]}
                           </SelectItem>
@@ -209,6 +259,11 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        {/* So aparece quando o lancamento em edicao ja estava sem
+                            forma: em lancamento novo, obrigar a escolha e melhor. */}
+                        {lancamentoAEditar && !lancamentoAEditar.forma_pagamento && (
+                          <SelectItem value={SEM_FORMA}>Não informada</SelectItem>
+                        )}
                         {FORMAS_PAGAMENTO.map((forma) => (
                           <SelectItem key={forma} value={forma}>
                             {ROTULO_FORMA_PAGAMENTO[forma]}
@@ -266,8 +321,8 @@ export function LancamentoFormDialog({ open, onOpenChange }: LancamentoFormDialo
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isCriando}>
-                {isCriando ? 'Salvando...' : 'Registrar'}
+              <Button type="submit" disabled={isCriando || isAtualizando}>
+                {isCriando || isAtualizando ? 'Salvando...' : editando ? 'Salvar' : 'Registrar'}
               </Button>
             </div>
           </form>

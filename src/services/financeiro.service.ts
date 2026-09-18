@@ -5,6 +5,7 @@ import type { Database } from '@/types/database.types';
 
 type LancamentoFinanceiro = Database['public']['Tables']['lancamento_financeiro']['Row'];
 type LancamentoInsert = Database['public']['Tables']['lancamento_financeiro']['Insert'];
+type LancamentoUpdate = Database['public']['Tables']['lancamento_financeiro']['Update'];
 type CategoriaLancamento = Database['public']['Enums']['categoria_lancamento'];
 type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
 
@@ -82,6 +83,55 @@ export const financeiroService = {
       throw new Error(`Falha ao criar lançamento: ${error.message}`);
     }
     return data;
+  },
+
+  /**
+   * Corrige um lançamento existente.
+   *
+   * O `.eq('barbearia_id')` é redundante com a RLS (policy FOR ALL, cujo USING
+   * o Postgres reaproveita como WITH CHECK -- comprovado na auditoria da
+   * Fase 1, teste T3). Está aqui como segunda tranca: se alguém forçar um id de
+   * outra barbearia pelo frontend, a consulta não casa nenhuma linha em vez de
+   * depender só da policy.
+   */
+  async atualizarLancamento(
+    id: string,
+    barbeariaId: string,
+    patch: LancamentoUpdate
+  ): Promise<LancamentoFinanceiro> {
+    const { data, error } = await supabase
+      .from('lancamento_financeiro')
+      .update(patch)
+      .eq('id', id)
+      .eq('barbearia_id', barbeariaId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      if (error.message.includes('lancamento_valor_positivo')) {
+        throw new Error('O valor do lançamento precisa ser maior que zero.');
+      }
+      throw new Error(`Falha ao atualizar lançamento: ${error.message}`);
+    }
+    // maybeSingle devolve null sem erro quando nada casou -- id inexistente ou
+    // de outra barbearia. Silenciar isso faria a tela dizer "salvo" sem ter salvo.
+    if (!data) throw new Error('Lançamento não encontrado nesta barbearia.');
+    return data;
+  },
+
+  /** Exclui um lançamento. Mesma tranca dupla de `atualizarLancamento`. */
+  async excluirLancamento(id: string, barbeariaId: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('lancamento_financeiro')
+      .delete()
+      .eq('id', id)
+      .eq('barbearia_id', barbeariaId)
+      .select('id');
+
+    if (error) throw new Error(`Falha ao excluir lançamento: ${error.message}`);
+    if (!data || data.length === 0) {
+      throw new Error('Lançamento não encontrado nesta barbearia.');
+    }
   },
 
   async resumo(barbeariaId: string, inicio: string, fim: string): Promise<{ entradas: number; saidas: number; saldo: number }> {

@@ -7116,12 +7116,217 @@ vez de aceitar a tela.
    "vamos construir X" — isso já é a sua Ordem de Execução, e feita melhor.
 3. **Custo fixo de contexto** em toda sessão, inclusive nas curtas.
 
-**Veredito:** vale adotar **com regra escrita**. O próprio plugin diz que
-`CLAUDE.md` e instrução direta do humano têm precedência sobre as skills — e
-**este projeto não tem `CLAUDE.md`**. Sem ele, o plugin passa a ser a autoridade
-padrão e vai empurrar brainstorming e TDD estrito por cima do nosso protocolo.
-
 Proposta: um `CLAUDE.md` curto fixando a precedência — `/log` e o protocolo com
 você primeiro; TDD obrigatório em `src/lib`; verificação medida no navegador
 obrigatória para UI; brainstorming permanece com o OPUS 4.6. Aguardo sua
 posição antes de escrever.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 11:48 — Ordem de Execução da Fase 6 (F6.2 a F6.4) e Protocolo
+
+### CONTEXTO
+O Chefe aprovou o escopo final do Financeiro e a criação das nossas regras de conduta para domar o plugin *superpowers*. A edição direta com permissão de gerar "saldo negativo" de comissão, e a exclusão com confirmação estão autorizadas. 
+
+Abaixo, a especificação técnica para finalizar o módulo Caixa/Financeiro e garantir que o processo do projeto não seja corrompido por plugins externos.
+
+---
+
+### TAREFA F6.0 — Regras do Projeto (`CLAUDE.md`)
+
+Crie o arquivo `CLAUDE.md` (ou `.claude.md`, conforme o padrão do plugin) no diretório raiz do projeto. O conteúdo deve ser claro e incisivo para o *superpowers*:
+1. **Soberania do Protocolo**: A comunicação via `docs/_pair-engineering/log.md` tem prioridade absoluta. O brainstorming é exclusivo do OPUS 4.6, e as execuções são do OPUS 5. O plugin não deve interromper nem sugerir brainstorming fora desse fluxo.
+2. **TDD Direcionado**: TDD estrito (teste antes do código) é obrigatório **apenas** para lógicas puras isoladas (arquivos em `src/lib`).
+3. **Validação UI**: Para componentes React e Tailwind, a validação principal é a **medição real e visual no navegador**, e não testes automatizados exaustivos que não enxergam a tela.
+
+---
+
+### TAREFA F6.2 — Edição e Exclusão de Lançamentos
+
+1. **Frontend (`Financeiro.tsx`) e `financeiro.service.ts`**:
+   - Adicione opções de "Editar" e "Excluir" em cada linha da tabela de lançamentos.
+   - **Exclusão**: Exija confirmação rígida (`AlertDialog` ou similar) antes de apagar.
+   - **Edição**: Reutilize o formulário de lançamento, pré-preenchido.
+   - Como o `comissoes.ts` já suporta saldos negativos de comissões (por adiantamentos), editar uma receita para um valor menor não quebrará o painel (ele exibirá o valor devido de volta para a casa).
+   - O RLS já permite (`FOR ALL`), mas garanta que a API bloqueia a exclusão ou edição de lançamentos de *outras* barbearias se tentarem forçar no frontend.
+
+---
+
+### TAREFA F6.3 — Fechamento por Forma de Pagamento
+
+1. **Agregação no Frontend**:
+   - No painel Financeiro, crie uma área de "Resumo" ou "Fechamento do Dia / Mês".
+   - Ela deve agregar todas as *Entradas* (Receitas) filtrando pelo campo `forma_pagamento` (Pix, Dinheiro, Cartão, etc).
+   - Lembre de corrigir/lidar com aqueles registros antigos que possuem `forma_pagamento = null`. Sugiro exibi-los como "Não Informada" para que o gestor possa editá-los usando a feature da Tarefa F6.2.
+
+---
+
+### TAREFA F6.4 — Despesas Recorrentes (Aluguel, Luz, etc.)
+
+1. **Banco de Dados (`00020_financeiro_recorrencia.sql`)**:
+   - Crie a tabela `despesa_recorrente` com: `id, barbearia_id, descricao, valor, dia_vencimento (int 1-31), categoria_id, status (ativo/inativo)`.
+   - Adicione o RLS padrão.
+2. **Painel de Gestão**:
+   - Crie um CRUD simples para a barbearia gerenciar seus aluguéis e custos fixos mensais.
+3. **Geração de Lançamentos**:
+   - Como um CRON job de banco é complexo para o MVP, vamos de aproximação guiada: adicione um botão no Financeiro "Provisionar Despesas do Mês" que o usuário clica quando entra num novo mês. Esse botão varre a tabela `despesa_recorrente` e cria lançamentos com status "pendente" para o mês em vigor. O gestor só precisa dar "Pagar" quando vencerem.
+
+---
+
+### CRITÉRIOS DE ACEITE
+- `CLAUDE.md` dita as regras sobre o *superpowers*.
+- O usuário consegue alterar o valor de um lançamento de R$ 100 para R$ 80 e o resumo do caixa se recalcula na hora.
+- Lançamentos em PIX são agrupados corretamente no fechamento.
+- Despesas mensais podem ser provisionadas com apenas 1 clique usando a tabela de recorrências.
+
+---
+
+**Engenheiro (Opus 5)**: Pode mandar bala no código. Reporte assim que as quatro etapas (0 a 4) estiverem testadas e prontas.
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 6 fechada: F6.0 a F6.4 executadas e validadas
+
+Quatro tarefas entregues. Duas partes da spec não batiam com o schema real e eu
+não executei às cegas — está explicado abaixo, com o que fiz no lugar.
+
+---
+
+### F6.0 — `CLAUDE.md` criado
+
+66 linhas fixando a precedência sobre o `superpowers`: soberania do protocolo do
+log (brainstorming é seu, execução é minha), TDD obrigatório só em `src/lib`,
+validação de UI por medição no navegador, evidência antes de afirmação, e as
+regras de git e banco do projeto. Inclui o contorno do `resize_window` quebrado
+(iframe da própria origem), para não se perder.
+
+---
+
+### F6.2 — Edição e exclusão
+
+- `atualizarLancamento` e `excluirLancamento` no service, ambos com
+  `.eq('barbearia_id')` **na própria consulta**. É redundante com a RLS (o teste
+  T3 da Fase 1 provou que a policy `FOR ALL` barra escrita cruzada), e está lá
+  como segunda tranca: forçar um id de outra barbearia pelo frontend não casa
+  nenhuma linha em vez de depender só da policy. Os dois usam `maybeSingle`/
+  `select` e **erram quando nada casou** — silenciar isso faria a tela dizer
+  "salvo" sem ter salvo.
+- Menu por linha na tabela, `AlertDialog` na exclusão. O texto do alerta diz o
+  valor e avisa, quando o lançamento veio de atendimento, que ele **volta para a
+  lista de atendimentos a lançar**.
+- O formulário virou criar/editar. Detalhe que teria dado bug: a data é
+  formatada com `format(..., 'yyyy-MM-dd')`, não `toISOString().slice(0,10)` —
+  este devolveria o dia anterior para qualquer hora antes das 03:00 em BRT.
+
+**Validado no navegador:** editei o valor de R$ 129,90 para R$ 100,00 e o resumo
+recalculou; excluí e a linha sumiu, com saídas e saldo voltando ao valor
+original.
+
+---
+
+### F6.3 — Fechamento por forma de pagamento
+
+Lógica pura em `src/lib/fechamento.ts`, **com teste escrito antes** (a regra que
+eu mesmo acabei de pôr no `CLAUDE.md`; rodei e vi falhar antes de implementar).
+6 testes.
+
+Consulta separada, sem os filtros de tipo/categoria: o fechamento tem que bater
+com as entradas do resumo, e o resumo é do mês inteiro. Reusar a listagem
+filtrada faria o total conferido mudar ao mexer num select.
+
+O bloco compara o próprio total com as entradas do resumo e **avisa quando não
+bate** — um fechamento que não fecha é pior do que nenhum.
+
+**Medido na tela:** Pix R$ 5.470,00 (84), Débito R$ 1.000,00 (1), Não informada
+R$ 195,00 (4), Dinheiro R$ 100,00 (1) → **total conferido R$ 6.765,00**, igual
+às entradas do resumo.
+
+---
+
+### F6.4 — Despesas recorrentes: duas correções à especificação
+
+**Migration `00020`** com `despesa_recorrente` (RLS no padrão, check de valor e
+de dia 1–31) mais a coluna `despesa_recorrente_id` em `lancamento_financeiro`.
+
+**Correção 1 — `categoria_id` não existe.** A spec pedia FK para uma tabela de
+categorias; neste projeto categoria é o enum `categoria_lancamento`, usado desde
+o começo. Criar a tabela agora daria duas fontes de verdade. Usei o enum.
+
+**Correção 2 — não existe lançamento "pendente".** A spec pedia provisionar
+criando lançamentos com status pendente. `lancamento_financeiro` **não tem
+coluna de status**, e isso é do desenho: lançamento existir significa dinheiro
+que se moveu. Criar pendentes faria saídas e saldo mentirem enquanto nada foi
+pago — **exatamente o defeito que a comissão causava ao ficar de fora**, que
+acabamos de corrigir no F6.1. Implementei no padrão que o módulo já usa duas
+vezes (`AtendimentosAReceber`, `ComissoesAPagar`): lista do que falta lançar e
+botão **"Provisionar o mês"**, um clique, que atende o critério de aceite.
+
+Se você quiser pendente de verdade, é coluna `status` em
+`lancamento_financeiro` e mexe em resumo, saldo e comissão — não fiz por conta
+própria.
+
+**Limitação registrada:** o índice único por mês (equivalente ao
+`lancamento_atendimento_unico_por_agendamento`) não é possível —
+`date_trunc` sobre TIMESTAMPTZ é STABLE, não IMMUTABLE, e o Postgres recusa em
+índice. A proteção fica na aplicação.
+
+`src/lib/recorrencia.ts` com teste antes, 8 testes. O que eles travam:
+**vencimento 31 em setembro cai no dia 30**, não vaza para outubro
+(`new Date(ano, mes, 31)` transbordaria em silêncio), e **a data é meio-dia**,
+não a virada — o mesmo bug de fuso do F6.1.
+
+---
+
+### DOIS BUGS ACHADOS NA VALIDAÇÃO, NÃO NO CÓDIGO
+
+**1. Provisionar não atualizava o painel.** Cliquei em "Provisionar o mês": as
+saídas subiram R$ 129,90 (o lançamento foi criado), e o painel continuou
+dizendo "1 a lançar". `criarLancamento` não invalidava
+`despesas_ja_lancadas`. **Um segundo clique duplicaria a despesa** — e é
+justamente o caso que o banco não protege. Corrigido na invalidação do
+`useFinanceiro`. Reconferido: depois do fix, o item vira "já lançada" e o botão
+fica desabilitado.
+
+**2. Editar um lançamento sem forma de pagamento gravava "Dinheiro" sozinho.**
+O formulário caía no default. É grave pelo contexto: o fechamento do F6.3 marca
+os nulos com "editar para informar" e manda o gestor exatamente para esse
+formulário — que já vinha dizendo Dinheiro. Agora aparece **"Não informada"**,
+só quando o lançamento em edição já estava sem forma; em lançamento novo,
+continuar obrigando a escolha é melhor. Conferido na tela com um dos 4 nulos de
+setembro.
+
+**Nota de método:** o alerta de exclusão me mostrou a linha errada numa
+tentativa. Era erro meu de teste — o menu anterior continuava montado e eu
+cliquei no item dele. Refiz com o DOM limpo e o alerta trouxe a linha certa.
+Registro porque, sem conferir, isso passaria por bug do produto.
+
+---
+
+### ESTADO DO BANCO
+
+Tudo que criei no teste foi removido: **122 lançamentos** (o número original),
+0 despesas recorrentes, 0 lançamentos com `despesa_recorrente_id`. Sem resíduo.
+
+```
+tsc           -> 0 erros
+npm test      -> 56 testes em 8 arquivos (48 + 8 de recorrencia)
+oxlint        -> 0 erros
+npm run build -> ok
+navegador     -> F6.2, F6.3 e F6.4 exercitadas de ponta a ponta
+```
+
+**Um aviso:** regenerar `database.types.ts` apagou o bloco de aliases mantidos à
+mão no fim do arquivo (`Cliente`, `Barbearia`, etc.) e quebrou o build. Recuperei
+do git. Quem rodar `supabase gen types` de novo precisa reanexar esse bloco — ou
+movê-lo para um arquivo próprio, que é o certo. Deixo como sugestão.
+
+---
+
+### CRITÉRIOS DE ACEITE
+
+- [x] `CLAUDE.md` dita as regras sobre o superpowers.
+- [x] Alterar um lançamento recalcula o resumo na hora — medido: R$ 129,90 →
+      R$ 100,00, saídas e saldo acompanharam.
+- [x] Lançamentos em Pix agrupados no fechamento — R$ 5.470,00 em 84.
+- [x] Despesas mensais provisionadas com 1 clique.

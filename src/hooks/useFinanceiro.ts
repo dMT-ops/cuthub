@@ -9,6 +9,7 @@ import type {
 import type { Database } from '@/types/database.types';
 
 type LancamentoInsert = Database['public']['Tables']['lancamento_financeiro']['Insert'];
+type LancamentoUpdate = Database['public']['Tables']['lancamento_financeiro']['Update'];
 
 /**
  * Referência estável para a lista ainda não carregada. Ver useHorarios.ts:
@@ -32,6 +33,11 @@ export function useFinanceiro(
     // A comissao sai da receita lancada: registrar entrada muda o devido, e
     // registrar o pagamento muda o pendente. Os dois casos passam por aqui.
     queryClient.invalidateQueries({ queryKey: ['comissoes_a_pagar', barbeariaId] });
+    // Um lancamento novo pode ser a provisao de uma despesa fixa. Sem invalidar
+    // aqui, o painel continua oferecendo "a lancar" o que ja foi lancado -- e o
+    // segundo clique duplica a despesa, porque a unicidade por mes nao existe
+    // no banco (ver nota na migration 00020).
+    queryClient.invalidateQueries({ queryKey: ['despesas_ja_lancadas', barbeariaId] });
   };
 
   const query = useQuery({
@@ -51,6 +57,17 @@ export function useFinanceiro(
     onSuccess: invalidarCaixa,
   });
 
+  const atualizarMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: LancamentoUpdate }) =>
+      financeiroService.atualizarLancamento(id, barbeariaId!, patch),
+    onSuccess: invalidarCaixa,
+  });
+
+  const excluirMutation = useMutation({
+    mutationFn: (id: string) => financeiroService.excluirLancamento(id, barbeariaId!),
+    onSuccess: invalidarCaixa,
+  });
+
   return {
     lancamentos: query.data ?? LANCAMENTOS_VAZIOS,
     resumo: queryResumo.data,
@@ -59,6 +76,10 @@ export function useFinanceiro(
     error: query.error || queryResumo.error,
     criarLancamento: criarMutation.mutateAsync,
     isCriando: criarMutation.isPending,
+    atualizarLancamento: atualizarMutation.mutateAsync,
+    isAtualizando: atualizarMutation.isPending,
+    excluirLancamento: excluirMutation.mutateAsync,
+    isExcluindo: excluirMutation.isPending,
   };
 }
 

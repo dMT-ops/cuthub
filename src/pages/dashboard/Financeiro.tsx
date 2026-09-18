@@ -12,8 +12,11 @@ import { LancamentosTable } from '@/components/financeiro/LancamentosTable';
 import { LancamentoFormDialog } from '@/components/financeiro/LancamentoFormDialog';
 import { AtendimentosAReceber } from '@/components/financeiro/AtendimentosAReceber';
 import { ComissoesAPagar } from '@/components/financeiro/ComissoesAPagar';
+import { FechamentoPorPagamento } from '@/components/financeiro/FechamentoPorPagamento';
+import { DespesasFixas } from '@/components/financeiro/DespesasFixas';
 import { CATEGORIAS_LANCAMENTO, ROTULO_CATEGORIA } from '@/lib/financeiro';
 import { formatarMoeda } from '@/lib/utils';
+import type { LancamentoComDetalhes } from '@/services/financeiro.service';
 import type { Database } from '@/types/database.types';
 
 type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
@@ -26,6 +29,19 @@ export default function Financeiro() {
   const [tipo, setTipo] = useState<'todos' | TipoLancamento>('todos');
   const [categoria, setCategoria] = useState<'todas' | CategoriaLancamento>('todas');
   const [formOpen, setFormOpen] = useState(false);
+  const [lancamentoAEditar, setLancamentoAEditar] = useState<LancamentoComDetalhes | null>(null);
+
+  const abrirEdicao = (lancamento: LancamentoComDetalhes) => {
+    setLancamentoAEditar(lancamento);
+    setFormOpen(true);
+  };
+
+  // O dialogo e o mesmo para criar e editar: sem limpar o alvo ao fechar, o
+  // proximo "Novo Lancamento" abriria preenchido com o lancamento anterior.
+  const fecharForm = (aberto: boolean) => {
+    setFormOpen(aberto);
+    if (!aberto) setLancamentoAEditar(null);
+  };
 
   const periodo = useMemo(
     () => ({
@@ -45,6 +61,13 @@ export default function Financeiro() {
   );
 
   const { lancamentos, resumo, isLoading, isError, error } = useFinanceiro(barbeariaId, filtros);
+  // Consulta separada, sem os filtros de tipo/categoria: o fechamento tem que
+  // bater com as entradas do resumo, e o resumo e do mes inteiro. Reusar a
+  // listagem filtrada faria o total conferido mudar ao mexer num select.
+  const { lancamentos: lancamentosDoPeriodo, isLoading: carregandoPeriodo } = useFinanceiro(
+    barbeariaId,
+    periodo
+  );
   const { atendimentos, isLoading: carregandoAtendimentos } = useAtendimentosAReceber(
     barbeariaId,
     periodo.inicio,
@@ -73,7 +96,7 @@ export default function Financeiro() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
         <span title={motivoBloqueio ?? undefined}>
-          <Button onClick={() => setFormOpen(true)} disabled={!podeOperar}>
+          <Button onClick={() => { setLancamentoAEditar(null); setFormOpen(true); }} disabled={!podeOperar}>
             <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
           </Button>
         </span>
@@ -184,6 +207,19 @@ export default function Financeiro() {
         />
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-2">
+        <FechamentoPorPagamento
+          lancamentos={lancamentosDoPeriodo}
+          isLoading={carregandoPeriodo}
+          totalDeEntradas={resumo?.entradas}
+        />
+        <DespesasFixas
+          periodo={periodo}
+          mesReferencia={mesReferencia}
+          rotuloDoPeriodo={rotuloDoPeriodo}
+        />
+      </div>
+
       {isError ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-card p-12 text-center">
           <h3 className="mb-1 text-lg font-semibold">Não foi possível carregar o financeiro</h3>
@@ -192,10 +228,14 @@ export default function Financeiro() {
           </p>
         </div>
       ) : (
-        <LancamentosTable lancamentos={lancamentos} isLoading={isLoading} />
+        <LancamentosTable lancamentos={lancamentos} isLoading={isLoading} onEditar={abrirEdicao} />
       )}
 
-      <LancamentoFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <LancamentoFormDialog
+        open={formOpen}
+        onOpenChange={fecharForm}
+        lancamentoAEditar={lancamentoAEditar}
+      />
     </div>
   );
 }
