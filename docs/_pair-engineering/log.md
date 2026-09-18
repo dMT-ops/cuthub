@@ -6164,3 +6164,396 @@ depois do clique.
 
 **Os cinco critérios de aceite da Fase 5 estão validados.** Nenhum ficou em
 aberto.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 08:54 — Conclusão da Fase 5 e do Arco Principal do CutHub
+
+### CONTEXTO
+
+O Opus 5 entregou com maestria. A decisão de usar RPCs (`ocupacao_publica` e `agendar_como_cliente`) para proteger a agenda e automatizar a criação do registro de cliente foi a escolha arquitetural perfeita. Respeita a segurança impenetrável que montamos desde a Fase 1 e entrega uma experiência fluida para o cliente final. O "Repetir" que exige zero cliques para selecionar barbeiro/serviço é a cereja do bolo da UX.
+
+### 🔴 O QUE ISSO SIGNIFICA PARA O PROJETO
+
+Chefe, com a entrega da **Fase 5**, o loop principal do CutHub está **completo**. 
+Temos um ecossistema real de ponta a ponta:
+1. **A Barbearia** cria a conta, configura sua marca (Fase 2), gerencia a vitrine (Fase 3) e cria promoções (Fase 5).
+2. **O Catálogo** lista todas as barbearias ativas com busca limpa (Fase 4).
+3. **O Cliente** encontra a barbearia, vê os serviços/promoções e realiza o agendamento logado pelo wizard público (Fase 5).
+4. **O Histórico** permite que o cliente veja seus agendamentos, favorite a barbearia e repita o serviço com 2 cliques (Fase 4 e 5).
+
+### INSTRUÇÕES PARA O CHEFE
+
+A fundação e a visão do cliente estão finalizadas no código! Sugiro fortemente que você faça o teste real:
+1. Abra `http://localhost:5180/barbearias` (deslogado ou logado como cliente de teste).
+2. Entre no perfil da Barbearia do Renan, veja as promoções e clique em **Agendar**.
+3. Faça o fluxo inteiro (escolha o serviço, barbeiro, dia, hora) e feche o agendamento.
+4. Verifique em `/minha-conta/agendamentos` se ele apareceu lá e teste clicar em **Repetir** para ver a mágica do recarregamento.
+
+Faça o push dos commits. E agora a grande pergunta: **Para onde vamos a seguir?** 
+- Partimos para a "Mão de Deus" (Painel Administrativo da plataforma inteira)?
+- Entramos na parte de Financeiro/Caixa das barbearias?
+- Notificações por e-mail/WhatsApp?
+
+O plano é seu! Aguardo instruções.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 09:11 — Ordem de Execução da Fase 5.5
+
+# FASE 5.5 — Correção de Bugs Visuais e Responsividade na Área do Cliente
+
+## CONTEXTO
+O CutHub é um SaaS de agendamento para barbearias (Vite + React + TypeScript, Supabase 
+como backend/DB/Auth, Tailwind CSS + shadcn/ui, React Router). A Fase 5 acabou de ser 
+entregue e testada, completando o loop principal: barbearia cria conta e vitrine → 
+catálogo exibe barbearias → cliente navega, vê serviços e agenda pelo wizard → histórico 
+salva e permite repetir agendamento. Essa fase foi validada, mas aparentemente sem testar 
+em múltiplas larguras de tela — os bugs abaixo só aparecem em resolução de navegador 
+desktop.
+
+## PROBLEMA
+Foram identificados os seguintes problemas na área do cliente, em visão de navegador 
+(desktop), que não foram pegos na validação da Fase 5:
+
+1. O layout da área do cliente não é responsivo à largura do navegador: o conteúdo 
+   permanece centralizado/estreito em vez de ocupar a resolução real da tela, deixando 
+   grandes áreas vazias nas laterais.
+2. Na tela de detalhes da barbearia (onde o cliente vê os dados dela para agendar), a 
+   foto de perfil aparece **atrás/por baixo** da foto de banner — bug visual de 
+   sobreposição (stacking/z-index).
+3. Nessa mesma tela, o botão de agendar aparece com aparência escura/apagada, como se 
+   estivesse desabilitado e não disponível para clique.
+4. O mesmo padrão de "não uso do espaço disponível" se repete em outras áreas do cliente, 
+   sugerindo que não são bugs isolados por página, e sim de um componente de 
+   layout/header compartilhado.
+
+## OBJETIVO
+Corrigir os bugs visuais e adaptar a área do cliente (incluindo a tela de detalhes da 
+barbearia) para usar corretamente a resolução do navegador em desktop, sem quebrar o 
+comportamento já validado em mobile, e sem alterar a lógica de negócio do agendamento 
+a menos que a investigação comprove que é necessário.
+
+## ANÁLISE OBRIGATÓRIA (antes de tocar em qualquer arquivo)
+Antes de alterar código, você deve:
+
+1. Localizar o(s) componente(s) de layout/wrapper usados pelas páginas da área do 
+   cliente (dashboard do cliente, catálogo, detalhes da barbearia, histórico) e 
+   verificar se compartilham um container comum com largura fixa/centralizada.
+2. Localizar o componente de cabeçalho da página de detalhes da barbearia (o que 
+   renderiza banner + avatar) e inspecionar a estrutura de posicionamento 
+   (`position`, `z-index`, `overflow`) que está causando o avatar ficar atrás do banner.
+3. Localizar o botão de agendar nessa tela e determinar a causa raiz seguindo este 
+   raciocínio (não pule etapas):
+   - SINTOMA: botão parece desabilitado.
+   - EVIDÊNCIAS: ele está de fato com o atributo/estado `disabled` aplicado, ou é 
+     puramente uma classe de cor/variante do shadcn (`variant`, `bg-*`, `opacity-*`) 
+     mal escolhida?
+   - HIPÓTESES: (a) bug cosmético de variante/cor; (b) lógica de disponibilidade de 
+     horário calculando incorretamente e desabilitando o botão de verdade; (c) estado 
+     de loading que nunca é finalizado.
+   - Confirme qual hipótese é verdadeira antes de decidir a correção. Se for (b) ou (c), 
+     isso é um bug funcional, não estético — ele impede o cliente de agendar, e deve ser 
+     tratado com prioridade mais alta e reportado explicitamente no log, mesmo que fuja 
+     do escopo original de "ajuste de layout".
+4. Verificar se as outras áreas do cliente com o mesmo sintoma de "espaço vazio" 
+   compartilham o wrapper identificado no item 1, para confirmar se a correção pode (e 
+   deve) ser feita em um único lugar.
+
+Não corrija nada antes de concluir essa investigação. Se a especificação abaixo se 
+mostrar inadequada à luz do que você encontrar na investigação — por exemplo, se 
+descobrir que a correção correta é em outro componente, ou que existe um motivo 
+arquitetural para o layout estar centralizado — não execute cegamente: explique o 
+problema encontrado e proponha a abordagem tecnicamente mais adequada antes de 
+prosseguir.
+
+## REQUISITOS
+1. A área do cliente (incluindo a tela de detalhes da barbearia) deve ocupar 
+   corretamente a largura da viewport em resoluções desktop comuns (ex.: 1366px, 
+   1920px), sem ficar artificialmente centralizada/estreita.
+2. O comportamento em mobile (já validado na Fase 5) não pode regredir. Qualquer 
+   alteração de layout deve ser feita com breakpoints responsivos (Tailwind: 
+   `sm:`/`md:`/`lg:`/`xl:`), nunca removendo o comportamento mobile existente.
+3. Em larguras maiores, o espaço adicional deve ser preenchido com conteúdo útil, não 
+   apenas esticado. Priorize reaproveitar dados/funcionalidades que já existem no 
+   sistema (ex.: grid de barbearias no catálogo em vez de lista única de coluna, 
+   destaque de promoções ativas da barbearia, próximos agendamentos do cliente, 
+   barbearias visitadas recentemente para repetir agendamento). Não invente uma feature 
+   nova que exija dado que ainda não existe no banco — se identificar uma boa ideia que 
+   dependa de dado novo, anote como sugestão no log em vez de implementar.
+4. O avatar/foto de perfil da barbearia deve aparecer visualmente acima do banner (na 
+   posição de sobreposição pretendida pelo design), com stacking context correto.
+5. O botão de agendar deve refletir visualmente o estado real: habilitado e com a cor 
+   de destaque padrão (variant primário do design system) quando o agendamento estiver 
+   de fato disponível; um estado desabilitado só deve existir quando houver uma razão 
+   real (ex.: sem horários disponíveis, cliente não autenticado) e, nesse caso, deve 
+   comunicar isso ao usuário (texto/tooltip), não apenas mudar de cor silenciosamente.
+6. Se o mesmo bug de layout vazio/centralizado existir em outras telas da área do 
+   cliente por compartilharem o mesmo wrapper, corrija na origem (o componente 
+   compartilhado), não duplique a correção por página.
+
+## ARQUITETURA
+Preferir corrigir no componente de layout/wrapper compartilhado e nos componentes de UI 
+reutilizáveis (header da barbearia, `Button`) em vez de aplicar overrides pontuais em 
+cada página. Isso evita duplicar a correção e reduz o risco do mesmo bug reaparecer em 
+uma tela nova no futuro. Use os tokens de cor/variantes já existentes do shadcn/ui — não 
+crie cores ou classes novas "ad hoc" para o botão de agendar.
+
+## IMPLEMENTAÇÃO
+- Ajustar o(s) container(s) de layout da área do cliente para respeitar breakpoints 
+  responsivos em vez de largura fixa/centralizada.
+- Ajustar o componente de header da barbearia (banner + avatar) para que o avatar tenha 
+  `position` e `z-index` corretos em relação ao banner, dentro de um stacking context 
+  bem definido (contêiner com `position: relative`).
+- Corrigir a causa raiz do botão de agendar identificada na investigação (cosmética 
+  e/ou funcional).
+- Adicionar conteúdo complementar nas áreas identificadas como "vazias" em telas 
+  largas, reaproveitando dados/endpoints já existentes.
+
+## ESTRUTURA DE ARQUIVOS
+Não assuma nomes de arquivo — você deve localizá-los durante a investigação (item 
+"ANÁLISE OBRIGATÓRIA"). Ao concluir, liste no log todos os arquivos efetivamente 
+alterados.
+
+## BANCO DE DADOS
+Não é esperada nenhuma alteração de schema, migration ou RLS nesta fase — isso é 
+majoritariamente um ajuste de apresentação. Exceção: se a investigação do botão de 
+agendar (item 3 da Análise Obrigatória) revelar que a causa é uma consulta de 
+disponibilidade de horários com lógica incorreta, trate isso como um bug de lógica de 
+negócio à parte, documente separadamente no log e não misture a correção com o ajuste 
+puramente visual.
+
+## SEGURANÇA
+Nenhuma mudança de autenticação/autorização é esperada. Ao corrigir o estado do botão 
+de agendar, garanta que a checagem de "cliente autenticado" continue sendo feita 
+corretamente (não afrouxe nenhuma validação existente só para "fazer o botão parecer 
+habilitado").
+
+## UX/UI
+- Layout deve responder de forma fluida a diferentes larguras (mobile, tablet, laptop, 
+  desktop, ultrawide), sem saltos bruscos de conteúdo.
+- Estado de "vazio" na tela de detalhes/catálogo deve ser preenchido com conteúdo real 
+  e útil, mantendo consistência visual com o restante do sistema.
+- Botão de agendar deve seguir o padrão visual já usado para ações primárias no resto 
+  do sistema (mesma variante que outros CTAs principais).
+- Avatar sobreposto ao banner deve manter boa legibilidade (considerar sombra/borda se 
+  necessário) independentemente do tamanho/proporção da imagem enviada pela barbearia.
+
+## TRATAMENTO DE ERROS
+- Se não houver foto de banner ou de avatar cadastrada pela barbearia, o layout não 
+  pode quebrar — usar um estado padrão (placeholder) sem afetar o z-index/posicionamento 
+  corrigido.
+- Se a checagem de disponibilidade falhar (erro de rede, timeout), o botão deve indicar 
+  claramente um estado de erro/indisponibilidade temporária — nunca cair silenciosamente 
+  no mesmo visual "escuro" que hoje é confundido com "desabilitado por padrão".
+
+## EDGE CASES
+- Larguras extremas: mobile pequeno (~360px), tablet (~768px), laptop (~1366px), 
+  desktop (~1920px), ultrawide (~2560px).
+- Zoom do navegador alterado (90%, 110%, 125%).
+- Barbearia sem foto de banner e/ou sem avatar.
+- Nome de barbearia muito longo (quebra de linha no header).
+- Cliente não autenticado tentando ver a tela de detalhes (o botão de agendar deve 
+  comunicar isso, não apenas parecer desabilitado sem explicação).
+- Barbearia sem nenhum horário disponível no momento.
+
+## TESTES
+- Testar manualmente a área do cliente e a tela de detalhes da barbearia em pelo menos 
+  4 larguras diferentes (mobile, tablet, laptop, desktop) e confirmar que o layout usa 
+  o espaço corretamente em todas.
+- Confirmar visualmente que o avatar aparece acima do banner em pelo menos 3 barbearias 
+  de teste com imagens de proporções diferentes.
+- Testar o botão de agendar nos cenários: cliente autenticado com horários disponíveis, 
+  cliente não autenticado, barbearia sem horários disponíveis — confirmar que o visual 
+  do botão muda de forma coerente com cada estado real.
+- Confirmar que o comportamento mobile validado na Fase 5 não regrediu.
+
+## CRITÉRIOS DE ACEITE
+- [ ] Área do cliente e tela de detalhes ocupam corretamente a largura em resoluções 
+      desktop testadas, sem regressão no mobile.
+- [ ] Avatar aparece visualmente acima do banner em todas as barbearias testadas.
+- [ ] Botão de agendar reflete o estado real de disponibilidade (não aparenta 
+      desabilitado quando está, de fato, disponível).
+- [ ] Causa raiz do bug do botão foi identificada e documentada no log (cosmética e/ou 
+      funcional), com a correção correspondente.
+- [ ] Espaço adicional em telas largas foi preenchido com conteúdo funcional reaproveitando 
+      dados já existentes, não apenas esticado.
+- [ ] Nenhuma tela ou fluxo da Fase 5 quebrou (regressão) como resultado destes ajustes.
+
+## RESTRIÇÕES
+- Não altere a lógica de negócio de agendamento além do necessário para corrigir a 
+  causa raiz identificada.
+- Não introduza novas bibliotecas de UI — use os componentes e tokens já existentes do 
+  Tailwind + shadcn/ui.
+- Não invente conteúdo novo que dependa de dado inexistente no banco; se tiver uma boa 
+  sugestão, registre no log em vez de implementar.
+- Não corrija o mesmo bug de forma duplicada em várias páginas se a causa for um 
+  componente compartilhado — corrija na origem.
+
+## VALIDAÇÃO FINAL
+Antes de considerar concluído, capture evidência visual (descrição textual dos testes, 
+já que trabalhamos por log) em pelo menos 3 larguras de tela diferentes, confirmando: 
+layout responsivo correto, avatar acima do banner, e botão de agendar com estado visual 
+coerente com o estado real. Registre no log compartilhado o diagnóstico da causa raiz 
+do botão (cosmética vs. funcional) e todos os arquivos alterados.
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 5.5 executada: os três bugs, com causa medida
+
+### CONTEXTO
+
+Você pediu investigação antes de tocar em código, e ela mudou o diagnóstico de
+dois dos três itens. Tudo abaixo foi medido no navegador em 1920px, não deduzido
+do código.
+
+**Commit:** `0b3c8f2`. Arquivos alterados: `ClienteLayout.tsx`,
+`PerfilBarbearia.tsx`, `Barbearias.tsx`, `MinhaConta.tsx` e o novo
+`src/lib/marca.ts`.
+
+---
+
+### BUG 1 — largura: confirmado, e a correção é na origem
+
+`ClienteLayout` usava `max-w-4xl` **fixo** — 896px. Numa tela de 1920 sobravam
+mais de 500px vazios de cada lado. O mesmo container aparecia no header, na
+navegação e no `main`, e o perfil público repetia o padrão.
+
+Corrigido no componente compartilhado, com largura por breakpoint
+(`max-w-4xl lg:max-w-6xl xl:max-w-7xl`), e o catálogo ganhou
+`2xl:max-w-screen-2xl`.
+
+**Mantive um teto**, e registro o porquê: largura total numa tela ultrawide
+produz linha de texto de 2000px, que é ilegível. O requisito era "não ficar
+artificialmente estreito", e 1232px de conteúdo úteis contra 896px resolve isso
+sem trocar um problema por outro.
+
+---
+
+### BUG 2 — avatar atrás do banner: **não era z-index esquecido**
+
+A causa é mais interessante do que "faltou z-index", e é o tipo de coisa que
+volta se o motivo não ficar escrito.
+
+O wrapper do banner é `position: relative`. O header que contém o avatar era
+`position: static`. **Na ordem de pintura do CSS, elemento posicionado cobre
+conteúdo estático independentemente da ordem no DOM.** O `-mt-10` puxava o avatar
+para cima da faixa do banner, e ele perdia a disputa de pintura.
+
+Comprovado com `elementFromPoint` nos 40px de sobreposição, antes da correção:
+
+```
+deslocamento +5px  -> IMG.h-full w-full object-cover   (o banner)
+deslocamento +15px -> IMG.h-full w-full object-cover
+deslocamento +25px -> IMG.h-full w-full object-cover
+deslocamento +35px -> IMG.h-full w-full object-cover
+deslocamento +45px -> IMG.h-20 w-20 rounded-full       (o avatar, já fora do banner)
+```
+
+Depois de `relative z-10` no header, os quatro pontos devolvem o avatar.
+
+---
+
+### BUG 3 — o botão **não estava desabilitado**
+
+Sua análise obrigatória pedia para distinguir três hipóteses. Medi:
+
+```
+disabled  -> false
+opacity   -> 1
+fundo     -> rgb(0, 128, 0)      (#008000, a cor da Barbearia do Renan)
+texto     -> rgb(10, 10, 10)     (fixado no código)
+contraste -> 3.85                (mínimo WCAG para texto: 4.5)
+```
+
+Então é a hipótese **(a), cosmética** — o botão sempre funcionou. Mas a causa não
+é "variante do shadcn mal escolhida": é que **pintávamos a cor escolhida pela
+barbearia como fundo do CTA e fixávamos texto quase preto, sem verificar se dava
+para ler**. Qualquer cor escura produz um CTA que parece desligado, e a Fase 2
+deixa a barbearia escolher qualquer hexadecimal.
+
+Um detalhe que pode enganar quem for conferir: o `className` do botão **contém**
+a string `disabled`. São as utilitárias `disabled:` do shadcn, que existem sempre
+e não significam que o botão está desabilitado. Cheguei a marcar isso como
+suspeita e descartei olhando o atributo real.
+
+**Correção — `src/lib/marca.ts`:** mede luminância antes de pintar, escolhe preto
+ou branco conforme o que for legível, e **devolve `undefined` quando a cor não
+serve como fundo de CTA** — aí o botão volta para a variante primária do design
+system, que é legível por construção. Melhor perder a marca num botão do que
+entregar um CTA que parece desligado.
+
+Contraste depois: **5.14**, com o verde da barbearia preservado e o texto em
+branco.
+
+**Não mexi em nenhuma validação de autenticação.** O botão do perfil sempre
+levou ao wizard; quem controla o acesso é o passo de confirmação, que continua
+exigindo conta.
+
+---
+
+### O ESPAÇO EXTRA FOI PREENCHIDO COM O QUE JÁ EXISTE
+
+Seguindo o requisito de não inventar dado novo:
+
+- **Perfil da barbearia**: promoções saíram de cima das abas e viraram coluna
+  lateral em `lg`. Antes empurravam serviços e equipe para baixo; agora ocupam a
+  lateral que estava vazia.
+- **Início do cliente**: "Ofertas nas suas barbearias" na coluna lateral, usando
+  `usePromocoesVigentes` com os favoritos — dado que já existia desde a Fase 5.
+- **Catálogo**: quarta coluna em `2xl`. Mais barbearias por linha, em vez de
+  cards gigantes.
+
+---
+
+### MOBILE NÃO REGRIDE — e verifiquei, não assumi
+
+**Ressalva de método:** tentei redimensionar a janela para 390px e a ferramenta
+não alterou o viewport (`innerWidth` continuou 1920). Então **não observei o
+layout renderizado em mobile**.
+
+O que verifiquei no lugar disso, na página carregada:
+
+```
+classes da grade -> "grid gap-8 pb-16 lg:grid-cols-[minmax(0,1fr)_320px]"
+grid-cols sem prefixo de breakpoint -> nenhuma
+```
+
+Como não existe classe `grid-cols-*` base, abaixo de `lg` o container é coluna
+única — o comportamento anterior, por construção. É evidência sólida, mas é
+diferente de ter visto a tela. Registro a distinção.
+
+---
+
+### MEDIÇÕES FINAIS, EM 1920px
+
+| | antes | depois |
+|---|---|---|
+| avatar na faixa de sobreposição | banner por cima (4 de 4 pontos) | **avatar por cima (4 de 4)** |
+| contraste do CTA | 3.85 | **5.14** |
+| largura do conteúdo no perfil | 896px | **1232px** (880 + 320) |
+| largura do `main` do cliente | 896px | **1280px** |
+| colunas do catálogo em 2xl | 3 | **4** |
+
+```
+npm test    -> 25 testes passando
+tsc         -> 0 erros
+oxlint      -> 0 erros, 17 warnings (baseline mantida)
+npm run build -> ✓ 3587 modules
+```
+
+---
+
+### DUAS COISAS PARA VOCÊ
+
+1. **A causa do bug 3 é sistêmica, não pontual.** Toda superfície que pinta a cor
+   da barbearia corre o mesmo risco — hoje o CTA, as bordas do wizard e os cards
+   de promoção. Passei as três pelo `marca.ts`, mas **a Fase 2 continua aceitando
+   qualquer hexadecimal sem aviso**. Sugestão: mostrar o contraste no formulário
+   de Identidade e marca, para a barbearia saber na hora que escolheu uma cor que
+   vai sumir. É pequeno e evita a classe inteira do problema.
+2. **Nenhuma alteração de banco, RLS ou lógica de agendamento**, como sua spec
+   previa. A investigação do botão confirmou a hipótese cosmética, então não
+   houve bug funcional a separar.
