@@ -11,6 +11,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { ProximoAgendamentoPorBarbeiro } from '@/components/dashboard/ProximoAgendamentoPorBarbeiro';
 import { resumirAgendamento } from '@/lib/agendamento';
 import { formatarMoeda } from '@/lib/utils';
+import { RequisicoesDaEquipe } from '@/components/dashboard/RequisicoesDaEquipe';
 
 // O recharts responde por ~400 kB do bundle; carregado sob demanda, sai do caminho crítico
 const FaturamentoChart = lazy(() =>
@@ -45,6 +46,10 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-6">
+      {/* Antes dos indicadores de proposito: pedido da equipe parado e coisa
+          que custa dinheiro -- o barbeiro nao sabe se pode faltar. */}
+      <RequisicoesDaEquipe />
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <IndicadorCard
           titulo="Faturamento (Hoje)"

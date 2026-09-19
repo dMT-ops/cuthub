@@ -254,6 +254,8 @@ export type Database = {
           id: string
           motivo: string | null
           profissional_id: string | null
+          solicitado_por: string | null
+          status_aprovacao: Database["public"]["Enums"]["status_aprovacao"]
         }
         Insert: {
           barbearia_id: string
@@ -263,6 +265,8 @@ export type Database = {
           id?: string
           motivo?: string | null
           profissional_id?: string | null
+          solicitado_por?: string | null
+          status_aprovacao?: Database["public"]["Enums"]["status_aprovacao"]
         }
         Update: {
           barbearia_id?: string
@@ -272,6 +276,8 @@ export type Database = {
           id?: string
           motivo?: string | null
           profissional_id?: string | null
+          solicitado_por?: string | null
+          status_aprovacao?: Database["public"]["Enums"]["status_aprovacao"]
         }
         Relationships: [
           {
@@ -300,6 +306,13 @@ export type Database = {
             columns: ["profissional_id"]
             isOneToOne: false
             referencedRelation: "profissional_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bloqueio_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
             referencedColumns: ["id"]
           },
         ]
@@ -574,6 +587,8 @@ export type Database = {
           hora_inicio: string
           id: string
           profissional_id: string | null
+          solicitado_por: string | null
+          status_aprovacao: Database["public"]["Enums"]["status_aprovacao"]
         }
         Insert: {
           ativo?: boolean
@@ -584,6 +599,8 @@ export type Database = {
           hora_inicio: string
           id?: string
           profissional_id?: string | null
+          solicitado_por?: string | null
+          status_aprovacao?: Database["public"]["Enums"]["status_aprovacao"]
         }
         Update: {
           ativo?: boolean
@@ -594,6 +611,8 @@ export type Database = {
           hora_inicio?: string
           id?: string
           profissional_id?: string | null
+          solicitado_por?: string | null
+          status_aprovacao?: Database["public"]["Enums"]["status_aprovacao"]
         }
         Relationships: [
           {
@@ -622,6 +641,13 @@ export type Database = {
             columns: ["profissional_id"]
             isOneToOne: false
             referencedRelation: "profissional_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horario_trabalho_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
             referencedColumns: ["id"]
           },
         ]
@@ -1270,7 +1296,9 @@ export type Database = {
       conta_suspensa: { Args: never; Returns: boolean }
       criar_barbearia_e_vincular: { Args: { p_nome: string }; Returns: string }
       get_barbearia_do_usuario: { Args: never; Returns: string }
+      get_profissional_id_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
+      is_gestor: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       ocupacao_publica: {
         Args: {
@@ -1314,6 +1342,7 @@ export type Database = {
         | "concluido"
         | "cancelado"
         | "faltou"
+      status_aprovacao: "pendente" | "aprovado" | "rejeitado"
       status_registro: "ativo" | "inativo"
       tipo_favorito: "barbearia" | "servico_profissional" | "agendamento"
       tipo_lancamento: "entrada" | "saida"
@@ -1480,6 +1509,7 @@ export const Constants = {
         "cancelado",
         "faltou",
       ],
+      status_aprovacao: ["pendente", "aprovado", "rejeitado"],
       status_registro: ["ativo", "inativo"],
       tipo_favorito: ["barbearia", "servico_profissional", "agendamento"],
       tipo_lancamento: ["entrada", "saida"],

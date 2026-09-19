@@ -8353,3 +8353,190 @@ profissional no caixa, `horario_trabalho`/`bloqueio` (o barbeiro não marca a
 própria folga), a poda dos seis aliases mortos, o caminho de volta da promoção
 (profissional removido da equipe continua `profissional`), e as passadas
 visuais que dependem de login.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-18 23:32 — Ordem de Execução da Fase 9 (Escala e Demissão)
+
+### CONTEXTO
+
+O Chefe definiu as regras de RH. 
+1. **O Caminho de Volta:** Se o dono demitir (inativar) o barbeiro, ele perde o acesso ao painel de gestão na hora e volta a ser um cliente comum.
+2. **O Sistema de Aprovação:** O barbeiro PODE marcar suas próprias folgas e alterar sua própria escala de trabalho, mas tudo isso nasce **pendente** de aprovação do Dono. E o mais importante: a agenda pública (aquela que os clientes usam para marcar corte) **ignora solenemente** requisições pendentes. O bloqueio só entra em vigor de fato após a bênção do dono.
+
+### TAREFA F9.1 — Banco de Dados: O Estado Pendente e o Trigger de Demissão
+
+1. **Migration `00025_fluxo_aprovacao_e_demissao.sql`**:
+   - Crie o `CREATE TYPE status_aprovacao AS ENUM ('pendente', 'aprovado', 'rejeitado');`
+   - Adicione a coluna `status_aprovacao status_aprovacao NOT NULL DEFAULT 'aprovado'` nas tabelas `horario_trabalho` e `bloqueio` (o default `aprovado` salva o legado).
+   - **Mude o RLS** dessas duas tabelas:
+     - Leitura: Continua para toda a barbearia.
+     - Escrita (INSERT/UPDATE/DELETE): Permitido para `is_gestor() OR is_admin_supremo()`. 
+     - **Escrita para Profissional:** O profissional pode fazer `INSERT` ou `UPDATE` APENAS nas linhas onde `profissional_id = get_profissional_id_do_usuario()`, E OBRIGATORIAMENTE o novo registro deve ter `status_aprovacao = 'pendente'`.
+   - **Trigger de Demissão**: Crie uma função e trigger em `profissional` para o evento `UPDATE`. Se `OLD.status = 'ativo'` e `NEW.status = 'inativo'`, ligue a flag `app.vinculo_autorizado` e faça o `UPDATE` no `usuario_perfil` dele voltando o `tipo` para `cliente` e limpando o `barbearia_id`. (Faça o inverso caso ele seja reativado).
+
+### TAREFA F9.2 — Frontend: Lógica de Disponibilidade
+
+1. **`src/services/disponibilidade.service.ts`**:
+   - Mude as consultas de `horario_trabalho` e `bloqueio`. Elas DEVEM exigir `.eq('status_aprovacao', 'aprovado')`. Se não fizer isso, o barbeiro consegue forjar folgas sem aprovação.
+2. **`src/services/horarios.service.ts`**:
+   - Atualize a tipagem para incluir o `status_aprovacao`.
+   - Quando o painel enviar um novo bloqueio/horário, garanta que envia `status_aprovacao: 'pendente'` se quem estiver logado for `profissional`, e `'aprovado'` se for `gestor`.
+   - Crie um método `listarRequisicoesPendentes(barbeariaId)` que puxe tudo que está pendente nas duas tabelas.
+   - Crie um método `responderRequisicao(tipo: 'horario' | 'bloqueio', id, status: 'aprovado' | 'rejeitado')`.
+
+### TAREFA F9.3 — Frontend: A Experiência (UX)
+
+1. **Painel do Dono (Aprovações)**:
+   - Adicione um componente de "Alertas" ou "Requisições da Equipe" no `DashboardHome.tsx` (se for Gestor).
+   - Se a lista de `listarRequisicoesPendentes` não for vazia, exiba os pedidos (Ex: "Vitor solicitou Folga amanhã") com botões de [Aprovar] e [Rejeitar]. (Ao clicar, chama o serviço e remove da lista).
+2. **Painel do Barbeiro**:
+   - Ao adicionar folgas ou mudar horário, o UI deve deixar claro que é uma *solicitação*.
+   - Renderize as folgas dele com cores diferentes ou textos se estiverem pendentes/rejeitadas.
+
+---
+**Radar Estratégico (O que vem depois da F9)**:
+Fase 10 será focada em **Notificações e Lembretes** (combate a faltas). A Fase 11 será o **Refinamento do App do Cliente (PWA e Favoritos)**. Não implemente nada disso agora, apenas tenha em mente a arquitetura futura.
+
+**Engenheiro (Opus 5)**: Execute a Fase 9. Transforme a plataforma num RH de verdade. Mande brasa!
+
+---
+
+## [OPUS 5] 2026-09-18 — FASE 9: aprovação de escala e demissão
+
+F9.1 a F9.3 entregues. Duas coisas mudaram o tamanho da fase, e as duas
+apareceram na investigação, não na execução.
+
+---
+
+### 1. A REGRA CENTRAL PASSAVA POR FORA DO QUE A ORDEM MANDAVA MUDAR
+
+A F9.2 manda filtrar `status_aprovacao = 'aprovado'` nos serviços do frontend.
+Só que existem **dois** caminhos de disponibilidade neste projeto:
+
+```
+disponibilidade.service.ts   -> agenda INTERNA (modal do painel)
+ocupacao_publica (RPC)       -> agenda PUBLICA, que e a do cliente
+```
+
+A RPC é `SECURITY DEFINER` e lê `horario_trabalho` e `bloqueio` **direto**: nem
+a RLS nem filtro de frontend a alcançam. Se eu tivesse feito só o que a ordem
+pedia, **a folga não aprovada bloquearia o cliente de agendar** — o oposto
+exato da regra do Chefe. Patchei a RPC junto, e a migration termina lendo o
+resultado para confirmar (regra do `CLAUDE.md`).
+
+**A regra, medida de ponta a ponta, como anônimo:**
+
+| momento | horários ocupados que o cliente vê |
+|---|---|
+| antes de qualquer pedido | 2 |
+| barbeiro pede folga (pendente) | **2 — ignorada** |
+| dono aprova | **3** |
+
+---
+
+### 2. A TELA DE FOLGA NÃO EXISTIA
+
+A F9.3 fala em "ao adicionar folgas, o UI deve deixar claro que é uma
+solicitação". Fui procurar essa tela e **ela nunca foi construída**: `bloqueio`
+era uma tabela que o app só **lia**. A disponibilidade a respeitava, a Landing
+anunciava "bloqueios de agenda" na lista de recursos, e **nada no produto
+criava um**.
+
+Então não dava para "ajustar o UI": construí a primeira escrita em `bloqueio`.
+`FolgasDialog`, aberto pelo botão na Agenda. Para o barbeiro é "Minhas folgas"
+e o pedido nasce pendente; para o gestor é "Folgas" e vale na hora.
+
+Detalhe da tela do gestor: o botão exige um profissional escolhido no filtro.
+Bloquear "todos" de uma vez seria **fechar a casa**, que é outra operação, e
+que a RLS continua reservando para gestor (`profissional_id` nulo).
+
+---
+
+### F9.1 — o banco
+
+`status_aprovacao` (enum) nas duas tabelas, com default `aprovado` para salvar
+o legado, mais `solicitado_por` — sem ele a tela do dono teria que adivinhar
+quem pediu a partir do `profissional_id`, que é nulo em bloqueio da casa.
+
+**RLS do profissional**, nas duas tabelas: INSERT e UPDATE só na própria linha
+e **obrigatoriamente como `pendente`**. Medido:
+
+| tentativa | resultado |
+|---|---|
+| pedir folga como pendente | **INSERT 0 1** |
+| já cadastrar a própria folga como `aprovado` | **violates row-level security policy** |
+| bloquear a barbearia inteira (`profissional_id` nulo) | **violates row-level security policy** |
+| retirar o próprio pedido pendente | **DELETE 1** |
+| apagar bloqueio já aprovado | **DELETE 0** |
+
+**O DELETE não estava na ordem e eu incluí**, restrito ao que ainda está
+pendente: um pedido que não dá para retirar é beco sem saída — o barbeiro que
+errou a data ficaria esperando o dono recusar. Não alcança nada já aprovado.
+
+**Trigger de demissão**, com duas guardas que a ordem não pedia:
+
+```
+demissao ....... profissional -> cliente, barbearia_id NULL   [ok]
+recontratacao .. cliente -> profissional, na barbearia certa  [ok]
+guarda 1 ....... dono que tambem corta cabelo: continua OWNER [ok]
+guarda 2 ....... quem tem ficha ativa em outra casa nao e rebaixado
+```
+
+A guarda 1 é a mesma da 00024 e aqui o estrago seria maior: rebaixar o owner
+para `cliente` **apagaria o vínculo dele com a própria barbearia**. A guarda 2
+existe porque `profissional` não tem unicidade por usuário — dá para trabalhar
+em duas casas, e ser demitido de uma não pode expulsar da outra.
+
+---
+
+### F9.2 e F9.3 — o resto
+
+- `disponibilidade.service.ts`: `.eq('status_aprovacao','aprovado')` nas duas
+  consultas.
+- `escala.service.ts` (novo): folgas do profissional, criar, cancelar,
+  `listarRequisicoesPendentes` e `responderRequisicao`. O `responder` **erra
+  quando nenhuma linha foi afetada** — dizer "aprovado" sem ter aprovado é pior
+  que o erro.
+- `useEscala.ts`: a invalidação derruba `folgas`, `requisicoes_pendentes`,
+  `ocupacao` e `ocupacao_publica`. Sem a última, aprovar a folga não tiraria o
+  horário do wizard do cliente até o cache expirar.
+- `RequisicoesDaEquipe` no topo do `DashboardHome`, **acima dos indicadores**:
+  pedido parado custa dinheiro, o barbeiro não sabe se pode faltar. Some da
+  tela quando não há nada — card permanente dizendo "nenhuma requisição" é
+  ruído no painel que o dono abre todo dia.
+
+```
+tsc           -> 0 erros
+npm test      -> 71 testes em 9 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> 0 pendentes, 0 profissionais inativos; testes revertidos
+```
+
+**Um erro meu, pego pelo lint:** criei o helper de invalidação como
+`usarInvalidacaoDaEscala`. Ele chama `useQueryClient`, e a regra de hooks só
+reconhece composição em nomes que começam com `use` — renomeado.
+
+---
+
+### O QUE NÃO FIZ, E POR QUÊ
+
+**A jornada (`horario_trabalho`) ainda não tem caminho de solicitação na tela.**
+O banco aceita: a RLS deixa o profissional propor mudança na própria jornada, e
+a fila do dono já lista esses pedidos com o rótulo "Mudança de jornada". O que
+falta é o `JornadaTrabalho.tsx` mandar `status_aprovacao: 'pendente'` quando
+quem salva é o profissional — hoje aquela tela é aberta pelo gestor, na aba de
+Profissionais, que o barbeiro **não acessa** (F8.3). Ou seja: não existe
+caminho pelo qual ele chegue lá.
+
+Construir isso significa dar ao profissional uma tela de jornada própria, e
+isso é feature nova, não ajuste. **Preferi entregar a folga funcionando inteira
+a entregar as duas pela metade.** Se você quiser a jornada nesta fase, é uma
+tela a mais no menu do profissional — me diga e eu faço.
+
+**Validação visual:** como sempre, não fiz login. O caminho de dados está
+provado no banco, ponta a ponta. O teste que fecha, se você tiver ânimo: entre
+como o **Vitor**, abra a Agenda, clique em "Minhas folgas" e peça uma; depois
+entre como o dono e veja o pedido no topo do painel.

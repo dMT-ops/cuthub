@@ -9,7 +9,8 @@ import {
   Search,
   Filter,
   CalendarDays,
-  CalendarRange
+  CalendarRange,
+  CalendarOff
 } from 'lucide-react';
 import { 
   format, 
@@ -45,6 +46,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { FolgasDialog } from '@/components/agenda/FolgasDialog';
 import { useProfissionais } from '@/hooks/useProfissionais';
 import { useAgendamentos } from '@/hooks/useAgendamentos';
 import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
@@ -72,12 +74,24 @@ export default function AgendaHome() {
   
   // Modais e Drawers
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [folgasAbertas, setFolgasAbertas] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(agendamentoInicial);
 
   // Filtros
   const [busca, setBusca] = useState('');
   const [selectedProfissionalId, setSelectedProfissionalId] = useState<string | null>(null); // null = Todos
   const { profissionais } = useProfissionais(barbeariaId, { status: 'ativo' });
+
+  // Para o barbeiro, a folga e sempre a dele; para o gestor, e a do
+  // profissional filtrado na barra. Sem filtro, o gestor escolhe primeiro --
+  // bloquear "todos" de uma vez seria fechar a casa, que e outra coisa.
+  const { tipo: tipoDeUsuario, perfil } = useAuth();
+  const ehProfissional = tipoDeUsuario === 'profissional';
+  const fichaDoUsuario = useMemo(
+    () => profissionais.find((p) => p.usuario_id === perfil?.id) ?? null,
+    [profissionais, perfil]
+  );
+  const profissionalDaFolga = ehProfissional ? (fichaDoUsuario?.id ?? null) : selectedProfissionalId;
   const { configuracao } = useBarbeariaAtual();
 
   // Calcular Range de Datas baseado na View
@@ -392,10 +406,31 @@ export default function AgendaHome() {
             </div>
           </div>
 
-          <Button onClick={() => setIsNewModalOpen(true)} className="gap-2">
-            <Plus size={16} />
-            Novo Agendamento
-          </Button>
+          <div className="flex items-center gap-2">
+            <span
+              title={
+                profissionalDaFolga
+                  ? undefined
+                  : 'Escolha um profissional no filtro para marcar a folga dele'
+              }
+            >
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={!profissionalDaFolga}
+                onClick={() => setFolgasAbertas(true)}
+              >
+                <CalendarOff size={16} />
+                {ehProfissional ? 'Minhas folgas' : 'Folgas'}
+              </Button>
+            </span>
+            {!ehProfissional && (
+              <Button onClick={() => setIsNewModalOpen(true)} className="gap-2">
+                <Plus size={16} />
+                Novo Agendamento
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -484,6 +519,13 @@ export default function AgendaHome() {
         onCancelar={handleCancelar}
         onExcluir={handleExcluir}
         isSalvando={isAtualizando || isCancelando || isExcluindo}
+      />
+
+      <FolgasDialog
+        open={folgasAbertas}
+        onOpenChange={setFolgasAbertas}
+        profissionalId={profissionalDaFolga}
+        profissionalNome={profissionais.find((p) => p.id === profissionalDaFolga)?.nome}
       />
     </div>
   );

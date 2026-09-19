@@ -26,6 +26,9 @@ export const disponibilidadeService = {
         .eq('profissional_id', profissionalId)
         .eq('dia_semana', dia.getDay())
         .eq('ativo', true)
+        // F9: escala pedida e nao aprovada nao vale. Sem isto o barbeiro
+        // forjaria a propria jornada sem passar pelo dono.
+        .eq('status_aprovacao', 'aprovado')
         .order('hora_inicio'),
 
       // Mesma condição do constraint agendamento_sem_sobreposicao:
@@ -43,6 +46,7 @@ export const disponibilidadeService = {
         .select('data_hora_inicio, data_hora_fim')
         .eq('barbearia_id', barbeariaId)
         .or(`profissional_id.eq.${profissionalId},profissional_id.is.null`)
+        .eq('status_aprovacao', 'aprovado')
         .lt('data_hora_inicio', fimDia)
         .gt('data_hora_fim', inicioDia),
     ]);
