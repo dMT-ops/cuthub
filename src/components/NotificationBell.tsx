@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, BellOff, CheckCheck } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useNotificacoes } from '@/hooks/useNotificacoes';
 import type { Notificacao } from '@/services/notificacoes.service';
 
@@ -49,9 +50,27 @@ export function NotificationBell() {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-semibold">Notificações</span>
+      {/* Largura fixa de 320px estourava a margem em tela de 360px. O `min`
+          entrega 352px quando cabe e se ajusta ao viewport quando nao cabe,
+          sempre com uma folga de 16px de cada lado -- a mesma que o resto do
+          site usa. */}
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-[min(22rem,calc(100vw-2rem))] overflow-hidden p-0"
+      >
+        {/* Mesma anatomia de cabecalho dos outros paineis do site
+            (Requisicoes da equipe, Fechamento, Despesas fixas): titulo a
+            esquerda, acao a direita, px-4 py-3 e borda embaixo. */}
+        <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold">Notificações</h3>
+            {naoLidas > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {naoLidas} não {naoLidas === 1 ? 'lida' : 'lidas'}
+              </p>
+            )}
+          </div>
           {naoLidas > 0 && (
             <Button
               variant="ghost"
@@ -66,13 +85,20 @@ export function NotificationBell() {
         </div>
 
         {isLoading ? (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">Carregando…</p>
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : notificacoes.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            Nada por aqui ainda.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <BellOff className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">Nada por aqui ainda.</p>
+            <p className="max-w-[16rem] text-xs text-muted-foreground">
+              Agendamentos, cancelamentos e respostas da gestão aparecem nesta lista.
+            </p>
+          </div>
         ) : (
-          <ul className="max-h-96 divide-y overflow-y-auto">
+          <ul className="max-h-[min(24rem,60vh)] divide-y overflow-y-auto">
             {notificacoes.map((n) => (
               <li key={n.id}>
                 {/* Botão, e não DropdownMenuItem: o item fecha o menu no
@@ -80,17 +106,33 @@ export function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => void abrir(n)}
-                  className={`w-full px-3 py-2.5 text-left transition-colors hover:bg-muted ${
+                  className={`flex w-full gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted ${
                     n.lida ? '' : 'bg-primary/5'
                   }`}
                 >
-                  <p className={`text-sm ${n.lida ? 'font-normal' : 'font-semibold'}`}>{n.titulo}</p>
-                  {n.mensagem && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{n.mensagem}</p>
-                  )}
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {formatDistanceToNow(new Date(n.criado_em), { addSuffix: true, locale: ptBR })}
-                  </p>
+                  {/* Ponto no lugar de negrito sozinho: em lista curta o peso
+                      da fonte sozinho e dificil de comparar de relance. */}
+                  <span
+                    className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                      n.lida ? 'bg-transparent' : 'bg-primary'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block text-sm ${n.lida ? 'font-normal' : 'font-semibold'}`}
+                    >
+                      {n.titulo}
+                    </span>
+                    {n.mensagem && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {n.mensagem}
+                      </span>
+                    )}
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      {formatDistanceToNow(new Date(n.criado_em), { addSuffix: true, locale: ptBR })}
+                    </span>
+                  </span>
                 </button>
               </li>
             ))}

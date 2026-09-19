@@ -6,28 +6,35 @@ import { NotificationBell } from '@/components/NotificationBell';
 export default function DashboardLayout() {
   const sidebarState = useSidebarState();
 
+  const recuoDaSidebar =
+    sidebarState.isPinned && !sidebarState.isMobile ? 'md:ml-60' : 'md:ml-16';
+
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar {...sidebarState} />
 
-      {/* Este layout nao tem barra superior -- a sidebar e a moldura inteira.
-          Em vez de inventar um header so para o sino, ele fica ancorado no
-          canto, acima do conteudo e fora do caminho do botao de menu mobile,
-          que mora no canto esquerdo. */}
-      <div className="fixed right-4 top-3 z-40">
-        <NotificationBell />
-      </div>
-
-      {/* Main Content */}
-      <main 
+      {/* Coluna de conteúdo: o recuo da sidebar passou para cá, e não para o
+          `main`, porque agora o cabeçalho precisa acompanhar o mesmo recuo.
+          Antes o sino era um botão `fixed` solto sobre a tela e caía em cima
+          do primeiro card do painel. */}
+      <div
         className={`
-          flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-8 bg-background
+          flex min-w-0 flex-1 flex-col
           transition-[margin] duration-200 ease-in-out motion-reduce:transition-none
-          ml-0 ${sidebarState.isPinned && !sidebarState.isMobile ? 'md:ml-60' : 'md:ml-16'}
+          ml-0 ${recuoDaSidebar}
         `}
       >
-        <Outlet />
-      </main>
+        {/* Mesma anatomia do ClienteLayout e do AdminLayout: faixa de altura
+            fixa, borda embaixo, ações à direita. `pl-16` no mobile reserva o
+            canto do botão de menu da sidebar, que é `fixed` e passa por cima. */}
+        <header className="flex h-14 shrink-0 items-center justify-end gap-2 border-b border-border/60 bg-background px-4 pl-16 md:px-8 md:pl-8">
+          <NotificationBell />
+        </header>
+
+        <main className="flex-1 overflow-y-auto bg-background p-4 md:p-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
