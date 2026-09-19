@@ -8261,3 +8261,95 @@ nada rebaixa o `usuario_perfil` de volta para `cliente` — ele continua com
 agenda vazia. A promoção tem caminho de ida e não tem o de volta. Não
 implementei porque envolve decidir o que acontece com o histórico dele, e isso
 é produto.
+
+---
+
+## [OPUS 5] 2026-09-18 — Varredura de regressão da Fase 8 (nenhuma mudança de código)
+
+Sem ordem nova no log, fui atrás do risco que ficou pendurado: **a Fase 8
+reescreveu as policies de 12 tabelas e ninguém reexercitou os caminhos de
+escrita do dono desde então.** Se eu tivesse quebrado o uso diário, isso seria
+mais urgente que qualquer pendência em aberto.
+
+Varri um write por tela, como owner da Barbearia do Renan, em transação
+revertida.
+
+### RESULTADO: NENHUMA REGRESSÃO
+
+| tela / tabela | operação | resultado |
+|---|---|---|
+| Serviços | insert + update + delete | ok |
+| Produtos | insert + update + delete | ok |
+| Clientes | insert + update + delete | ok |
+| Profissionais | insert + update + delete | ok |
+| Promoções | insert + delete | ok |
+| Jornada (`horario_trabalho`) | update | **14 linhas** |
+| Bloqueio | insert + delete | ok |
+| Marca (`configuracao_barbearia`) | update | ok |
+| Despesas fixas | insert + select + delete | ok |
+| Caixa | insert + update + delete | ok |
+| Agenda | agendamento + agendamento_servico | ok |
+
+### UM ALARME FALSO QUE VALE FICAR ESCRITO
+
+O insert de `agendamento_servico` **falhou** na primeira tentativa:
+
+```
+ERROR: new row violates row-level security policy for table "agendamento_servico"
+```
+
+Fui checar o código antes de gritar regressão, e o defeito era do meu teste: eu
+escrevi os dois inserts numa **CTE que modifica dados**
+(`WITH novo AS (INSERT INTO agendamento ...) INSERT INTO agendamento_servico
+SELECT novo.id ...`). A policy da tabela filha faz `EXISTS` contra o
+agendamento pai, e dentro da mesma instrução **a linha-pai ainda não existe
+para aquele snapshot**. O app faz em dois comandos separados
+(`agendamentos.service.ts:96`), e aí passa.
+
+**Não é comportamento novo** — a policy antiga já era `EXISTS` contra o pai.
+Mas fica registrado: quem for otimizar isso para uma CTE única vai reencontrar
+o erro, e ele não é de permissão.
+
+### DOIS ÂNGULOS QUE NINGUÉM TINHA COBERTO
+
+**O `gerente` nunca existiu em dados.** O papel está no enum desde a Fase 2 e
+não havia um único usuário dele — ou seja, `is_gestor()` cobrindo `gerente`
+nunca foi verificado com dado real. Simulei um em transação revertida:
+
+```
+is_gestor() ................................ t
+escreve no catalogo ........................ ok
+le o caixa inteiro da barbearia ............ 1 de 1
+mexe no status da barbearia (tranca da F7) . UPDATE 0
+```
+
+O gerente opera a loja e **não** alcança a suspensão da plataforma. Era o
+desenho pretendido, agora medido.
+
+**O profissional na agenda**, os dois sentidos:
+
+```
+encaixe na PROPRIA agenda .................. INSERT 0 1
+encaixe na agenda de OUTRO barbeiro ........ violates row-level security policy
+```
+
+**O público anônimo**, depois de 12 policies reescritas:
+
+```
+barbearias 3 | servicos 16 | profissionais 9 | promocoes 2 | produtos 1
+```
+
+Intacto — como esperado, já que as views públicas são `security_invoker=false`
+e as RPCs são `SECURITY DEFINER`, então nada disso passa pelas policies que
+mexi. Verifiquei mesmo assim, porque "como esperado" não é evidência.
+
+### NADA MUDOU NO CÓDIGO
+
+Esta entrada é só verificação. Banco sem resíduo: tudo rodou dentro de
+`BEGIN ... ROLLBACK`.
+
+As pendências continuam as mesmas, esperando decisão de vocês: a escrita do
+profissional no caixa, `horario_trabalho`/`bloqueio` (o barbeiro não marca a
+própria folga), a poda dos seis aliases mortos, o caminho de volta da promoção
+(profissional removido da equipe continua `profissional`), e as passadas
+visuais que dependem de login.
