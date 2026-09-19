@@ -10,7 +10,8 @@ import {
   Filter,
   CalendarDays,
   CalendarRange,
-  CalendarOff
+  CalendarOff,
+  Clock
 } from 'lucide-react';
 import { 
   format, 
@@ -47,6 +48,8 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { FolgasDialog } from '@/components/agenda/FolgasDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { JornadaTrabalho } from '@/components/profissionais/JornadaTrabalho';
 import { useProfissionais } from '@/hooks/useProfissionais';
 import { useAgendamentos } from '@/hooks/useAgendamentos';
 import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
@@ -75,6 +78,7 @@ export default function AgendaHome() {
   // Modais e Drawers
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [folgasAbertas, setFolgasAbertas] = useState(false);
+  const [jornadaAberta, setJornadaAberta] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(agendamentoInicial);
 
   // Filtros
@@ -424,6 +428,15 @@ export default function AgendaHome() {
                 {ehProfissional ? 'Minhas folgas' : 'Folgas'}
               </Button>
             </span>
+            {/* A jornada do barbeiro morava so na aba Profissionais, que ele
+                nao acessa desde a F8.3 -- o banco aceitava o pedido dele e nao
+                existia caminho ate la. Este botao e o caminho. */}
+            {ehProfissional && (
+              <Button variant="outline" className="gap-2" onClick={() => setJornadaAberta(true)}>
+                <Clock size={16} />
+                Minha jornada
+              </Button>
+            )}
             {!ehProfissional && (
               <Button onClick={() => setIsNewModalOpen(true)} className="gap-2">
                 <Plus size={16} />
@@ -527,6 +540,15 @@ export default function AgendaHome() {
         profissionalId={profissionalDaFolga}
         profissionalNome={profissionais.find((p) => p.id === profissionalDaFolga)?.nome}
       />
+
+      <Dialog open={jornadaAberta} onOpenChange={setJornadaAberta}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Minha jornada</DialogTitle>
+          </DialogHeader>
+          {profissionalDaFolga && <JornadaTrabalho profissionalId={profissionalDaFolga} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -17,11 +17,24 @@ export const horariosService = {
     return data || [];
   },
 
+  /**
+   * @param comoSolicitacao quando o próprio profissional está salvando. Muda
+   * duas coisas, e as duas são exigência da RLS da Fase 9:
+   *
+   *   1. tudo que entra ou muda nasce `pendente`;
+   *   2. **remover deixa de ser DELETE**. A policy só deixa o profissional
+   *      apagar linha pendente, então apagar uma faixa já aprovada afetaria
+   *      zero linhas **sem erro** — a tela diria "salvo" e o horário
+   *      continuaria lá. No lugar disso, a faixa é proposta como inativa e vai
+   *      para a fila do dono.
+   */
   async salvarJornada(
     barbeariaId: string,
     profissionalId: string,
     faixasAtuais: HorarioTrabalho[],
-    novasFaixas: Array<Omit<HorarioTrabalhoInsert, 'id' | 'barbearia_id' | 'profissional_id'>>
+    novasFaixas: Array<Omit<HorarioTrabalhoInsert, 'id' | 'barbearia_id' | 'profissional_id'>>,
+    comoSolicitacao = false,
+    solicitadoPor: string | null = null
   ): Promise<void> {
     // Montar listas para as três operações (diff por ID e valores)
     const faixasAntigasMap = new Map(faixasAtuais.map(f => [f.id, f]));
@@ -52,7 +65,8 @@ export const horariosService = {
             dia_semana: nova.dia_semana,
             hora_inicio: nova.hora_inicio,
             hora_fim: nova.hora_fim,
-            ativo: nova.ativo
+            ativo: nova.ativo,
+            status_aprovacao: comoSolicitacao ? 'pendente' : 'aprovado'
           });
         }
       } else {
@@ -63,7 +77,9 @@ export const horariosService = {
           dia_semana: nova.dia_semana,
           hora_inicio: nova.hora_inicio,
           hora_fim: nova.hora_fim,
-          ativo: nova.ativo
+          ativo: nova.ativo,
+          status_aprovacao: comoSolicitacao ? 'pendente' : 'aprovado',
+          solicitado_por: comoSolicitacao ? solicitadoPor : null
         });
       }
     }
@@ -103,7 +119,15 @@ export const horariosService = {
 
     if (idsParaDeletar.length > 0) {
       promises.push(
-        supabase.from('horario_trabalho').delete().in('id', idsParaDeletar).then(res => res)
+        comoSolicitacao
+          // Ver o comentário da assinatura: o profissional não apaga faixa
+          // aprovada, ele PROPÕE desativá-la.
+          ? supabase
+              .from('horario_trabalho')
+              .update({ ativo: false, status_aprovacao: 'pendente' })
+              .in('id', idsParaDeletar)
+              .then(res => res)
+          : supabase.from('horario_trabalho').delete().in('id', idsParaDeletar).then(res => res)
       );
     }
 

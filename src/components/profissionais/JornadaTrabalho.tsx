@@ -24,7 +24,10 @@ const DIAS_SEMANA = [
 
 export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
   const { barbeariaId, podeOperar, motivoBloqueio } = useAuth();
-  const { horarios, isLoading, salvarJornada, isSalvando } = useHorarios(profissionalId, barbeariaId);
+  const { horarios, isLoading, salvarJornada, isSalvando, salvaComoSolicitacao } = useHorarios(
+    profissionalId,
+    barbeariaId
+  );
   
   const [faixas, setFaixas] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -72,6 +75,49 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
     setFaixas(novas);
   };
 
+  /**
+   * Repete a primeira faixa de um dia ativo nos outros seis.
+   *
+   * Preencher sete dias a mao e o atrito real desta tela -- barbearia costuma
+   * ter o mesmo horario de terca a sabado. Replica a partir do primeiro dia
+   * ativo e substitui o que houver nos demais: replicar somando faixas
+   * deixaria jornada duplicada em cima da que ja existia.
+   */
+  const handleReplicarParaTodos = () => {
+    const modelo = faixas.find((f) => f.ativo);
+    if (!modelo) {
+      setLocalError('Defina o horário de um dia antes de replicar.');
+      return;
+    }
+    setLocalError('');
+    const doDiaModelo = faixas.filter((f) => f.dia_semana === modelo.dia_semana && f.ativo);
+
+    const replicadas = [] as any[];
+    for (let dia = 0; dia <= 6; dia++) {
+      if (dia === modelo.dia_semana) {
+        replicadas.push(...faixas.filter((f) => f.dia_semana === dia));
+        continue;
+      }
+      // Mantem os ids existentes do dia para virar UPDATE em vez de duplicar.
+      const existentes = faixas.filter((f) => f.dia_semana === dia);
+      doDiaModelo.forEach((molde, i) => {
+        const anterior = existentes[i];
+        replicadas.push({
+          ...(anterior ?? {}),
+          dia_semana: dia,
+          hora_inicio: molde.hora_inicio,
+          hora_fim: molde.hora_fim,
+          ativo: true,
+        });
+      });
+      // Sobras do dia (faixas a mais que o modelo) ficam desativadas.
+      existentes.slice(doDiaModelo.length).forEach((sobra) => {
+        replicadas.push({ ...sobra, ativo: false });
+      });
+    }
+    setFaixas(replicadas);
+  };
+
   const handleSave = async () => {
     setLocalError('');
     // Validação básica cliente
@@ -84,7 +130,11 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
     
     try {
       await salvarJornada(faixas);
-      toast.success('Jornada salva com sucesso!');
+      toast.success(
+        salvaComoSolicitacao
+          ? 'Pedido enviado. A gestão precisa aprovar antes de valer na agenda.'
+          : 'Jornada salva com sucesso!'
+      );
       setIsEditing(false);
     } catch (err: any) {
       setLocalError(err.message || 'Falha ao salvar jornada');
@@ -109,13 +159,24 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center pb-2 border-b">
-        <h3 className="font-medium">Horários de Atendimento</h3>
+        <div>
+          <h3 className="font-medium">Horários de Atendimento</h3>
+          {salvaComoSolicitacao && (
+            <p className="text-xs text-muted-foreground">
+              O que você mudar aqui vira um <strong>pedido</strong>: vale na agenda só depois que a
+              gestão aprovar.
+            </p>
+          )}
+        </div>
         {!isEditing ? (
           <span title={motivoBloqueio ?? undefined}>
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} disabled={!podeOperar}>Editar Jornada</Button>
           </span>
         ) : (
-          <div className="space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleReplicarParaTodos}>
+              Replicar para todos os dias
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => {
               setIsEditing(false);
               setLocalError('');

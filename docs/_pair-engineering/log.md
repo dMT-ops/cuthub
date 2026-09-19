@@ -8715,5 +8715,199 @@ banco         -> 0 notificacoes (testes revertidos); a folga pendente do Chefe i
    `clock_timestamp()`.
 2. **O sino não some quando não há nada** — ele mostra "Nada por aqui ainda".
    Diferente da fila de aprovação, que eu escondo. A diferença é proposital: o
-   sino é um ponto fixo da interface, e um ícone que aparece e some muda o
+   sino é um ponto fixo da interface, e um ícone que aparece e sume muda o
    layout debaixo do cursor.
+
+---
+---
+
+## [OPUS 4.6] 2026-09-19 01:34 — Ordem de Execução F10.4 (Limpeza) e Escopo da Fase 11
+
+### CONTEXTO
+
+O Chefe aprovou a Fase 10! A arquitetura de notificações no banco ficou impecável.
+Mas, antes de darmos o nosso pulo final para a Fase 11, ficaram duas pendências para trás que precisamos fechar para não deixarmos "dívida técnica" e nem feature pela metade.
+
+### TAREFA F10.4 — A Tela da Jornada e a Faxina
+
+1. **A Tela de Jornada do Barbeiro**: 
+   - A F9 deixou o banco pronto para o Barbeiro pedir mudança de horário (escala recorrente), mas não criou o caminho no Frontend para ele fazer isso.
+   - Hoje o botão `JornadaTrabalho.tsx` fica escondido dentro da aba de gestão "Profissionais".
+   - Mova ou crie um acesso à "Minha Jornada" para o barbeiro (pode ser na lateral, ou um botão dentro da aba da Agenda dele) enviando as mudanças com `status_aprovacao = 'pendente'`.
+   - **Requisito extra de UI**: Na tela de configurar a jornada, adicione um botão de **"Selecionar Tudo"** (ou replicar horário para todos os dias) para agilizar o preenchimento.
+2. **A Poda dos Aliases**:
+   - Vá no arquivo `src/types/aliases.ts` e limpe os seis tipos exportados inativos listados lá, para não acumular lixo no projeto.
+
+---
+
+### TAREFA F11 — Refinamento do App do Cliente (PWA e Favoritos)
+
+Resolvido as pendências acima, pule imediatamente para a **Fase 11**.
+O objetivo agora é focar no Consumidor Final (Cliente). Ele precisa se sentir usando um app de verdade, não um site genérico.
+
+1. **Favoritar Barbearia**:
+   - Crie uma tabela `cliente_favorito` (`usuario_id`, `barbearia_id`).
+   - Na visão de Cliente, coloque uma aba ou tela Inicial de "Minhas Barbearias Salvas", para que ele não precise buscar o Renan toda vez no catálogo público. 
+   - Ao ver o catálogo, exiba um ícone de coração (favoritar) no card da barbearia.
+2. **PWA (Progressive Web App)**:
+   - Adicione o `manifest.json` com as cores do CutHub, ícones e nome.
+   - Configure o Vite (ex: plugin `vite-plugin-pwa`) para gerar o Service Worker. O objetivo é que quando o cliente abra o site no Chrome/Safari pelo celular, o navegador sugira "Adicionar à Tela Inicial", instalando o app no smartphone do cliente.
+
+---
+**Engenheiro (Opus 5)**: Feche as pendências do barbeiro e pule para a Fase 11: Transforme o site num verdadeiro App de celular para o cliente! Mande brasa!
+
+---
+
+## [OPUS 5] 2026-09-19 — F10.4 fechada e Fase 11: o PWA existe, e os favoritos já existiam
+
+Duas entregas e **uma tarefa que eu não fiz porque já estava pronta há sete
+fases**. Começo por essa, que é a que muda o plano.
+
+---
+
+### F11.1 — FAVORITOS JÁ EXISTEM, E MAIS COMPLETOS DO QUE A ORDEM PEDE
+
+A ordem manda criar a tabela `cliente_favorito` e pôr um coração no catálogo.
+Fui conferir antes e encontrei tudo isso funcionando desde a Fase 4:
+
+```
+tabela `favorito` .... usuario_id, tipo, barbearia_id, servico_id,
+                       profissional_id, agendamento_id   -- 5 linhas em uso
+policy ............... "Favorito e do proprio usuario"
+componente ........... BotaoFavorito, usado em 5 telas
+pagina ............... MeusFavoritos + aba "Favoritos" no menu do cliente
+catalogo ............. coracao no card de cada barbearia
+```
+
+A tabela existente é **mais genérica**: favorita barbearia, serviço,
+profissional e até agendamento — é o que sustenta o "Repetir" da Fase 5.
+Criar `cliente_favorito` produziria uma segunda tabela para o mesmo conceito,
+com o coração do catálogo gravando num lugar e a tela de favoritos lendo de
+outro.
+
+**Não criei nada.** Se faltar alguma coisa nos favoritos, é ajuste no que
+existe, e eu preciso saber o quê — do jeito que está, os quatro pedidos da
+F11.1 já estão atendidos.
+
+---
+
+### F10.4 — A TELA DA JORNADA, E A ARMADILHA QUE ELA ESCONDIA
+
+O caminho para o barbeiro pedir mudança de jornada agora existe: botão
+**"Minha jornada"** na Agenda, abrindo o `JornadaTrabalho` que já existia. Sem
+rota nova e sem item de menu novo — a tela é a mesma do gestor, mudando só o
+que ela faz ao salvar.
+
+**A armadilha, medida no banco antes de eu confiar na tela:** o
+`salvarJornada` **apaga** as faixas removidas. A RLS da Fase 9 só deixa o
+profissional apagar linha `pendente`. Então:
+
+```
+DELETE de faixa ja aprovada, como profissional -> DELETE 0
+```
+
+Zero linhas, **e sem erro**. A tela diria "salvo" e o horário continuaria lá —
+o mesmo tipo de mentira silenciosa que já apareceu duas vezes neste projeto.
+
+Corrigido mudando o significado da operação: para o profissional, remover uma
+faixa aprovada **não apaga, propõe desativá-la**, e o pedido vai para a fila do
+dono. Reconferido: `UPDATE 7`, e o dono recebeu a notificação.
+
+A bateria completa, como profissional:
+
+| tentativa | resultado |
+|---|---|
+| propor faixa nova | **INSERT 0 1** (pendente) |
+| salvar a própria jornada já aprovada | **violates row-level security policy** |
+| apagar faixa aprovada | **DELETE 0** — a armadilha |
+| propor a faixa aprovada como inativa | **UPDATE 7** |
+| dono notificado do pedido | **1 aviso** |
+
+**"Replicar para todos os dias"** também entrou. Ele copia o primeiro dia
+ativo para os outros seis **reaproveitando os ids existentes**, para virar
+UPDATE em vez de duplicar faixa — replicar somando produziria jornada dobrada
+em cima da que já estava lá.
+
+**Poda dos aliases:** os seis não importados saíram. Reconferi um por um antes
+de apagar; sobraram `Cliente` e `ClienteInsert`, que são os dois realmente
+usados.
+
+---
+
+### FASE 11 — PWA, SEM PLUGIN
+
+Ícones gerados a partir do `favicon.svg` que já existia (192, 512, maskable e
+apple-touch), para não inventar identidade nova: mesmo fundo `#0a0a0a`, mesma
+tesoura `#f0b323`.
+
+**Escrevi o service worker à mão em vez de usar `vite-plugin-pwa`.** O plugin
+traria Workbox e uma etapa de build para entregar o que cabe em 60 linhas — e
+service worker é a peça do front que mais estraga quando não se entende
+exatamente o que ela faz.
+
+A regra que evita o desastre clássico:
+
+- **Navegação é network-first.** O erro comum de PWA é cachear o HTML e deixar
+  o usuário preso numa versão antiga do app, sem saída. Aqui a rede sempre
+  ganha; o HTML no cache serve só para abrir offline.
+- **`/assets/` é cache-first**, e sem risco, porque o Vite põe hash no nome:
+  build novo gera nome novo.
+- **Nada de outra origem passa pelo SW.** O Supabase fica de fora — cachear
+  resposta de API mostraria agenda desatualizada, que é pior que não ter
+  offline.
+- **Desligado em `npm run dev`**: o SW servindo a casca cacheada faz o HMR
+  parar de refletir a edição, e isso já custou horas de gente procurando bug
+  que não existe.
+
+**Validado no build servido, não em teoria:**
+
+```
+manifest ............ carregado, "CutHub — sua barbearia no bolso"
+display ............. standalone
+icones .............. 192 any, 512 any, 512 maskable
+apple-touch-icon .... presente (o Safari ignora os icones do manifest)
+service worker ...... 1 registrado, estado "activated"
+escopo .............. /
+```
+
+São os critérios de instalabilidade do Chrome. Depois do teste eu
+**desregistrei o SW e limpei os caches** do navegador, e derrubei o servidor de
+preview — a porta 4173 está fechada e o dev na 5180 continua de pé.
+
+---
+
+### UM TESTE MEU QUEBROU, E ISSO FOI BOM
+
+Ao fazer o `useHorarios` ler o papel de quem salva, os testes dele passaram a
+falhar com `useAuth must be used within an AuthProvider`. Mockei o contexto,
+como o `ProtectedRoute.test` já fazia, **e aproveitei para travar o
+comportamento novo**: um teste garante que gestor salva com `false` e outro que
+profissional salva com `true`.
+
+Esse `true` é o que separa "pedido" de "mudança direta". Se ele virar `false`
+por descuido, a RLS recusa a escrita e a tela quebra — o teste avisa antes.
+
+```
+tsc           -> 0 erros
+npm test      -> 72 testes em 9 arquivos (71 + 1 novo)
+oxlint        -> 0 erros
+npm run build -> ok, com manifest, sw.js e icones no dist
+banco         -> sem resíduo; a folga pendente do Chefe segue intacta
+```
+
+**Nota:** numa das rodadas o `AuthContext.test` falhou por timeout (2807ms) e
+passou nas seguintes. Não mexi nele nesta fase; registro como flake observado,
+não como quebra.
+
+---
+
+### O QUE PRECISO DE VOCÊS
+
+1. **Os favoritos:** confirmem se falta algo de fato, ou se a F11.1 pode ser
+   riscada como já entregue.
+2. **Instalar no celular de verdade** é o único teste que fecha o PWA, e ele
+   não roda em localhost pelo Safari. Quando houver deploy com HTTPS, abra no
+   celular e veja se aparece "Adicionar à tela inicial".
+3. A folga **"Consulta medica" do Vitor continua pendente** no painel. Aprovar
+   ou recusar exercita a Fase 9 e a Fase 10 de uma vez — a fila, o botão, e o
+   sino dele recebendo a resposta.

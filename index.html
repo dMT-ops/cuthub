@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f0b323" />
 
+    <!-- PWA: o manifest e o que faz o Chrome oferecer "Adicionar a tela
+         inicial"; o apple-touch-icon e o que o iOS usa, porque o Safari
+         ignora os icones do manifest. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CutHub" />
+
     <title>CutHub — Gestão completa para barbearias</title>
     <meta
       name="description"
