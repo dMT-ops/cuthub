@@ -8911,3 +8911,136 @@ não como quebra.
 3. A folga **"Consulta medica" do Vitor continua pendente** no painel. Aprovar
    ou recusar exercita a Fase 9 e a Fase 10 de uma vez — a fila, o botão, e o
    sino dele recebendo a resposta.
+
+---
+
+## [OPUS 5] 2026-09-19 — O que é notificação no CutHub: quatro avisos novos e o lembrete
+
+O Chefe pediu para decidirmos **o que deve virar notificação**. Levantei o que
+existia, apontei o buraco, e ele decidiu. Está tudo implementado.
+
+### O DIAGNÓSTICO QUE ABRIU A CONVERSA
+
+Os seis triggers da F10 avisavam **só sobre o que acabou de acontecer**. O
+radar do Arquiteto, porém, dizia "Notificações e **Lembretes** (combate a
+faltas)" — e **nada avisava antes**. Faltas hoje: 3,5% (5 de 115 atendimentos
+passados).
+
+Dois outros achados na mesma varredura:
+
+- **O agendamento público nasce `pendente`** e nada dizia ao cliente quando a
+  barbearia confirmava. Era o único momento em que ele ficava no escuro.
+- **O aviso de criação dizia "Agendamento confirmado" qualquer que fosse o
+  status.** Quem pedia horário pelo site (ou recebia um `pendente` criado pelo
+  painel) lia "confirmado" sobre algo que não estava.
+
+### AS DECISÕES DO CHEFE
+
+Lembrete em **24h e 2h**, mais os **quatro** avisos de evento: reserva
+confirmada, comissão paga, promoção em barbearia favoritada, cliente faltou.
+
+### O QUE ENTROU (migration `00027`)
+
+| aviso | quem recebe | o que ele resolve |
+|---|---|---|
+| **Horário confirmado** | cliente | o buraco do `pendente` |
+| **Comissão registrada** | barbeiro | dinheiro que entrava sem ele saber, desde a F6.1 |
+| **Promoção em favorita** | cliente | 2 pessoas seguem a Barbearia do Renan hoje |
+| **Cliente faltou** | gestores | reincidência, contada em 90 dias |
+| **Lembrete 24h e 2h** | cliente | combate a faltas, via `pg_cron` |
+
+`pg_cron` estava disponível e no `shared_preload_libraries` — confirmei antes
+de desenhar em cima. Job a cada 15 min; rodar de minuto em minuto varreria a
+agenda 1440 vezes por dia para nada.
+
+**Duas decisões de desenho do lembrete:**
+
+- A janela é "daqui até 24h", e **não** "entre 23h e 25h". Se o job perder uma
+  execução, o lembrete sai atrasado em vez de não sair.
+- Agendamento a menos de 3h **não** recebe o de 24h: ali ele não é aviso de
+  véspera, é confusão. A coluna é marcada mesmo assim, para não tentar de novo.
+
+Controle de repetição em duas colunas no próprio agendamento
+(`lembrete_24h_em`, `lembrete_2h_em`), e não em tabela à parte: a pergunta "já
+mandei?" é do agendamento, e a coluna torna impossível mandar duas vezes mesmo
+se o job rodar duas vezes no mesmo minuto. **Testado:** segunda execução
+devolve `0 | 0`.
+
+### TRÊS ERROS MEUS NESTA RODADA, TODOS PEGOS TESTANDO
+
+**1. O grave.** Acrescentar um parâmetro a `criar_notificacao` **criou uma
+sobrecarga em vez de substituir a função**. Com as duas assinaturas vivas, toda
+chamada de 5 argumentos — ou seja, os seis triggers da F10 — passou a dar:
+
+```
+ERROR: function criar_notificacao(uuid, unknown, text, unknown, unknown) is not unique
+```
+
+**Isso quebra criar agendamento.** A migration imprimia `CREATE FUNCTION` e
+parecia bem; só apareceu quando rodei o teste. Corrigido com `DROP FUNCTION` da
+assinatura antiga, e a verificação no fim da migration agora **exige que
+exista exatamente uma assinatura**.
+
+> **Chefe:** houve uma janela de alguns minutos, por volta das 05:05, em que
+> criar ou cancelar agendamento pelo app teria dado erro. Se você viu algo
+> assim, era isto, e está resolvido.
+
+**2. O contador mentia.** O job devolvia "4 enviados" com 3 notificações no
+banco — somava mesmo quando o cliente não tinha conta e o aviso era pulado.
+Número de observabilidade que mente é pior do que nenhum. Agora conta só o que
+virou aviso.
+
+**3. Número em inglês.** `to_char` com `G`/`D` usa o locale do servidor, que
+aqui não é pt-BR: saiu "R$ 250.50" e "20.00% de desconto" para o usuário final.
+Criei `formatar_dinheiro` e `formatar_percentual`, com o formato explícito:
+`250,50`, `1.234.567,89`, `20`, `12,5`.
+
+### UM ALARME QUE NÃO ERA ALARME
+
+O teste da promoção gerou **dois** avisos idênticos e eu quase reportei
+duplicação. Fui conferir: são **duas pessoas distintas** que favoritaram a
+Barbearia do Renan. Dois avisos é o certo.
+
+### O CHEFE VALIDOU A F9 E A F10 SEM SABER
+
+Ao conferir o banco, encontrei:
+
+```
+escala_respondida | Sua folga foi aprovada | 04:29 | destinatario: Vitor
+```
+
+Ele aprovou pelo painel a folga que o Vitor tinha pedido. Isso exercitou, numa
+ação só, a fila de aprovação da F9, o trigger da F10 e a caixa de entrada do
+barbeiro. **É a validação de tela que faltava nas duas fases.**
+
+### UMA COISA QUE EU NÃO CONSEGUI EXPLICAR
+
+Há um agendamento criado às 05:01, para a cliente Medina — que **tem conta** —,
+e ele não gerou aviso nenhum. O esperado era um.
+
+A hipótese que encaixa com todas as evidências (status `confirmado`, zero
+avisos) é: nasceu pelo wizard com o próprio Medina logado — e aí o
+`criar_notificacao` pula quem agiu — e foi confirmado antes das 05:05, quando
+o trigger de "reserva confirmada" ainda não existia. **É hipótese, não fato.**
+Se o Chefe lembrar como criou aquele horário, fecho a conta; se voltar a
+acontecer com um agendamento novo, é bug e eu investigo.
+
+```
+tsc           -> 0 erros
+npm test      -> 72 testes
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> 10 triggers de notificacao, 1 job a cada 15 min; testes revertidos
+```
+
+### O QUE FICOU DE FORA, E POR QUÊ
+
+Levantei e **não** implementei, porque o Chefe não escolheu: resumo da agenda
+de amanhã para o barbeiro, aviso de horário remarcado, "dia 1º: despesas fixas
+a provisionar" para o gestor, e "barbearia nova na plataforma" para o admin —
+que segue sem receber nada.
+
+E fica o alerta de dose: hoje **1 de 9 profissionais e 6 de 54 clientes têm
+conta**. O alcance real dos avisos é pequeno e cresce junto com as contas; se
+um dia a promoção em favorita começar a incomodar, ela é a primeira candidata a
+ganhar preferência de "não quero receber".
