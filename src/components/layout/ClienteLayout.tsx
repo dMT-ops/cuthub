@@ -3,6 +3,7 @@ import { CalendarDays, Heart, Home, LogOut, Percent, Scissors, Store } from 'luc
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 const ITENS = [
@@ -40,6 +41,7 @@ export function ClienteLayout() {
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {perfil?.nome}
             </span>
+            <NotificationBell />
             <ThemeToggle />
             <Button
               variant="ghost"

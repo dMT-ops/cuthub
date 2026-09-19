@@ -3,6 +3,7 @@ import { LogOut, ScrollText, Shield, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,11 @@ export function AdminLayout() {
               {perfil?.nome ? `Autenticado como ${perfil.nome}` : 'Administrador da plataforma'}
             </span>
             <div className="flex items-center gap-2">
+              {/* O admin tem perfil e pode receber aviso; hoje nenhum
+                  trigger aponta para ele, entao o sino fica vazio -- mas
+                  esconde-lo aqui criaria a excecao que alguem esquece de
+                  desfazer quando o primeiro aviso de plataforma existir. */}
+              <NotificationBell />
               <ThemeToggle />
               <Button variant="ghost" size="sm" onClick={() => signOut()}>
                 <LogOut className="mr-2 h-4 w-4" /> Sair

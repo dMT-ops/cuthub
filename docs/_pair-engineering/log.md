@@ -8536,7 +8536,184 @@ isso é feature nova, não ajuste. **Preferi entregar a folga funcionando inteir
 a entregar as duas pela metade.** Se você quiser a jornada nesta fase, é uma
 tela a mais no menu do profissional — me diga e eu faço.
 
-**Validação visual:** como sempre, não fiz login. O caminho de dados está
-provado no banco, ponta a ponta. O teste que fecha, se você tiver ânimo: entre
-como o **Vitor**, abra a Agenda, clique em "Minhas folgas" e peça uma; depois
-entre como o dono e veja o pedido no topo do painel.
+---
+---
+
+## [OPUS 4.6] 2026-09-19 00:15 — Ordem de Execução da Fase 10 (Notificações In-App)
+
+### CONTEXTO
+
+O Chefe definiu o próximo passo: comunicação! Para reduzir o absenteísmo e manter a equipe a par das aprovações, a plataforma precisa de uma "Caixa de Entrada" inteligente (um ícone de sino na barra superior de todas as telas). 
+A sacada genial desta fase é ancorar a regra de negócio direto no banco de dados usando Triggers. Isso significa que o frontend não tem o trabalho de enviar notificações; elas nascem organicamente sempre que um evento crítico acontece (Ex: agendamento novo, folga aprovada).
+
+### TAREFA F10.1 — Banco de Dados: O Motor de Triggers
+
+1. **Migration `00026_central_de_notificacoes.sql`**:
+   - Crie a tabela `notificacao` com: `id` (UUID), `usuario_id` (fFK p/ usuario_perfil), `titulo` (VARCHAR), `mensagem` (TEXT), `tipo` (VARCHAR), `lida` (BOOLEAN DEFAULT FALSE), `link_acao` (VARCHAR NULL), e `criado_em`.
+   - **RLS**: Proteja a tabela para que apenas o próprio usuário (`usuario_id = auth.uid()`) consiga `SELECT` e `UPDATE` (para marcar como lida). Nenhum usuário deve conseguir `INSERT` ou `DELETE` diretamente; as notificações nascem por Trigger ou por RPC `security definer`.
+   - Crie Triggers para popular essa tabela nos seguintes eventos principais:
+     - `agendamento` (INSERT): Avisa o barbeiro ("Novo agendamento com o cliente X") e o cliente ("Seu corte foi agendado para o dia Y").
+     - `agendamento` (UPDATE para cancelado): Avisa a contra-parte (se o cliente cancelou, avisa o barbeiro. Se o barbeiro/dono cancelou, avisa o cliente).
+     - `bloqueio`/`horario_trabalho` (UPDATE de `status_aprovacao`): Avisa o barbeiro ("Sua folga/jornada foi aprovada" ou "rejeitada").
+     - *(Opcional)*: Se um bloqueio nascer "pendente", avisa os `owner/gerente` daquela barbearia para aprovarem.
+
+### TAREFA F10.2 — Frontend: O Serviço de Comunicação
+
+1. **`src/services/notificacoes.service.ts`**:
+   - Crie a camada de requisição que busca as notificações do usuário logado (ex: últimas 50, ordenadas por mais recentes).
+   - Métodos para `marcarComoLida(id)` e `marcarTodasComoLidas()`.
+2. **`useNotificacoes.ts` (React Query)**:
+   - Crie um hook que faça um polling curto (ex: 30s a 1 minuto) para manter o número da bolinha do sino sempre fresco sem derrubar o banco, ou configure via Supabase Realtime (se já estiver configurado no projeto).
+
+### TAREFA F10.3 — Frontend: A Experiência (O Sino)
+
+1. **`NotificationBell.tsx`**:
+   - Crie o componente visual: um ícone de sino com um badge (bolinha vermelha) indicando o número de notificações `lida = false`.
+   - Ao clicar, um Popover/Dropdown (usando as primitivas do shadcn/ui) deve listar as notificações.
+   - Cada item da lista deve ficar em negrito se não lida. Ao ser clicada, chama o serviço de marcar lida e, se existir um `link_acao`, redireciona via router.
+2. **Layouts Globais**:
+   - Injete o `<NotificationBell />` no cabeçalho tanto do `DashboardLayout` quanto do `ClienteLayout`. O chapéu que a pessoa vestir não importa; os avisos dela a seguem.
+
+---
+**Engenheiro (Opus 5)**: Execute a Fase 10. Implemente a caixa de entrada para deixar todo mundo sempre avisado! Mande brasa!
+
+---
+
+## [OPUS 5] 2026-09-19 — FASE 10: central de notificações, e a Fase 9 validada pelo Chefe
+
+F10.1 a F10.3 entregues. E, ao conferir o banco no fim, achei **a validação da
+Fase 9 que estava faltando** — feita pelo Chefe, não por mim.
+
+---
+
+### A FASE 9 FUNCIONOU NA MÃO DO CHEFE
+
+```
+motivo           | status    | criado_em                  | profissional | solicitante
+Consulta medica  | pendente  | 2026-09-19 02:54:19+00     | Vitor        | Vitor
+```
+
+Isso é o `FolgasDialog` sendo usado de verdade: entrou como Vitor, abriu
+"Minhas folgas", pediu uma. Nasceu **pendente** e com `solicitado_por`
+preenchido, exatamente como a F9 previa. Deixei a linha intacta — é dado seu,
+e ela vai aparecer na fila de aprovação do dono.
+
+**Por que ela não gerou notificação:** o pedido é de 02:54 e os triggers da F10
+entraram depois. Não é falha — testei o mecanismo em transação e ele dispara
+(tabela abaixo). A fila do painel mostra esse pedido de qualquer jeito, então
+nada se perdeu.
+
+---
+
+### A MEDIÇÃO QUE MUDOU A LEITURA DA FASE
+
+Antes de escrever os triggers, contei quem tem para onde receber:
+
+```
+profissionais ... 9 no total, 1 com conta
+clientes ........ 54 no total, 6 com conta
+```
+
+Cliente cadastrado no balcão e barbeiro sem login são **a regra**, não a
+exceção. Isso definiu a decisão mais importante da migration:
+`criar_notificacao` **ignora destinatário nulo em silêncio**.
+
+Se ela levantasse erro, um `INSERT` em `agendamento` passaria a falhar sempre
+que o cliente não tivesse conta — ou seja, **a notificação derrubaria o
+agendamento**. Trigger de aviso não pode quebrar a operação que o disparou.
+
+Vale como expectativa de produto: hoje o alcance real do sino é pequeno. Ele
+cresce à medida que as contas aparecem.
+
+---
+
+### F10.1 — o motor
+
+Tabela `notificacao` com RLS de dono: **SELECT e UPDATE só do próprio**, e
+**nenhuma policy de INSERT ou DELETE** — a RLS nega por padrão, então aviso
+nasce por trigger e não se apaga. O `WITH CHECK` do UPDATE impede repassar a
+notificação para outra pessoa trocando o `usuario_id`.
+
+Seis triggers:
+
+| evento | quem é avisado |
+|---|---|
+| `agendamento` INSERT | barbeiro e cliente |
+| `agendamento` → cancelado | a contraparte |
+| `bloqueio`/`horario_trabalho` respondido | o barbeiro |
+| `bloqueio`/`horario_trabalho` nasce pendente | os gestores da barbearia |
+
+Os dois últimos fecham o laço da Fase 9: sem eles o pedido fica parado
+esperando o dono lembrar de abrir o painel.
+
+**Uma decisão que não estava na ordem:** `criar_notificacao` também pula quem
+**acabou de agir** (`p_usuario_id = auth.uid()`). Contar para a pessoa, no
+mesmo segundo, aquilo que ela mesma fez é ruído — a tela dela já mostrou o
+resultado. Efeito colateral bom: o trigger de cancelamento não precisa
+adivinhar quem cancelou, manda para os dois e só a contraparte recebe.
+
+**Detalhe de fuso:** a hora na mensagem sai no fuso da barbearia
+(`barbearia.fuso_horario`), não no do servidor. Aviso com hora errada é pior
+que não avisar — e nesta sessão eu já errei fuso uma vez, no F6.1.
+
+**Medido, em transação revertida:**
+
+| tentativa | resultado |
+|---|---|
+| barbeiro pede folga | **dono recebe "Pedido da equipe aguardando"** |
+| ...e o próprio barbeiro | **0 avisos** — não se avisa quem agiu |
+| dono aprova | **barbeiro recebe "Sua folga foi aprovada"** |
+| agendamento criado | **2 avisos**: barbeiro e cliente |
+| agendamento cancelado | **2 avisos**, com o texto certo para cada lado |
+| barbeiro lendo a caixa | **1 visível, 0 de outros** |
+| barbeiro inserindo aviso forjado | **violates row-level security policy** |
+| barbeiro apagando aviso | **DELETE 0** |
+| barbeiro marcando a própria como lida | **UPDATE 1** |
+
+---
+
+### F10.2 e F10.3 — o sino
+
+`notificacoes.service.ts` ordena **não lidas primeiro** e recentes dentro de
+cada grupo. Ordenar só por data faria o aviso novo já lido empurrar para baixo
+o pedido de ontem que ainda espera resposta.
+
+`useNotificacoes` faz **polling de 60s**, e não Realtime: o projeto não tem
+canal Realtime configurado em lugar nenhum, e ligar um só para o sino
+manteria um websocket vivo em todas as telas. Para aviso de agendamento e de
+folga, um minuto de atraso não muda nada — e o `refetchOnWindowFocus` cobre o
+caso que importa, que é a pessoa voltar para a aba.
+
+`NotificationBell` nos três layouts. Dois detalhes de implementação:
+
+- O item da lista é `button`, não `DropdownMenuItem`: o item fecha o menu no
+  `pointerdown` e a navegação disputava com o fechamento.
+- O `DashboardLayout` **não tem barra superior** — a sidebar é a moldura
+  inteira. Em vez de inventar um header só para o sino, ancorei no canto
+  direito, fora do caminho do botão de menu mobile, que fica à esquerda.
+- O sino entra no `AdminLayout` também. Nenhum trigger aponta para o admin
+  hoje, então fica vazio — mas escondê-lo criaria a exceção que alguém esquece
+  de desfazer quando o primeiro aviso de plataforma existir.
+
+```
+tsc           -> 0 erros
+npm test      -> 71 testes em 9 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+banco         -> 0 notificacoes (testes revertidos); a folga pendente do Chefe intacta
+```
+
+---
+
+### DUAS COISAS PARA VOCÊS
+
+1. **`criado_em` usa `now()`, que é fixo na transação.** Os dois avisos de um
+   mesmo agendamento nascem com o mesmo carimbo e empatam na ordenação. No
+   sino isso é irrelevante (a ordem entre eles não importa), mas me enganou
+   durante o teste: achei que o cancelamento não tinha disparado, quando era o
+   meu `ORDER BY` empatando. Se algum dia a ordem exata importar, é
+   `clock_timestamp()`.
+2. **O sino não some quando não há nada** — ele mostra "Nada por aqui ainda".
+   Diferente da fila de aprovação, que eu escondo. A diferença é proposital: o
+   sino é um ponto fixo da interface, e um ícone que aparece e some muda o
+   layout debaixo do cursor.

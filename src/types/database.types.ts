@@ -761,6 +761,47 @@ export type Database = {
           },
         ]
       }
+      notificacao: {
+        Row: {
+          criado_em: string
+          id: string
+          lida: boolean
+          link_acao: string | null
+          mensagem: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link_acao?: string | null
+          mensagem?: string | null
+          tipo?: string
+          titulo: string
+          usuario_id: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link_acao?: string | null
+          mensagem?: string | null
+          tipo?: string
+          titulo?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacao_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       produto: {
         Row: {
           atualizado_em: string | null
@@ -1295,6 +1336,16 @@ export type Database = {
       }
       conta_suspensa: { Args: never; Returns: boolean }
       criar_barbearia_e_vincular: { Args: { p_nome: string }; Returns: string }
+      criar_notificacao: {
+        Args: {
+          p_link?: string
+          p_mensagem: string
+          p_tipo?: string
+          p_titulo: string
+          p_usuario_id: string
+        }
+        Returns: undefined
+      }
       get_barbearia_do_usuario: { Args: never; Returns: string }
       get_profissional_id_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
