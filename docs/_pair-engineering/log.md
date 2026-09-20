@@ -9044,3 +9044,311 @@ E fica o alerta de dose: hoje **1 de 9 profissionais e 6 de 54 clientes têm
 conta**. O alcance real dos avisos é pequeno e cresce junto com as contas; se
 um dia a promoção em favorita começar a incomodar, ela é a primeira candidata a
 ganhar preferência de "não quero receber".
+
+---
+---
+
+## [OPUS 4.6] 2026-09-19 22:24 — Ordem de Execução da Fase 12 (Higiene e Fundação de Processo)
+
+### CONTEXTO DA PAUSA ESTRATÉGICA
+
+Antes de mais nada — sobre o relatório da Fase 11 e a pergunta "qual a Fase 12?": o Tech Lead (Chefe) decidiu puxar o freio. Não vamos pular direto para Onboarding Self-Service ou Cobrança agora.
+Motivo: PWA + pg_cron + a lógica de jornada/inativação foram entregues na mesma leva, e isso é exatamente o tipo de janela em que bugs sutis se escondem (cron rodando sobre dados que ainda não foram varridos por um teste de regressão, Service Worker cacheando algo que não devia, etc.). Monetizar em cima de uma base não estabilizada é a pior hora para descobrir isso — é dinheiro de cliente em jogo.
+
+**Fase 12 = Higiene + Fundação de Processo**, não monetização. Onboarding e Cobrança viram Fase 13.
+
+### ARQUITETURA PROPOSTA (Nível 2)
+```
+documentation/
+├── 00-status/
+│   └── PROJECT_STATUS.md      ← fonte da verdade compacta (fase atual, o que está em andamento,
+│                                  gaps conhecidos, última sessão). Reescrita a cada /end.
+├── 09-log/
+│   ├── DEV_LOG.md             ← log corrente, só sessões recentes (últimas ~2-3 semanas)
+│   └── archive/
+│       └── 2026-08.md, 2026-09.md...  ← sessões antigas arquivadas mensalmente
+.claude/
+└── skills/
+    ├── start/SKILL.md         ← comando /start
+    └── end/SKILL.md           ← comando /end
+```
+- `/start` lê `PROJECT_STATUS.md` inteiro (é curto, isso é barato) + só as pendências da última entrada do `DEV_LOG.md` — nunca o log inteiro.
+- `/end` escreve o `PROJECT_STATUS.md` atualizado e acrescenta uma entrada nova no `DEV_LOG.md`, com uma seção `## Pendências para o próximo /start` em checklist.
+- Rotação: quando `DEV_LOG.md` passar de um tamanho definido (ou virada de mês), as entradas mais antigas migram para `archive/`, deixando um resumo de uma linha por fase arquivada.
+
+Isso resolve dois lados: o `/start` fica rápido e nunca perde uma pendência real; o `/end` nunca sobe código quebrado sem antes rodar o quality gate.
+
+---
+**Engenheiro (Opus 5 / Claude Code)**: Execute os DOIS prompts a seguir com extrema disciplina.
+
+### PROMPT 1 — Auditoria e Organização (execute antes de qualquer fix)
+
+Seguindo o princípio de "investigar antes de codificar" e de não enviar tarefas gigantes de uma vez: este primeiro prompt não corrige nada ainda — ele mapeia o terreno. Eu reviso o relatório antes de autorizar a correção.
+
+**CONTEXTO**
+Você é o implementador (Claude Opus) do CutHub, SaaS de agendamento para barbearias (Vite + React + TypeScript + Supabase). O sistema já passou por 11 fases de desenvolvimento (agenda, financeiro, RH, PWA, favoritos, notificações via pg_cron). Antes de avançar para monetização, o time decidiu parar para estabilizar: corrigir bugs, limpar código morto e reorganizar a estrutura de arquivos.
+
+**PROBLEMA**
+Não temos hoje um mapa confiável de: (1) bugs conhecidos ou latentes, (2) código morto/duplicado, (3) inconsistências de estrutura de pastas e convenções de nomenclatura, (4) dependências não utilizadas ou desatualizadas, (5) lugares onde erros são silenciados (try/catch vazio, .catch(() => {}), validações comentadas).
+
+**OBJETIVO DESTA RODADA**
+Produzir um relatório de auditoria completo. NÃO altere nenhum arquivo de código-fonte nesta etapa — apenas investigue e documente.
+
+**ANÁLISE OBRIGATÓRIA**
+Antes de escrever o relatório, percorra o projeto inteiro (não amostras) e para cada módulo (Agenda, Financeiro, RH, PWA/Service Worker, Notificações/pg_cron, Favoritos, Auth) documente:
+- estrutura atual de pastas e onde ela é inconsistente entre módulos
+- funções/componentes duplicados ou muito parecidos entre módulos
+- imports não usados, arquivos órfãos (nada os referencia)
+- tratamento de erro ausente ou "engolido" silenciosamente
+- lugares onde uma migration foi criada mas não hoje documentada, ou vice-versa
+- queries Supabase feitas sem necessidade dentro de loops/renderizações
+- qualquer TODO/FIXME/HACK deixado no código
+- checar especificamente a lógica de inativação de horário (Fase da tela de Jornada) e o pg_cron: são as partes mais novas e mais prováveis de terem edge cases não cobertos
+
+**REQUISITOS DO RELATÓRIO**
+Grave o resultado em `documentation/09-log/AUDITORIA-2026-XX.md` com estas seções:
+1. Bugs confirmados (reproduzíveis) — com causa raiz, não só sintoma
+2. Bugs suspeitos (não confirmados, mas o código sugere risco)
+3. Código morto / duplicado — o que pode ser removido com segurança
+4. Inconsistências estruturais — proponha UM padrão de organização de pastas para adotar daqui pra frente (não implemente ainda, só proponha)
+5. Dependências não usadas ou desatualizadas com risco de segurança conhecido
+6. Lista priorizada (P0 = quebra produção, P1 = incorreto mas não crítico, P2 = cosmético/dívida técnica)
+
+**RESTRIÇÕES**
+- Não corrija nada nesta rodada.
+- Não invente problemas — cada item do relatório precisa apontar o arquivo:linha exato como evidência.
+- Se encontrar uma área que não conseguiu investigar por falta de acesso ou contexto, declare isso explicitamente em vez de presumir que está ok.
+
+**CONTESTAÇÃO PERMITIDA**
+Se durante a investigação você perceber que a estrutura de pastas proposta neste prompt não é a mais adequada para o projeto, ou que a auditoria deveria cobrir algo que não foi pedido aqui, explique o motivo antes de prosseguir.
+
+**CRITÉRIO DE ACEITE**
+Relatório salvo, com pelo menos os 6 módulos cobertos e a lista P0/P1/P2 completa. Isso será revisado antes de qualquer correção ser autorizada.
+
+---
+
+### PROMPT 2 — Criação das skills /start e /end
+
+Este pode rodar em paralelo ao Prompt 1, já que não depende do relatório de auditoria.
+
+**CONTEXTO**
+O CutHub usa um fluxo de dois agentes: um agente arquiteto (Claude, fora do terminal) que planeja e gera prompts, e você (Claude Opus, via terminal/Claude Code) que implementa. Hoje a continuidade entre sessões depende de releitura manual e desorganizada de um log. Vamos formalizar isso como rotina diária: `/start` no começo do dia, `/end` no fechamento.
+
+**PROBLEMA**
+Sem um formato padronizado, pendências deixadas ao fim de uma sessão se perdem ou exigem reler o histórico inteiro para recuperar contexto — o que não escala conforme o log cresce.
+
+**OBJETIVO**
+Criar duas Claude Code skills de projeto:
+- `.claude/skills/start/SKILL.md`  → comando `/start`
+- `.claude/skills/end/SKILL.md`    → comando `/end`
+Mais os arquivos de apoio que elas dependem.
+
+**ANÁLISE OBRIGATÓRIA (faça antes de criar qualquer arquivo)**
+Investigue a estrutura de `documentation/` que já existe no repositório (sabemos que há um padrão de pastas numeradas, ex: `10-decisions/` para ADRs). Descubra onde o log de desenvolvimento atual vive e como está formatado. NÃO presuma o nome ou caminho do arquivo de log — confirme antes de escrever qualquer coisa. Adapte a estrutura abaixo ao que já existe em vez de criar um padrão paralelo, a menos que o existente seja claramente inadequado — se for o caso, explique o motivo antes de mudar.
+
+**ARQUITETURA**
+1. `documentation/00-status/PROJECT_STATUS.md`
+   - Arquivo curto (fonte da verdade atual): fase em andamento, o que está em progresso, gaps/riscos conhecidos, data e resumo de uma linha da última sessão.
+   - É SOBRESCRITO (não é log) a cada `/end`.
+
+2. Log de desenvolvimento (adapte ao caminho já existente, ou crie `documentation/09-log/DEV_LOG.md` se não houver um)
+   - Append-only. Cada entrada nova tem: data, resumo do que foi feito, decisões tomadas, resultado do quality gate, e uma seção final: "## Pendências para o próximo /start" em formato checklist (`- [ ] item`).
+   - Rotação: quando o arquivo passar de ~300 linhas (ajuste conforme o tamanho real que você encontrar), mova as entradas mais antigas para `documentation/09-log/archive/AAAA-MM.md`, deixando no topo do `DEV_LOG.md` um índice de uma linha por período arquivado.
+
+3. `.claude/skills/start/SKILL.md`
+   - Frontmatter: `name: start`, `description` descrevendo que é a rotina de abertura diária, `disable-model-invocation: true` (só deve rodar quando chamado manualmente com `/start`, nunca disparado sozinho por contexto).
+   - Instrua o skill a, ao ser invocado:
+     a. Ler `PROJECT_STATUS.md` inteiro.
+     b. Ler apenas a(s) última(s) 1-2 entrada(s) do log — especificamente a seção de pendências deixada pelo `/end` anterior.
+     c. Rodar checagem de saúde do repositório: `git status` (dirty tree no início do dia é sinal de alerta — investigar antes de seguir), `git log -1`, branch atual.
+     d. Se possível, verificar migrations do Supabase não aplicadas.
+     e. Cruzar as pendências do log com a realidade do git/banco — se uma pendência já não existe mais (ex: já foi commitada), marque como resolvida em vez de repetir.
+     f. Apresentar ao usuário um resumo de abertura de sessão: o que ficou pendente, riscos conhecidos, saúde do repositório, e sugestões de prioridade para o dia (pode e deve sugerir mais ideias do que o estritamente necessário — é o momento de pensar largo).
+     g. NUNCA começar a implementar nada sozinho — apresentar e aguardar instrução do usuário.
+
+4. `.claude/skills/end/SKILL.md`
+   - Frontmatter: `name: end`, `disable-model-invocation: true`.
+   - Instrua o skill a, ao ser invocado:
+     a. Levantar o diff da sessão (`git diff` / `git log` desde o início do dia) e comparar com o que foi planejado no `/start` e pedido durante a sessão — identificar o que ficou faltando.
+     b. Rodar o quality gate do projeto (lint, typecheck, build, e testes se existirem).
+     c. Se o gate falhar: NÃO commitar/dar push. Registrar o erro como pendência crítica no log, marcada com destaque (ex: 🔴), e encerrar a sessão deixando isso como o primeiro item que o próximo `/start` vai ver.
+     d. Se o gate passar: atualizar (sobrescrever) `PROJECT_STATUS.md` com o estado real e atual.
+     e. Adicionar uma nova entrada no log com data, resumo do que foi feito, decisões tomadas, resultado do gate, e a seção "## Pendências para o próximo /start" em checklist.
+     f. Fazer commit com mensagem descritiva e dar push para a branch de trabalho atual — nunca force-push, nunca reescrever histórico.
+     g. Fechar com um resumo humano do que foi entregue e o que fica para amanhã.
+
+**REQUISITOS TÉCNICOS**
+- Confirme a sintaxe atual de Claude Code skills (frontmatter, campos suportados como disable-model-invocation) na documentação oficial antes de escrever os SKILL.md — não presuma pelo treinamento.
+
+**EDGE CASES**
+- Primeiro `/start` do projeto: `PROJECT_STATUS.md` ainda não existe → criar com um estado inicial baseado na fase atual real do projeto, não inventado.
+- `/end` chamado sem nenhuma mudança na sessão (dia sem commits) → não criar entrada vazia no log, apenas confirmar que nada mudou.
+- `/start` chamado duas vezes no mesmo dia → não duplicar leitura/relatório de forma redundante e enganosa.
+- Falha ao rodar comandos de git (sem repositório, sem permissão) → skill deve reportar isso claramente, não falhar silenciosamente.
+
+**RESTRIÇÕES**
+- `/end` nunca dá push se o quality gate falhar.
+- Nenhuma das skills deve reler o log inteiro — sempre estado atual + últimas entradas.
+- Não crie abstrações genéricas de "sistema de skills reutilizável entre projetos" — isso é YAGNI aqui, são duas skills específicas do CutHub.
+
+**CONTESTAÇÃO PERMITIDA**
+Se a estrutura de `documentation/` existente tornar este desenho inviável ou redundante, pare, explique o conflito e proponha o ajuste antes de criar os arquivos.
+
+**CRITÉRIO DE ACEITE**
+- Ambas as skills aparecem como `/start` e `/end` no Claude Code.
+- `PROJECT_STATUS.md` e a estrutura de log/archive existem e refletem o estado real do projeto (não um template vazio).
+- Um ciclo de teste manual (`/end` seguido de `/start`) mostra que a pendência escrita por um é lida corretamente pelo outro.
+
+**VALIDAÇÃO FINAL**
+Rode `/end` uma vez ao final desta implementação (dogfooding) e mostre o resultado: o `PROJECT_STATUS.md` gerado e a entrada de log criada.
+
+---
+
+## [OPUS 5] 2026-09-19 — FASE 12: auditoria entregue e as rotinas /start e /end
+
+Os dois prompts executados. **Nenhuma linha de código-fonte foi alterada**, como
+o Prompt 1 exigia. Três coisas para você antes do resto.
+
+---
+
+### 1. A PREMISSA DA ORDEM ESTAVA ERRADA
+
+A ordem dizia "sabemos que há um padrão de pastas numeradas, ex:
+`10-decisions/`" e mandava gravar em `documentation/`. **Essa pasta não
+existe.** O que existe é:
+
+```
+docs/_pair-engineering/log.md    ← 9.203 linhas, e mais nada em docs/
+15 arquivos .md soltos na RAIZ do repositorio
+4 scripts de teste soltos na RAIZ
+```
+
+Adaptei a numeração proposta à pasta real (`docs/00-status/`, `docs/09-log/`),
+que é o que a própria ordem manda fazer quando há estrutura prévia. Criar
+`documentation/` em paralelo daria duas árvores de documentação num projeto que
+já tem documento demais fora do lugar.
+
+### 2. O ACHADO QUE INTERROMPE A FILA: P0-1
+
+A ordem pediu para olhar com lupa "a lógica de inativação de horário e o
+pg_cron — as partes mais novas". Olhei, e **achei falha de desenho no que eu
+mesmo construí na F10.4.**
+
+**Uma proposta de mudança de jornada destrói a jornada aprovada.**
+
+Reproduzido no banco, com a jornada real do Vitor (segunda, 09:00–18:00):
+
+| passo | faixas valendo na agenda pública |
+|---|---|
+| estado inicial, aprovado | 1 |
+| barbeiro propõe 11:00 (vira `pendente`) | **0** |
+| dono **recusa** (vira `rejeitado`, hora_inicio segue 11:00) | **0** |
+
+Duas consequências:
+
+1. **Pedir mudança de horário tira o barbeiro da agenda** até alguém
+   responder. Ninguém consegue marcar com ele nesse meio-tempo.
+2. **Recusar não restaura nada.** O valor antigo foi sobrescrito, e o registro
+   final guarda o horário recusado. O dono precisa redigitar a jornada do
+   funcionário para desfazer um "não".
+
+**Causa raiz:** a proposta **muta a linha vigente** em vez de existir como
+registro à parte. Copiei o modelo de `bloqueio`, onde funciona porque ali a
+linha **é** a folga — não havia estado anterior para destruir. Em
+`horario_trabalho` a linha é o estado vigente, e a diferença me passou.
+
+**Não corrigi**, porque o Prompt 1 proíbe e porque a correção não é remendo: ou
+uma tabela de propostas, ou colunas de valor proposto ao lado do vigente. Tenho
+preferência pela primeira, mas é desenho e é sua a escolha.
+
+### 3. O SEGUNDO P0, QUE É DE UMA LINHA
+
+`class-variance-authority` está em **devDependencies** e é importada em runtime
+por `button.tsx:3`, `badge.tsx:2`, `label.tsx:3` e `sheet.tsx:3`. Funciona hoje
+porque o build local tem as devDependencies. **Quebra no primeiro
+`npm ci --omit=dev`**, que é o padrão de imagem de produção.
+
+---
+
+### O RESTO DA AUDITORIA
+
+Em `docs/09-log/AUDITORIA-2026-09.md`, com `arquivo:linha` em cada item:
+
+- **P1 (3):** remarcar não reenvia lembrete e o aviso da data velha já saiu;
+  lembrete continua saindo para barbearia suspensa; `responderRequisicao`
+  sobrescreve decisão concorrente em silêncio.
+- **Código morto (4):** `WaitlistSidebar.tsx` (10 linhas, ninguém importa),
+  `accordion.tsx`, `aspect-ratio.tsx`, e os 4 scripts soltos na raiz — que
+  importam `dotenv`, **dependência que nem está declarada**, ou seja, não rodam.
+- **Dependências:** `pg` e `@types/pg` (driver Postgres de Node num front
+  Vite, zero imports) e as duas primitivas Radix órfãs.
+- **Estrutura:** 3 componentes soltos na raiz de `src/components/`,
+  `navigation.config.ts` (lógica de autorização) dentro de `components/`, e uma
+  única página com `components/` aninhado.
+
+**O que verifiquei e descartei como falso positivo**, para não inflar relatório:
+`src/test/setup.ts`, `tailwindcss-animate`, `@types/node`, `autoprefixer` e
+`postcss` — todos usados, só que fora de `src/`.
+
+**Medido, não inferido:** 27 migrations em arquivo, 27 aplicadas, **zero drift
+nos dois sentidos**; **nenhuma** tabela de `public` sem RLS; job de lembrete com
+**82 execuções e 82 sucessos**.
+
+**Duas lacunas que declaro em vez de fingir cobertura:** não rodei `npm audit`
+(exige base de CVE), e não inspecionei visualmente nenhuma tela — como em todas
+as fases, não faço login.
+
+**Uma coisa boa que vale registrar:** procurei duplicação de lógica e **não
+achei**. `formatarMoeda` aparece 52 vezes e `toFixed(2)` **zero** vezes em
+`src/`. É disciplina acima da média, e é o tipo de coisa que se perde sem
+ninguém notar.
+
+---
+
+### AS SKILLS /start E /end
+
+Confirmei o frontmatter na documentação oficial antes de escrever, como a ordem
+exigia: `disable-model-invocation` existe mesmo, e project skill mora em
+`.claude/skills/<nome>/SKILL.md`.
+
+**A contestação que a ordem permitia, e que eu faço:** mantive **dois** logs,
+com donos diferentes, em vez de um.
+
+| arquivo | quem lê | o que vai nele |
+|---|---|---|
+| `_pair-engineering/log.md` | você | narrativa: causa raiz, medições, divergências |
+| `09-log/DEV_LOG.md` | o próximo `/start` | data, gate, pendências em checklist |
+
+Juntar os dois recriaria o problema que a Fase 12 veio resolver: o `/start`
+voltaria a ter que atravessar narrativa para achar pendência. A fronteira está
+escrita dentro da própria skill `/end`, para não erodir com o tempo.
+
+O `/start` **nunca implementa nada** — apresenta e espera. E foi instruído a
+cruzar cada pendência com git e banco antes de repetir, para não ressuscitar
+item já resolvido.
+
+---
+
+### DOGFOODING
+
+Rodei o `/end` de verdade ao terminar:
+
+```
+tsc     -> 0 erros
+testes  -> 72 em 9 arquivos
+oxlint  -> 0 erros
+build   -> ok
+```
+
+Gate verde, então: `PROJECT_STATUS.md` escrito com o estado real (inclusive os
+dois P0 como risco declarado) e a primeira entrada do `DEV_LOG.md` com seis
+pendências acionáveis — a primeira sendo o P0-1.
+
+### O QUE PRECISO DE VOCÊ
+
+1. **Autorização para corrigir**, e em que ordem. Minha recomendação: P0-1
+   primeiro, porque é o único que **corrompe dado de cliente** e quanto mais
+   tempo passar, mais jornada real se perde.
+2. **O modelo do P0-1**: tabela de propostas ou colunas de valor proposto.
+3. Segue aberta, desde a Fase 8, a decisão sobre **escrita do profissional no
+   caixa**.
