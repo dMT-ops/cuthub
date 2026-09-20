@@ -114,7 +114,63 @@ export const horariosService = {
       }
     }
 
-    // Executar operações em paralelo (Update é por array ou um a um. Supabase suporta upsert de array).
+    // ---- Caminho do PROFISSIONAL: nada toca a jornada vigente ----
+    //
+    // Antes, a "proposta" era gravada em cima da propria linha de
+    // horario_trabalho com status pendente. Como a disponibilidade exige
+    // `aprovado`, pedir mudanca tirava o barbeiro da agenda -- e um "nao" do
+    // dono destruia a jornada, porque o valor antigo ja tinha sido
+    // sobrescrito. Ver P0-1 na auditoria da Fase 12.
+    //
+    // Agora a proposta vira linha em `solicitacao_jornada`, e a jornada so
+    // muda quando o gestor aprova (RPC responder_solicitacao_jornada).
+    if (comoSolicitacao) {
+      const solicitacoes = [
+        ...faixasParaInserir.map((f) => ({
+          barbearia_id: barbeariaId,
+          profissional_id: profissionalId,
+          horario_id: null,
+          operacao: 'criar' as const,
+          dia_semana: f.dia_semana,
+          hora_inicio: f.hora_inicio,
+          hora_fim: f.hora_fim,
+          solicitado_por: solicitadoPor,
+        })),
+        ...faixasParaAtualizar.map((f) => ({
+          barbearia_id: barbeariaId,
+          profissional_id: profissionalId,
+          horario_id: f.id!,
+          operacao: 'alterar' as const,
+          dia_semana: f.dia_semana ?? null,
+          hora_inicio: f.hora_inicio!,
+          hora_fim: f.hora_fim!,
+          solicitado_por: solicitadoPor,
+        })),
+        ...idsParaDeletar.map((id) => ({
+          barbearia_id: barbeariaId,
+          profissional_id: profissionalId,
+          horario_id: id,
+          operacao: 'remover' as const,
+          dia_semana: null,
+          hora_inicio: null,
+          hora_fim: null,
+          solicitado_por: solicitadoPor,
+        })),
+      ];
+
+      if (solicitacoes.length === 0) return;
+
+      const { error } = await supabase.from('solicitacao_jornada').insert(solicitacoes as never);
+      if (error) {
+        if (error.message.includes('row-level security')) {
+          throw new Error('Você só pode pedir mudança na sua própria jornada.');
+        }
+        throw new Error(`Falha ao enviar o pedido de jornada: ${error.message}`);
+      }
+      return;
+    }
+
+    // ---- Caminho do GESTOR: escreve direto, vale na hora ----
     const promises: any[] = [];
 
     if (idsParaDeletar.length > 0) {

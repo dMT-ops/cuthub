@@ -1,5 +1,10 @@
 # Auditoria do CutHub — setembro de 2026
 
+> **Status: todos os itens corrigidos em 2026-09-19.** O relatório fica como
+> está, com o diagnóstico original — o que foi feito em cima dele está no
+> commit da correção e na entrada do log daquele dia. Reescrever o diagnóstico
+> depois de corrigir apagaria o registro de como o problema foi encontrado.
+
 Rodada de higiene pedida na Fase 12, **antes** de qualquer correção. Nenhum
 arquivo de código-fonte foi alterado nesta etapa.
 

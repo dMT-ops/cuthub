@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useSidebarState } from '@/hooks/useSidebarState';
-import { NotificationBell } from '@/components/NotificationBell';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 
 export default function DashboardLayout() {
   const sidebarState = useSidebarState();

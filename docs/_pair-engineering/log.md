@@ -9352,3 +9352,105 @@ pendências acionáveis — a primeira sendo o P0-1.
 2. **O modelo do P0-1**: tabela de propostas ou colunas de valor proposto.
 3. Segue aberta, desde a Fase 8, a decisão sobre **escrita do profissional no
    caixa**.
+
+---
+
+## [OPUS 5] 2026-09-19 — Auditoria da Fase 12 corrigida por inteiro
+
+Autorização dada, correções feitas: **2 P0, 3 P1 e 8 itens P2**, todos fechados.
+
+### O MODELO DO P0-1 — EU ESCOLHI, E DIGO POR QUÊ
+
+Você autorizou sem escolher entre as duas opções que eu tinha posto. Escolhi
+**tabela de propostas** (`solicitacao_jornada`) e não colunas de valor proposto.
+
+O motivo é concreto: com colunas paralelas, a linha precisaria responder
+"estou aprovada com o valor X e com uma proposta Y pendente" **e** "sou uma
+faixa nova que ainda não vale" usando o mesmo campo de status. Os dois estados
+são diferentes e o campo é um só — sobrecarga que iria estourar na primeira
+faixa nova proposta. A tabela separa a pergunta "o que vigora" da pergunta
+"o que alguém pediu", e `horario_trabalho` volta a ser só a primeira.
+
+Aprovar virou **RPC** (`responder_solicitacao_jornada`): responder e aplicar a
+mudança têm que cair na mesma transação. Em duas chamadas do app, se o UPDATE
+na jornada falhasse, a fila diria "resolvido" e a agenda continuaria a antiga.
+
+### O MESMO TESTE DA AUDITORIA, AGORA
+
+| passo | antes | depois |
+|---|---|---|
+| jornada aprovada (segunda 09:00) | 1 faixa valendo | 1 |
+| barbeiro propõe 11:00 | **0** | **1 — ele continua na agenda** |
+| dono **recusa** | **0**, e o horário virou 11:00 | **1, de volta em 09:00 `aprovado`** |
+| dono **aprova** | — | jornada aplicada em 11:00, barbeiro notificado |
+| barbeiro tenta aprovar o próprio pedido | — | `Apenas a gestao da barbearia responde` |
+| responder duas vezes | sobrescrevia em silêncio | `Esta solicitacao ja foi respondida: aprovado` |
+
+A última linha fecha o **P1-3** de quebra: a trava de decisão concorrente
+nasceu dentro da RPC, e eu a repliquei na folga (`bloqueio`) com
+`.eq('status_aprovacao','pendente')`.
+
+### O RESTO
+
+**P0-2** — `class-variance-authority` movida para `dependencies`, com
+`package-lock.json` sincronizado. Sem isso o primeiro `npm ci --omit=dev`
+quebraria.
+
+**P1-1** — trigger `limpar_lembretes_ao_remarcar`: mover a data zera os
+lembretes já enviados, para o cliente receber aviso da data nova.
+
+**P1-2** — o job de lembrete passou a exigir `barbearia.status = 'ativo'`.
+Barbearia suspensa não manda mais "seu corte é amanhã".
+
+**Faxina P2:**
+
+```
+removidos ......... WaitlistSidebar, accordion, aspect-ratio + 4 scripts soltos
+dependencias ...... pg, @types/pg, @radix-ui/react-accordion, @radix-ui/react-aspect-ratio
+raiz do repo ...... 15 .md soltos -> 2 (CLAUDE.md e README.md)
+docs/10-fases/ .... os 13 documentos de fase
+componentes ....... NotificationBell -> layout/, Theme* -> tema/
+navigation.config . components/layout/ -> lib/  (é autorização, não componente)
+agenda ............ pages/dashboard/agenda/components/ -> components/agenda/
+npm audit ......... 0 vulnerabilidades  (P2-7, nunca tinha sido rodado)
+```
+
+### DOIS TROPEÇOS, OS DOIS DO MESMO TIPO
+
+1. **Uma substituição não casou e passou em silêncio.** Reescrevi três trechos
+   do `escala.service.ts` com `str.replace()`, e o terceiro tinha **uma palavra
+   de diferença** no comentário ("pior que" contra "pior do que"). Sem `assert`,
+   o script disse "ok" e o método ficou como estava. Só apareceu porque fui
+   conferir o arquivo depois. É a terceira vez nesta série que patch por
+   string me morde — e a regra que eu mesmo escrevi no `CLAUDE.md` manda
+   verificar o resultado, não o comando.
+2. **Duas importações escaparam do reapontamento**, por usarem aspas duplas e
+   prefixo `./components/`. O `tsc` pegou na hora, mas foi o build que
+   mostrou — de novo a diferença entre `tsc --noEmit` e `tsc -b`.
+
+### ESTADO
+
+```
+tsc           -> 0 erros
+npm test      -> 72 testes em 9 arquivos
+oxlint        -> 0 erros
+npm run build -> ok
+npm audit     -> 0 vulnerabilidades
+migrations    -> 28 em arquivo, 28 aplicadas
+```
+
+A auditoria em `docs/09-log/AUDITORIA-2026-09.md` ficou **com o diagnóstico
+original**, só com um aviso no topo de que está tudo corrigido. Reescrever o
+diagnóstico depois de consertar apagaria o registro de como o problema foi
+encontrado — que é a parte reaproveitável.
+
+### O QUE FICA PARA VOCÊ
+
+1. **Fase 13** — onboarding e cobrança, segundo o radar. A base está
+   estabilizada, que era a condição que o Chefe pôs.
+2. **Escrita do profissional no caixa** — aberta desde a Fase 8, sem resposta.
+3. **Ninguém olhou a fila de jornada nova numa tela.** O caminho está provado
+   no banco; vale o Chefe pedir uma mudança como Vitor e responder como dono.
+4. **Falha do job de lembrete não dispara alarme** — só registro passivo em
+   `cron.job_run_details`. Não fiz porque alarme exige decidir *para onde* ele
+   vai, e isso é produto.

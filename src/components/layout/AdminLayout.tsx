@@ -2,8 +2,8 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { LogOut, ScrollText, Shield, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { NotificationBell } from '@/components/NotificationBell';
+import { ThemeToggle } from '@/components/tema/ThemeToggle';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 

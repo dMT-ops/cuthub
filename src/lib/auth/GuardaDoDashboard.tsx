@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { useAuth } from './AuthContext';
 import { rotaInicialDoPapel } from './areas';
-import { podeAbrir } from '@/components/layout/navigation.config';
+import { podeAbrir } from '@/lib/navigation.config';
 
 /**
  * Autorização por papel DENTRO do dashboard.

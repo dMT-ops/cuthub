@@ -4,7 +4,7 @@ import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './lib/auth/AuthContext';
 import { ProtectedRoute } from './lib/auth/ProtectedRoute';
 import { GuardaDoDashboard } from './lib/auth/GuardaDoDashboard';
-import { ThemeProvider } from './components/ThemeProvider';
+import { ThemeProvider } from '@/components/tema/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 
 // Páginas Públicas

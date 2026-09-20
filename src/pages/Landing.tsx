@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { CalendarDays, LineChart, Scissors, Users, ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { ThemeToggle } from '@/components/tema/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 const RECURSOS = [

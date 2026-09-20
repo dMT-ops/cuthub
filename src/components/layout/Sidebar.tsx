@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Menu, Pin, PinOff, LogOut, Scissors } from 'lucide-react';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { ThemeToggle } from '@/components/tema/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
 import { useSidebarState } from '@/hooks/useSidebarState';
-import { itensDoPapel } from './navigation.config';
+import { itensDoPapel } from '@/lib/navigation.config';
 import { SidebarItem } from './SidebarItem';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';

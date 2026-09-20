@@ -27,14 +27,14 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import CalendarView from './components/CalendarView';
-import KanbanView from './components/KanbanView';
-import ListView from './components/ListView';
-import MonthlyView from './components/MonthlyView';
-import YearlyView from './components/YearlyView';
-import WeeklyView from './components/WeeklyView';
-import { AppointmentDetailsDrawer } from './components/AppointmentDetailsDrawer';
-import { NewAppointmentModal } from './components/NewAppointmentModal';
+import CalendarView from '@/components/agenda/CalendarView';
+import KanbanView from '@/components/agenda/KanbanView';
+import ListView from '@/components/agenda/ListView';
+import MonthlyView from '@/components/agenda/MonthlyView';
+import YearlyView from '@/components/agenda/YearlyView';
+import WeeklyView from '@/components/agenda/WeeklyView';
+import { AppointmentDetailsDrawer } from '@/components/agenda/AppointmentDetailsDrawer';
+import { NewAppointmentModal } from '@/components/agenda/NewAppointmentModal';
 import { Button } from '@/components/ui/button';
 import { 
   DropdownMenu, 

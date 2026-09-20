@@ -40,3 +40,28 @@ estrutura de log/arquivo.
 - [ ] Aguardando o Arquiteto: autorização para corrigir o que a auditoria
       levantou, e a decisão sobre escrita do profissional no caixa (aberta
       desde a Fase 8).
+
+---
+
+## 2026-09-19 (fechamento)
+
+**Feito:** correção completa da auditoria da Fase 12 — 2 P0, 3 P1 e 8 itens P2.
+
+**Decisões:**
+- **P0-1** resolvido com **tabela `solicitacao_jornada`**, não com colunas de
+  valor proposto: só a tabela distingue "faixa nova pendente" de "faixa
+  aprovada com edição pendente" sem sobrecarregar a semântica da linha.
+  Aprovar virou RPC, para responder e aplicar caírem na mesma transação.
+- `horario_trabalho` voltou a ser só a jornada vigente; as policies de escrita
+  direta do profissional foram removidas.
+- `npm audit`: **0 vulnerabilidades** — fecha o P2-7.
+
+**Quality gate:** tsc ✅ · testes ✅ (72) · oxlint ✅ · build ✅
+
+## Pendências para o próximo /start
+
+- [ ] Aguardando o Arquiteto: Fase 13 (onboarding e cobrança, segundo o radar).
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] Nenhuma tela foi inspecionada visualmente — vale uma passada do Chefe na
+      fila de jornada nova (pedir mudança como Vitor, responder como dono).
+- [ ] Sem alarme para falha do job de lembrete (só registro passivo).

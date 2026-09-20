@@ -44,6 +44,8 @@ export type Database = {
           data_hora: string
           data_hora_fim: string
           id: string
+          lembrete_24h_em: string | null
+          lembrete_2h_em: string | null
           observacoes: string | null
           profissional_id: string
           status: Database["public"]["Enums"]["status_agendamento"] | null
@@ -57,6 +59,8 @@ export type Database = {
           data_hora: string
           data_hora_fim: string
           id?: string
+          lembrete_24h_em?: string | null
+          lembrete_2h_em?: string | null
           observacoes?: string | null
           profissional_id: string
           status?: Database["public"]["Enums"]["status_agendamento"] | null
@@ -70,6 +74,8 @@ export type Database = {
           data_hora?: string
           data_hora_fim?: string
           id?: string
+          lembrete_24h_em?: string | null
+          lembrete_2h_em?: string | null
           observacoes?: string | null
           profissional_id?: string
           status?: Database["public"]["Enums"]["status_agendamento"] | null
@@ -1046,6 +1052,104 @@ export type Database = {
           },
         ]
       }
+      solicitacao_jornada: {
+        Row: {
+          barbearia_id: string
+          criado_em: string
+          dia_semana: number | null
+          hora_fim: string | null
+          hora_inicio: string | null
+          horario_id: string | null
+          id: string
+          operacao: string
+          profissional_id: string
+          respondido_em: string | null
+          respondido_por: string | null
+          solicitado_por: string | null
+          status: Database["public"]["Enums"]["status_aprovacao"]
+        }
+        Insert: {
+          barbearia_id: string
+          criado_em?: string
+          dia_semana?: number | null
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          horario_id?: string | null
+          id?: string
+          operacao: string
+          profissional_id: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          solicitado_por?: string | null
+          status?: Database["public"]["Enums"]["status_aprovacao"]
+        }
+        Update: {
+          barbearia_id?: string
+          criado_em?: string
+          dia_semana?: number | null
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          horario_id?: string | null
+          id?: string
+          operacao?: string
+          profissional_id?: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          solicitado_por?: string | null
+          status?: Database["public"]["Enums"]["status_aprovacao"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacao_jornada_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_barbearia_id_fkey"
+            columns: ["barbearia_id"]
+            isOneToOne: false
+            referencedRelation: "barbearia_publica"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_horario_id_fkey"
+            columns: ["horario_id"]
+            isOneToOne: false
+            referencedRelation: "horario_trabalho"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profissional"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profissional_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacao_jornada_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "usuario_perfil"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usuario_perfil: {
         Row: {
           barbearia_id: string | null
@@ -1340,12 +1444,22 @@ export type Database = {
         Args: {
           p_link?: string
           p_mensagem: string
+          p_mesmo_para_o_autor?: boolean
           p_tipo?: string
           p_titulo: string
           p_usuario_id: string
         }
         Returns: undefined
       }
+      enviar_lembretes_de_agendamento: {
+        Args: never
+        Returns: {
+          enviados_24h: number
+          enviados_2h: number
+        }[]
+      }
+      formatar_dinheiro: { Args: { p_valor: number }; Returns: string }
+      formatar_percentual: { Args: { p_valor: number }; Returns: string }
       get_barbearia_do_usuario: { Args: never; Returns: string }
       get_profissional_id_do_usuario: { Args: never; Returns: string }
       is_admin_supremo: { Args: never; Returns: boolean }
@@ -1362,6 +1476,10 @@ export type Database = {
       }
       perfil_por_email: { Args: { p_email: string }; Returns: string }
       remover_gestor: { Args: { p_usuario_id: string }; Returns: undefined }
+      responder_solicitacao_jornada: {
+        Args: { p_solicitacao_id: string; p_status: string }
+        Returns: undefined
+      }
       slug_disponivel: {
         Args: { p_id?: string; p_nome: string }
         Returns: string

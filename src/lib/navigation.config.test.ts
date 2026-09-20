@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { itensDoPapel, podeAbrir } from './navigation.config';
+import { itensDoPapel, podeAbrir } from '@/lib/navigation.config';
 
 describe('itensDoPapel', () => {
   it('o profissional ve apenas Agenda e Financeiro', () => {

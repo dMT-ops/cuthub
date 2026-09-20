@@ -109,11 +109,13 @@ export const escalaService = {
         .eq('barbearia_id', barbeariaId)
         .eq('status_aprovacao', 'pendente')
         .order('criado_em', { ascending: false }),
+      // Jornada agora vive em `solicitacao_jornada`: a proposta deixou de
+      // morar em cima da linha vigente (P0-1 da auditoria da Fase 12).
       supabase
-        .from('horario_trabalho')
+        .from('solicitacao_jornada')
         .select('*, profissional:profissional ( id, nome )')
         .eq('barbearia_id', barbeariaId)
-        .eq('status_aprovacao', 'pendente')
+        .eq('status', 'pendente')
         .order('criado_em', { ascending: false }),
     ]);
 
@@ -140,8 +142,16 @@ export const escalaService = {
       tipo: 'horario',
       id: h.id,
       profissionalNome: h.profissional?.nome ?? 'Profissional removido',
-      descricao: 'Mudança de jornada',
-      quando: `${DIAS[h.dia_semana] ?? h.dia_semana}, ${String(h.hora_inicio).slice(0, 5)} às ${String(h.hora_fim).slice(0, 5)}`,
+      descricao:
+        h.operacao === 'criar'
+          ? 'Novo horário na jornada'
+          : h.operacao === 'remover'
+            ? 'Remover horário da jornada'
+            : 'Mudança de jornada',
+      quando:
+        h.operacao === 'remover'
+          ? 'a faixa atual sai da jornada'
+          : `${DIAS[h.dia_semana] ?? '—'}, ${String(h.hora_inicio).slice(0, 5)} às ${String(h.hora_fim).slice(0, 5)}`,
       criadoEm: h.criado_em,
     }));
 
@@ -155,18 +165,32 @@ export const escalaService = {
     id: string,
     status: 'aprovado' | 'rejeitado'
   ): Promise<void> {
-    const tabela = tipo === 'bloqueio' ? 'bloqueio' : 'horario_trabalho';
+    // Jornada vai por RPC: responder e aplicar a mudança têm que cair na mesma
+    // transação. Se o app marcasse "aprovado" e a escrita na jornada falhasse,
+    // a fila diria resolvido e a agenda continuaria a antiga.
+    if (tipo === 'horario') {
+      const { error } = await supabase.rpc('responder_solicitacao_jornada', {
+        p_solicitacao_id: id,
+        p_status: status,
+      });
+      if (error) throw new Error(error.message);
+      return;
+    }
+
     const { data, error } = await supabase
-      .from(tabela)
+      .from('bloqueio')
       .update({ status_aprovacao: status })
       .eq('id', id)
+      // P1-3 da auditoria: sem isto, duas abas abertas sobrescrevem a decisão
+      // uma da outra em silêncio.
+      .eq('status_aprovacao', 'pendente')
       .select('id');
 
     if (error) throw new Error(`Falha ao responder a requisição: ${error.message}`);
-    // Sem linha afetada = a RLS barrou. Dizer "aprovado" sem ter aprovado é
-    // pior do que o erro.
+    // Sem linha afetada = a RLS barrou ou alguém já respondeu. Dizer
+    // "aprovado" sem ter aprovado é pior do que o erro.
     if (!data || data.length === 0) {
-      throw new Error('Requisição não encontrada ou fora do seu alcance.');
+      throw new Error('Esta folga já foi respondida por alguém, ou está fora do seu alcance.');
     }
   },
 };

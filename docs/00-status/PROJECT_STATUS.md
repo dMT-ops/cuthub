@@ -1,44 +1,39 @@
 # CutHub — estado atual
 
 **Atualizado em:** 2026-09-19
-**Branch:** `feat/fase-implantacao` · **Último commit:** `8dc818e` quatro avisos novos e o lembrete antes do horário
+**Branch:** `feat/fase-implantacao` · **Último commit:** correções da auditoria da Fase 12
 
 ## Fase atual
 
-Fase 12 — higiene e fundação de processo. Auditoria entregue; correções **não**
-autorizadas ainda.
+Fase 12 — higiene. Auditoria entregue **e corrigida**: os dois P0, os três P1 e
+a faxina P2 estão fechados.
 
 ## Em andamento
 
-- **Auditoria da Fase 12** (`docs/09-log/AUDITORIA-2026-09.md`) — pronta,
-  aguardando revisão do Arquiteto antes de qualquer correção.
-- **Skills `/start` e `/end`** — criadas nesta sessão, em uso a partir de agora.
+Nada em aberto no código. Próximo passo depende do Arquiteto (Fase 13:
+onboarding self-service e cobrança, segundo o radar).
 
 ## Gaps e riscos conhecidos
 
-- 🔴 **P0-1:** proposta de mudança de jornada **destrói a jornada aprovada**.
-  Enquanto pendente, o barbeiro some da agenda pública; se recusada, o horário
-  antigo não volta. Reproduzido no banco. Exige mudança de modelo, não remendo.
-- 🔴 **P0-2:** `class-variance-authority` está em `devDependencies` e é
-  importada em runtime por 4 componentes — build com `npm ci --omit=dev` quebra.
-- **P1:** remarcar agendamento não reenvia lembrete; lembrete continua saindo
-  para barbearia suspensa; `responderRequisicao` sobrescreve decisão concorrente
-  em silêncio.
-- **Não verificado:** `npm audit` nunca foi rodado. Nenhuma tela do console
-  admin, do chapéu (`/escolher-acesso`) ou do PWA instalado foi inspecionada
-  visualmente por mim — só medida no banco e no build.
+- **Nenhuma tela foi inspecionada visualmente por mim** em nenhuma fase — não
+  faço login. Console admin, tela do chapéu, PWA instalado e a nova fila de
+  jornada estão provados no banco e no build, não na tela.
 - **Alcance dos avisos é pequeno:** 1 de 9 profissionais e 6 de 54 clientes têm
   conta. Notificação sem destinatário é pulada em silêncio, por desenho.
+- **Falha do job de lembrete não dispara alarme.** Há registro passivo em
+  `cron.job_run_details` (82 execuções, 82 sucessos), e ninguém é avisado se
+  começar a falhar.
+- Um agendamento de 19/09 05:01 não gerou notificação e a causa não foi
+  determinada. Hipótese registrada no log; se repetir, é bug.
 
 ## Decisões abertas com o Arquiteto
 
-- Escrita do profissional no caixa (contrariei a ordem da F8 e ele não
-  respondeu).
-- Modelo para corrigir o P0-1: tabela de propostas **ou** colunas de valor
-  proposto ao lado do vigente.
-- Mover os 12 `FASE-*.md` da raiz para `docs/10-fases/`.
+- Escrita do profissional no caixa — contrariei a ordem da Fase 8 e segue sem
+  resposta.
+- Avisos levantados e não implementados: resumo da agenda de amanhã, horário
+  remarcado, "dia 1º provisionar despesas", "barbearia nova" para o admin.
 
 ## Última sessão
 
-Auditoria completa da Fase 12 (7 módulos, 2 P0 confirmados) e criação das
-rotinas `/start` e `/end`.
+Auditoria da Fase 12 corrigida por inteiro: P0-1 (proposta de jornada destruía
+a jornada vigente) resolvido com tabela própria de solicitações.

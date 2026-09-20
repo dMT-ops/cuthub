@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { ThemeToggle } from '@/components/tema/ThemeToggle';
 import { useCatalogo } from '@/hooks/useCatalogo';
 import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia';
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
