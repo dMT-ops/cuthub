@@ -9454,3 +9454,116 @@ encontrado — que é a parte reaproveitável.
 4. **Falha do job de lembrete não dispara alarme** — só registro passivo em
    `cron.job_run_details`. Não fiz porque alarme exige decidir *para onde* ele
    vai, e isso é produto.
+
+---
+
+## [OPUS 5] 2026-09-21 — Identidade e marca: o painel passa a ser da barbearia
+
+O Chefe quis focar em personalização e pediu ideias. O diagnóstico que abriu a
+conversa vale mais que as ideias:
+
+**A marca do CutHub é só para fora.** Os quatro campos (`tema_cor_primaria`,
+logo, banner, descrição) aparecem no catálogo, no perfil público e nos
+favoritos. **O painel da barbearia não usava nenhum deles** — o dono entra e vê
+um CutHub amarelo genérico, com o nome dele em texto simples na sidebar. Ele
+personaliza como o *cliente* o vê e trabalha num sistema que não é dele.
+
+### A ALAVANCA, E A ARMADILHA
+
+O design system é todo em variáveis HSL, e há **83 pontos** usando
+`bg-primary` / `text-primary` / `border-primary` / `ring-primary`. Sobrescrever
+`--primary` alcança os 83 de uma vez.
+
+Só que é a mesma armadilha da Fase 5.5, multiplicada: lá **uma** cor mal
+escolhida deixou o CTA com 3.85 de contraste e o olho leu "desabilitado". Em
+83 pontos, uma barbearia de marca preta teria um painel ilegível.
+
+**Decisões do Chefe:** Nível 1 (o painel vira dela) e "a barbearia escolhe o
+matiz, o sistema garante a leitura".
+
+### O QUE ISSO EXIGIU DE VERDADE
+
+Escrevi o teste antes (`src/lib/paleta.test.ts`, 9 casos) porque a promessa
+"o sistema garante a leitura" **é** um número, e sem teste ela é conversa.
+
+**Travar a luminosidade numa faixa não bastou, e o teste provou.** Amarelo em
+L=52 tem **1.94** de contraste contra o branco. Luminância percebida depende do
+matiz — azul e amarelo no mesmo L são coisas muito diferentes aos olhos. Então
+a faixa virou só o limite, e entrou uma **busca**: o L caminha um passo por vez
+na direção segura até o botão se separar do fundo.
+
+**Segunda correção, minha, depois de medir:** a primeira versão fixava o L no
+meio da faixa antes de buscar, e isso mexia na cor sem necessidade — o verde
+`#008000` do Renan virava `#00e600` (neon) no tema escuro. O comentário dizia
+"mexer o mínimo possível" e o código não fazia isso. Agora a busca parte da cor
+**original**.
+
+Resultado medido, e é o argumento para o Chefe:
+
+| marca | claro | escuro |
+|---|---|---|
+| `#008000` (Renan) | **intacta** | **intacta** |
+| `#2B6CB0` (azul) | **intacta** | **intacta** |
+| `#F0B323` (amarelo) | escurece p/ `#bf890d` | intacta |
+| `#111111` (preta) | vira `#333333` | vira `#cccccc` |
+
+Ou seja: a maioria das marcas **não muda nada**. Só muda quando manter mataria
+a leitura — e aí muda o mínimo.
+
+### O QUE ENTROU NO PAINEL
+
+- **`TemaDaBarbearia`** — aplica as variáveis. Em `documentElement`, e não numa
+  div: diálogo, dropdown e toast renderizam em portal no `body`, e variável
+  posta na subárvore não chega neles — o painel ficaria colorido e os modais
+  amarelos. Limpa no unmount, para o tema **não vazar** para a área do cliente
+  nem para o console do admin.
+- **Logo na sidebar**, expandida e recolhida, e no menu mobile. Sem logo, a
+  tesoura do produto segura o lugar em vez de deixar buraco.
+- **Título da aba** com o nome da barbearia. Detalhe pequeno e
+  desproporcionalmente notado por quem trabalha com muitas abas abertas.
+- **Saudação com o nome** antes dos indicadores.
+
+Acompanha o tema do sistema: se o aparelho vira escuro ao anoitecer, a paleta
+é recalculada.
+
+### UM ERRO MEU QUE O LINT NÃO PEGARIA SOZINHO
+
+Inseri `useBarbeariaAtual()` **depois de um early return** no `DashboardHome` —
+chamada condicional de hook. O `tsc` passa; React quebra na primeira vez que o
+painel falha ao carregar, que é justamente o caminho de erro. Movi para antes
+do `return` e deixei o porquê no comentário.
+
+```
+tsc           -> 0 erros
+npm test      -> 81 testes em 10 arquivos (72 + 9 da paleta)
+oxlint        -> 0 erros
+npm run build -> ok
+```
+
+### O QUE FICOU DE FORA, E POR QUÊ
+
+**Nível 2** (paleta completa com cor secundária e prévia ao vivo do painel) e
+**Nível 3** (login com a cara da barbearia por slug, PWA por barbearia) não
+entraram — o Chefe escolheu o Nível 1. Ficam propostos.
+
+**Não faria branding na área do cliente** (`/minha-conta`), e registro para não
+virar pedido depois: ela é neutra desde a Fase 4 porque o cliente é de várias
+barbearias ao mesmo tempo. Pintá-la com a cor de uma seria mentir sobre de quem
+é aquela tela.
+
+### UM ACHADO SOBRE O PRÓPRIO PRODUTO
+
+Ao calibrar a busca apareceu que **o amarelo padrão do CutHub
+(`--primary: 45 93% 47%`) não passa em 3.0 contra o branco no tema claro**.
+Ou seja, o tema base do produto tem o mesmo defeito que estou impedindo nas
+barbearias. Não mexi — mudar a cor do produto é decisão de marca, não minha.
+Fica registrado.
+
+### DUAS COISAS PARA VOCÊS
+
+1. **Ninguém viu isso numa tela** — como sempre, não faço login. Vale o Chefe
+   entrar, trocar a cor em Configurações → Identidade e marca e alternar
+   claro/escuro. A cor do Renan (`#008000`) não deve mudar em nenhum dos dois.
+2. **Só 1 das 3 barbearias preencheu a marca.** A personalização existe e está
+   vazia — na próxima rodada, valeria um empurrão no onboarding para a
+   barbearia escolher cor e logo logo no começo, senão o recurso fica invisível.

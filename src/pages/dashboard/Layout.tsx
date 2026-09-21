@@ -2,6 +2,8 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useSidebarState } from '@/hooks/useSidebarState';
 import { NotificationBell } from '@/components/layout/NotificationBell';
+import { TemaDaBarbearia } from '@/components/tema/TemaDaBarbearia';
+import { TituloDaAba } from '@/components/tema/TituloDaAba';
 
 export default function DashboardLayout() {
   const sidebarState = useSidebarState();
@@ -11,6 +13,12 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Nao renderizam nada: pintam o painel com a cor da barbearia e poem o
+          nome dela na aba do navegador. Vivem aqui, e nao no App, para o tema
+          nao vazar para a area do cliente nem para o console do admin. */}
+      <TemaDaBarbearia />
+      <TituloDaAba />
+
       <Sidebar {...sidebarState} />
 
       {/* Coluna de conteúdo: o recuo da sidebar passou para cá, e não para o

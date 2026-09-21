@@ -1,12 +1,14 @@
 import { Suspense, lazy } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { CalendarClock, DollarSign, Scissors, TrendingUp, Users } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
 import { useDashboard } from '@/hooks/useDashboard';
 import { ProximoAgendamentoPorBarbeiro } from '@/components/dashboard/ProximoAgendamentoPorBarbeiro';
 import { resumirAgendamento } from '@/lib/agendamento';
@@ -30,6 +32,9 @@ export default function DashboardHome() {
     isError,
     error,
   } = useDashboard(barbeariaId);
+  // Antes do early return: hook depois de `return` é chamada condicional, e
+  // React quebra na primeira vez que o painel falha ao carregar.
+  const { barbearia } = useBarbeariaAtual();
 
   if (isError) {
     return (
@@ -44,8 +49,20 @@ export default function DashboardHome() {
 
   const variacao = calcularVariacao(indicadores?.faturamentoHoje, indicadores?.faturamentoOntem);
 
+  const nomeDaBarbearia = barbearia?.nome;
+  const resumoDoDia = format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR });
+
   return (
     <div className="space-y-6">
+      {/* O nome da casa antes dos numeros: quem abre este painel todo dia
+          quer ver a barbearia dele, nao um titulo de produto. */}
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">
+          {nomeDaBarbearia ? `Olá, ${nomeDaBarbearia}` : 'Painel'}
+        </h2>
+        <p className="text-sm text-muted-foreground">{resumoDoDia}</p>
+      </div>
+
       {/* Antes dos indicadores de proposito: pedido da equipe parado e coisa
           que custa dinheiro -- o barbeiro nao sabe se pode faltar. */}
       <RequisicoesDaEquipe />

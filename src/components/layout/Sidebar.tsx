@@ -14,7 +14,8 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
   // Menu montado pelo papel. O `GuardaDoDashboard` usa a MESMA lista para
   // barrar a URL digitada -- esconder o item sem barrar a rota seria teatro.
   const itens = itensDoPapel(perfil?.tipo);
-  const { barbearia } = useBarbeariaAtual();
+  const { barbearia, configuracao } = useBarbeariaAtual();
+  const logoUrl = configuracao?.tema_logo_url ?? null;
   // Enquanto a barbearia carrega, o nome do produto evita um cabeçalho vazio
   const tituloBarbearia = barbearia?.nome ?? 'CutHub';
   const {
@@ -41,7 +42,12 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0 flex flex-col">
           <SheetHeader className="p-6 border-b text-left">
-            <SheetTitle className="text-2xl font-bold">{tituloBarbearia}</SheetTitle>
+            <SheetTitle className="flex items-center gap-2.5 text-2xl font-bold">
+              {logoUrl && (
+                <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+              )}
+              <span className="min-w-0 truncate">{tituloBarbearia}</span>
+            </SheetTitle>
             <p className="text-xs text-muted-foreground mt-1">Gestão de Barbearias</p>
           </SheetHeader>
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto" aria-label="Menu Principal Mobile">
@@ -95,8 +101,22 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
       <div className="p-4 border-b flex items-center h-[73px] box-border relative">
         {/* Expandido: nome da barbearia logada. Recolhido: a tesoura mantém a
             identidade visual no lugar do título, que não caberia em 64px. */}
-        <div className={`overflow-hidden transition-all duration-200 ease-in-out motion-reduce:transition-none ${isExpanded ? 'w-full opacity-100' : 'w-0 opacity-0'}`}>
-          <h1 className="text-xl font-bold text-foreground whitespace-nowrap truncate pr-8" title={tituloBarbearia}>
+        <div className={`flex items-center gap-2.5 overflow-hidden transition-all duration-200 ease-in-out motion-reduce:transition-none ${isExpanded ? 'w-full opacity-100' : 'w-0 opacity-0'}`}>
+          {/* A logo que a barbearia enviou ja existia e so o publico via. Aqui
+              ela aparece para quem trabalha na casa -- e, sem logo, a tesoura
+              do produto segura o lugar em vez de deixar um buraco. */}
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-md object-cover"
+            />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Scissors size={18} aria-hidden="true" />
+            </span>
+          )}
+          <h1 className="min-w-0 flex-1 truncate pr-8 text-lg font-bold text-foreground" title={tituloBarbearia}>
             {tituloBarbearia}
           </h1>
         </div>
@@ -106,7 +126,11 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
             className="absolute inset-0 flex items-center justify-center text-primary"
             aria-hidden="true"
           >
-            <Scissors size={24} />
+            {logoUrl ? (
+              <img src={logoUrl} alt="" className="h-8 w-8 rounded-md object-cover" />
+            ) : (
+              <Scissors size={24} />
+            )}
           </div>
         )}
 
