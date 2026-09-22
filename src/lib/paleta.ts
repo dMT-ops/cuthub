@@ -50,7 +50,7 @@ const FUNDO = { claro: '#ffffff', escuro: '#0a0a0a' };
 /** WCAG 1.4.11: componente de interface precisa de 3.0 contra o que está atrás. */
 const CONTRASTE_MINIMO_COM_O_FUNDO = 3;
 
-export function hexParaHsl(hex: string | null | undefined): Hsl | null {
+function hexParaHslPreciso(hex: string | null | undefined): Hsl | null {
   if (!hex) return null;
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return null;
@@ -73,7 +73,19 @@ export function hexParaHsl(hex: string | null | undefined): Hsl | null {
     if (h < 0) h += 360;
   }
 
-  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+  return { h, s: s * 100, l: l * 100 };
+}
+
+/**
+ * Versao arredondada, para quem precisa de HSL legivel por humano.
+ * `paletaDaMarca` NAO usa esta: arredondar H/S/L para inteiro perde ate
+ * **5/255** por canal no caminho de volta (medido no espaco de cor inteiro --
+ * so 11% das cores voltam identicas). Isso mudava a cor da barbearia mesmo
+ * quando ela ja passava no contraste e nada precisava ser ajustado.
+ */
+export function hexParaHsl(hex: string | null | undefined): Hsl | null {
+  const p = hexParaHslPreciso(hex);
+  return p && { h: Math.round(p.h), s: Math.round(p.s), l: Math.round(p.l) };
 }
 
 export function hslParaHex({ h, s, l }: Hsl): string {
@@ -119,47 +131,58 @@ export function paletaDaMarca(
   cor: string | null | undefined,
   modoEscuro: boolean
 ): PaletaDaMarca | null {
-  const hsl = hexParaHsl(cor);
+  const hsl = hexParaHslPreciso(cor);
   if (!hsl) return null;
 
   const faixa = modoEscuro ? FAIXA.escuro : FAIXA.claro;
   const fundo = modoEscuro ? FUNDO.escuro : FUNDO.claro;
 
+  // Quantiza UMA vez, antes da busca, e a partir daqui so existe este valor.
+  // Arredondar depois da busca quebrava a garantia: mexia o canal em 1/255 e
+  // o contraste caia de 3.00 para 2.99 em ~389 cores -- o laco media uma cor e
+  // a funcao devolvia outra. Quatro casas dao precisao de sobra para o hex
+  // voltar ao mesmo byte, e `hsl()` aceita decimal, entao o CSS nao se importa.
+  const q = (v: number) => Math.round(v * 10000) / 10000;
+  const H = q(hsl.h);
+  const S = q(hsl.s);
+  const corEm = (ll: number) => hslParaHex({ h: H, s: S, l: ll });
+
   // Começa na cor ORIGINAL, não no meio da faixa. A faixa é só o limite da
   // busca. Pré-fixar mexia na cor sem necessidade: o verde `#008000` virava
   // `#00e600` (neon) no tema escuro, quando ele já passava no contraste como
   // estava. "Mexer o mínimo possível" só é verdade se a busca partir daqui.
-  let l = hsl.l;
+  let l = q(hsl.l);
 
   // Cinza puro não tem matiz para preservar e some no fundo do próprio tema.
-  if (hsl.s < 8) l = modoEscuro ? faixa.max : faixa.min;
+  if (S < 8) l = modoEscuro ? faixa.max : faixa.min;
 
   // Caminha na direção segura (mais escuro no tema claro, mais claro no
   // escuro) só até o botão se separar do fundo — e para no limite da faixa.
   const passo = modoEscuro ? 1 : -1;
   const limite = modoEscuro ? faixa.max : faixa.min;
-  while (
-    contrasteEntreHex(hslParaHex({ h: hsl.h, s: hsl.s, l }), fundo) < CONTRASTE_MINIMO_COM_O_FUNDO &&
-    l !== limite
-  ) {
-    l += passo;
+  // Compara por direcao, e nao com `!==`: o L agora e fracionario e nunca cai
+  // exatamente no limite inteiro -- `l !== limite` daria laco infinito.
+  const aindaCabe = () => (modoEscuro ? l < limite : l > limite);
+  while (contrasteEntreHex(corEm(l), fundo) < CONTRASTE_MINIMO_COM_O_FUNDO && aindaCabe()) {
+    l = modoEscuro ? Math.min(l + passo, limite) : Math.max(l + passo, limite);
   }
 
-  const ajustada = { h: hsl.h, s: hsl.s, l };
-  const primariaHex = hslParaHex(ajustada);
+  const ajustada = { h: H, s: S, l };
+  const primariaHex = corEm(l);
   const textoHex =
     contrasteEntreHex(primariaHex, PRETO) >= contrasteEntreHex(primariaHex, BRANCO)
       ? PRETO
       : BRANCO;
 
-  const texto = hexParaHsl(textoHex)!;
+  const bruto = hexParaHslPreciso(textoHex)!;
+  const texto = { h: q(bruto.h), s: q(bruto.s), l: q(bruto.l) };
 
   const triplo = (c: Hsl) => `${c.h} ${c.s}% ${c.l}%`;
   const variavelPrimaria = triplo(ajustada);
 
   return {
-    matiz: ajustada.h,
-    luminosidade: ajustada.l,
+    matiz: Math.round(H),
+    luminosidade: Math.round(l),
     primariaHex,
     textoHex,
     variaveis: {

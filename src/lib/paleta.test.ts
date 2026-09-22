@@ -60,6 +60,51 @@ describe('paletaDaMarca', () => {
     }
   });
 
+  /**
+   * Cor que NAO precisa mudar nao pode mudar. `#e11d48` e `#16a34a` sao as
+   * cores reais das barbearias no banco e ja passam nos dois temas -- a busca
+   * de luminosidade nem roda. Mesmo assim a cor voltava diferente (`#e21d48`,
+   * `#16a249`), porque o ida-e-volta por HSL inteiro perde ate 5/255 por canal
+   * (medido no espaco todo: so 11% das cores voltam identicas).
+   */
+  it('devolve a cor original intacta quando ela já passa no contraste', () => {
+    for (const hex of ['#e11d48', '#16a34a', '#008000', '#2b6cb0']) {
+      for (const escuro of [false, true]) {
+        expect(paletaDaMarca(hex, escuro)!.primariaHex).toBe(hex);
+      }
+    }
+  });
+
+  /**
+   * Fio de navalha: estas cores saem da busca com contraste entre 3.00 e 3.01.
+   * Quantizar o L **depois** da busca (em vez de antes) mexia um canal em
+   * 1/255 e derrubava as seis para 2.98-2.99 -- o laco media uma cor e a
+   * funcao devolvia outra. Varredura do espaco inteiro achou 389 casos assim.
+   */
+  it('não perde o contraste nas cores que passam por pouco', () => {
+    const NAVALHA: [string, boolean][] = [
+      ['#002178', true], ['#0048bd', true], ['#004ea2', true],
+      ['#00516f', true], ['#00f3e4', false], ['#00f3ea', false],
+    ];
+    for (const [hex, escuro] of NAVALHA) {
+      const p = paletaDaMarca(hex, escuro)!;
+      const fundo = escuro ? '#0a0a0a' : '#ffffff';
+      expect(contrasteEntreHex(p.primariaHex, fundo)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  /** O painel pinta pelo `--primary`; o contraste foi medido no `primariaHex`.
+   *  Se os dois discordarem, a garantia vale para uma cor que ninguem ve. */
+  it('a variável do CSS pinta exatamente a cor que foi medida', () => {
+    for (const hex of [...MARCAS, '#e11d48', '#16a34a', '#002178']) {
+      for (const escuro of [false, true]) {
+        const p = paletaDaMarca(hex, escuro)!;
+        const [h, s, l] = p.variaveis['--primary'].replace(/%/g, '').split(' ').map(Number);
+        expect(hslParaHex({ h, s, l })).toBe(p.primariaHex);
+      }
+    }
+  });
+
   it('clareia a marca preta no modo escuro, senão o botão sumiria', () => {
     const escuro = paletaDaMarca('#111111', true)!;
     expect(escuro.luminosidade).toBeGreaterThan(hexParaHsl('#111111')!.l);
@@ -71,10 +116,13 @@ describe('paletaDaMarca', () => {
   });
 
   it('devolve as variáveis no formato que o CSS do projeto espera', () => {
-    // O design system usa `--primary: 45 93% 47%`, sem hsl() em volta.
+    // O design system usa `--primary: 45 93% 47%`, sem hsl() em volta. O valor
+    // pode vir com decimal (`42.15 87.23% 39.92%`): e o que faz a cor voltar ao
+    // mesmo byte em vez de derivar ate 5/255 no arredondamento. `hsl()` aceita.
+    const TRIPLO = /^\d+(\.\d+)? \d+(\.\d+)?% \d+(\.\d+)?%$/;
     const p = paletaDaMarca('#F0B323', false)!;
-    expect(p.variaveis['--primary']).toMatch(/^\d+ \d+% \d+%$/);
-    expect(p.variaveis['--primary-foreground']).toMatch(/^\d+ \d+% \d+%$/);
+    expect(p.variaveis['--primary']).toMatch(TRIPLO);
+    expect(p.variaveis['--primary-foreground']).toMatch(TRIPLO);
     expect(p.variaveis['--ring']).toBe(p.variaveis['--primary']);
   });
 
