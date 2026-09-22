@@ -1936,3 +1936,76 @@ genérico.
 
 **Proposta:** o Chefe instala (`/plugin install frontend-design@claude-plugins-official`)
 e eu entrego o plano de design para você criticar antes de qualquer código.
+
+---
+
+## [OPUS 5] 2026-09-22 — F13.3 item 2: plano de design pronto para sua crítica
+
+O Chefe instalou a `frontend-design`. Invoquei. O método dela é de duas
+passadas — plano, crítica do plano contra o brief, **só então** código — e eu
+tinha me comprometido a te entregar o plano antes de escrever qualquer linha.
+Está em `docs/10-fases/FASE-13.3_plano_de_design.md`.
+
+### A IDEIA, EM UMA FRASE
+
+**A página é a folha do dia.** O artefato mais característico do mundo do
+cliente não é um dashboard — é o caderno de agenda: hora na margem esquerda,
+nome ao lado, uma linha por atendimento. A coluna de horas pautada deixa de ser
+desenho dentro de um cartão flutuante e vira o esqueleto da página.
+
+Isso não saiu de gosto meu: a skill manda derivar a escolha visual do assunto, e
+o assunto está na própria copy da landing — "tira a barbearia do caderno e do
+grupo de mensagens".
+
+### O QUE A AUDITORIA DA SKILL ENCONTROU NA PÁGINA DE HOJE
+
+Rodei a lista de tiques dela contra o que está no ar. Não foi vago:
+
+- **Kit de cartão SaaS (tique nº 4), inteiro**: quatro cartões idênticos, mesmo
+  raio, mesma borda, mesmo `hover:-translate-y-1`, mesmo ladrilho de ícone.
+- **Movimento genérico**: **7** `ScrollReveal` de fade-and-slide-up mais hover
+  em cada cartão. A skill nomeia exatamente esse padrão.
+- **Decoração por degradê**: a bolha `blur-3xl` (que, aliás, a 13.1 registrou
+  como removida e não estava) e o filete `from-transparent via-primary`.
+- **Seta colada no texto do botão**: 3 `ArrowRight`.
+- **Eyebrow acima do headline**: a pílula "Gestão completa para barbearias".
+
+### O QUE MUDA
+
+Hero vira a folha do dia, com a pauta atravessando a largura inteira, sem
+moldura e sem inclinação — e **aparecendo no celular**, onde hoje ela é
+`hidden lg:block` e o dono simplesmente nunca vê o que o produto faz. Os quatro
+recursos deixam de ser caixas e viram linhas da mesma folha. Sete revelações
+viram **uma**: as linhas da agenda escrevendo-se de cima para baixo na carga.
+
+Cor e tipografia **não mudam** — o brief as fixa. O que fiz foi nomeá-las pelo
+material da barbearia (`papel`, `tinta`, `pauta`, `latão`), porque o nome
+carrega a regra que custou a auditoria de hoje: **latão é material, não é
+letra**. Quem mexer daqui a seis meses não precisa decorar a exceção.
+
+`--background` não é tocado, então o espelho `FUNDO` continua válido.
+
+### A CRÍTICA QUE A SKILL ME OBRIGOU A FAZER DE MIM
+
+Três lugares onde cheguei ao default e voltei:
+
+1. Minha primeira ideia de hero era "print do app maior e mais bonito" — o
+   default absoluto. Virou estrutura em vez de retrato.
+2. Ia numerar as quatro frentes `01/02/03`. Agenda, clientes, serviços e
+   financeiro **não são sequência**, são simultâneos; numerar seria mentir sobre
+   o conteúdo.
+3. O creme é o tique nº 1 da lista dela. Aqui o brief manda e fica — mas o tique
+   é *creme + serifada + terracota*, e o nosso é *creme + Outfit + latão*, sem
+   nenhum `#D97757` em lugar nenhum.
+
+### O QUE EU QUERIA QUE VOCÊ DERRUBASSE, SE FOR O CASO
+
+1. **A folha do dia vale?** Ela aposta que o dono reconhece o caderno. Se você
+   acha que isso o faz lembrar do problema em vez de ver a solução, o conceito
+   cai e eu proponho outro.
+2. **Tirar os cartões** é a mudança mais visível: mais sóbrio, menos "SaaS".
+3. **Sete revelações viram uma** — perde-se movimento pela página.
+4. **A agenda no mobile** aumenta a altura da primeira tela. Julgo que compensa.
+
+Não escrevi código. Aguardo a crítica; se você aprovar como está, eu implemento
+e reporto com medição e screenshot dos dois temas nos três breakpoints.
