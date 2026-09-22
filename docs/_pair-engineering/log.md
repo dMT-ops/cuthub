@@ -2009,3 +2009,75 @@ Três lugares onde cheguei ao default e voltei:
 
 Não escrevi código. Aguardo a crítica; se você aprovar como está, eu implemento
 e reporto com medição e screenshot dos dois temas nos três breakpoints.
+
+---
+
+## [OPUS 5] 2026-09-22 — Landing reescrita do zero: a folha do dia
+
+O Chefe aprovou o plano e mandou refazer a landing **da estaca zero**, não
+remendar. `Landing.tsx` foi reescrito inteiro.
+
+### O QUE SAIU, E POR QUE
+
+Cada remoção tem nome na lista de tiques da `frontend-design`:
+
+- **Os quatro cartões de recurso.** Mesmo raio, mesma borda, mesma sombra,
+  mesmo `hover:-translate-y-1`, mesmo ladrilho de ícone — o kit de cartão de
+  SaaS inteiro. Viraram linhas de uma `<dl>` separadas por pauta: título à
+  esquerda em 5 colunas, descrição em 7.
+- **Seis das sete revelações de scroll.** Sobrou **uma**, e ela mudou de
+  função: não é mais fade por seção, é a folha do dia **se escrevendo de cima
+  para baixo** na carga, 80ms entre linhas.
+- **A bolha `blur-3xl` e o filete em degradê** — decoração por degradê.
+- **As três setas `→`** coladas no texto dos botões.
+- **A pílula "Gestão completa para barbearias"** acima do headline: rótulo que
+  repetia o que o headline já diz.
+- **O cartão de agenda inclinado 2° com sombra.** Era "print do app flutuando".
+
+### O QUE ENTROU
+
+**A folha do dia**, atravessando a largura inteira entre duas pautas, sem
+moldura e sem inclinação. Hora na margem esquerda em `tabular-nums` alinhada à
+direita, tique de latão, nome, serviço. Cinco linhas — e **uma delas vazia**,
+"12:00 livre", porque folha de verdade tem buraco e é o buraco que o dono
+reconhece.
+
+**Ela aparece no celular.** Antes era `hidden lg:block`: o dono que abrisse no
+telefone nunca via o que o produto faz. Sem moldura, cabe.
+
+Medidas de texto encurtadas para ≤66 caracteres (o parágrafo do hero passava de
+75), headline em `max-w-[13ch]`, tudo alinhado à esquerda — inclusive a chamada
+final, que era um painel centralizado.
+
+Cor e tipografia intactas, `--background` intocado: o espelho `FUNDO` do
+`paleta.ts` continua válido.
+
+### MEDIDO
+
+3 breakpoints × 2 temas, na tela renderizada: **sem rolagem horizontal, sem
+estouro, sem truncamento, zero reprovação de contraste** — exceto as duas
+tesouras do logotipo em 1.70, isentas pela 1.4.11 e documentadas no `index.css`.
+
+tsc 0 · 93 testes · oxlint 0 erros/13 warnings · build ok.
+
+### O QUE EU **NÃO** CONSEGUI FAZER, E É RELEVANTE NUM REDESIGN
+
+**Não consegui ver a página.** O `Page.captureScreenshot` estourou o timeout de
+30s três vezes seguidas — parece ser o custo de renderizar a landing inteira
+(2.424px de altura) dentro de um iframe. A medição por JS continuou funcionando
+o tempo todo, e é dela que vêm os números acima.
+
+Ou seja: **a nova landing está provada por medição, não por olho.** Num
+redesign isso é exatamente a metade que falta — a skill manda tirar screenshot e
+criticar o próprio resultado, e essa parte não rodou.
+
+O caminho mais curto é o Chefe abrir `localhost:5173` numa janela anônima (a
+sessão logada redireciona para `/dashboard`) e julgar. O julgamento estético é
+dele de qualquer forma.
+
+Uma nota de método: eu quase reportei que os botões "Entrar" e "Já tenho conta"
+tinham sumido no tema claro — foi o que vi no único screenshot que saiu. Fui
+medir antes de sair consertando, e eles estavam em `rgb(33,31,28)` sobre o
+creme, contraste de sobra. **O screenshot é que tinha sido tirado no meio da
+transição de 700ms** que a troca de tema dispara. Se eu tivesse acreditado na
+imagem, teria "consertado" o que não estava quebrado.
