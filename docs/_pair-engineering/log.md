@@ -1800,4 +1800,7 @@ Não corrigi nada disto: mexer em `--primary` ou em `text-primary` no meio de
 uma decisão de redesign seria trabalhar contra a fase que o Chefe acabou de
 abrir. Fica como entrada do brief, não como bug solto.
 
-**Imagem salva:** `screenshot-1790100086876-0.jpg` (login e landing no claro).
+**Sobre a prova:** o que vale aqui e a tabela de medidas acima, reproduzivel
+com o app em `localhost:5173`. Tirei screenshot do login e da landing no tema
+claro para o Chefe ver os dois links sumindo, mas ele foi para a pasta
+temporaria da sessao e **nao esta no repositorio** — nao va procura-lo.
