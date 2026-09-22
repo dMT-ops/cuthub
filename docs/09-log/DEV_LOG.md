@@ -224,3 +224,110 @@ os dois não olham a mesma coisa; é verdade, e custou um ciclo.
 - [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
 - [ ] Sem alarme para falha do job de lembrete.
 - [ ] As skills do projeto só carregam se o Claude Code abrir em `PROJETO\cuthub`.
+
+---
+
+## 2026-09-22 (Fase 13.2) — validação do fluxo de jornada e desenho do onboarding
+
+**Feito:** itens 2 e 3 da 13.2. O item 1 (breakpoints) continua bloqueado.
+
+**Decisões:**
+- **A 00028 acertou o banco e cegou a tela do barbeiro.** Medido: depois de
+  pedir mudança, `JornadaTrabalho` exibe o horário **antigo** (lê só
+  `horario_trabalho`, que por projeto não muda) e não mostra o pedido, que
+  está em `solicitacao_jornada` e a RLS deixa ele ler. A policy de retirada
+  existia desde a 00028 e **nunca teve tela**. Criado `PedidosDeJornada.tsx`.
+- **A validação de sobreposição só existia no frontend.** O caminho do gestor
+  passa por `salvarJornada`; o da aprovação escreve dentro da RPC e passava por
+  fora. Dois pedidos idênticos aprovados produziam faixa duplicada —
+  reproduzido. Migration `00029` com duas travas: índice parcial
+  (`NULLS NOT DISTINCT`, necessário porque `horario_id` é nulo em `criar`) e
+  guarda dentro da RPC.
+- **`barbearia.status` não vai servir para cobrança**: hoje `suspenso` é o kill
+  switch do admin. Inadimplência precisa de eixo próprio, senão um pagamento
+  religa uma conta banida.
+- Desenho do onboarding/assinatura em
+  `docs/10-fases/FASE-13_onboarding_e_assinatura.md`. **Sem migration**, como
+  a ordem pediu.
+
+**Verificação:** fluxo completo rodado no banco como profissional e como dono
+(JWT trocado, RLS valendo), em `BEGIN ... ROLLBACK`; zero resíduo confirmado
+por leitura depois do rollback (7 faixas, 0 solicitações). Guarda e índice
+testados separados, mais o caminho legítimo (inclusive `alterar`, que não pode
+conflitar consigo mesmo).
+
+**Quality gate:** tsc ✅ · testes ✅ (93) · oxlint ✅ (0 erros, 13 warnings) · build ✅
+
+## Pendências para o próximo /start
+
+- [ ] 🔴 **Os 3 breakpoints (375/768/1440) continuam sem validação**, segunda
+      fase seguida. A extensão do Chrome não está conectada
+      (`list_connected_browsers` = `[]`); Supabase e `localhost:5173` estão de
+      pé. **Decisão do Chefe:** conectar a extensão ou autorizar Playwright
+      como devDependency.
+- [ ] 🔴 **Nenhuma tela foi vista.** Inclui o `PedidosDeJornada` criado hoje —
+      ele é validado por medição no banco e por tipo, não por olho.
+- [ ] 🟡 **Barbearia nova entra no catálogo público vazia** (medido: 0 serviços,
+      0 profissionais, 0 jornada). `barbearia_publica` não filtra por isso e
+      `listada_no_catalogo` nasce `true`. Vira problema real com auto-cadastro.
+- [ ] 5 decisões abertas no documento da Fase 13 (trial, cartão, o que o
+      cliente vê no vencimento, agendamentos já marcados, limite de plano).
+- [ ] Níveis 2 e 3 da identidade continuam propostos e não decididos.
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] Sem alarme para falha do job de lembrete.
+
+---
+
+## 2026-09-22 (virada de rumo) — Fase 13 deixa de ser cobrança e vira redesign
+
+**Decisão do Chefe:** onboarding e cobrança **engavetados**. A Fase 13 passa a
+ser **redesign**, conduzido pela skill `frontend-design`.
+
+- Nada foi revertido porque nada foi aplicado: o desenho era documento, sem
+  migration. `docs/10-fases/FASE-13_onboarding_e_assinatura.md` ficou no
+  repositório com aviso de engavetado no topo.
+- **Continua valendo desta sessão:** a migration `00029` e o
+  `PedidosDeJornada` — são correção do fluxo de jornada, não de cobrança.
+
+**Bloqueio imediato:** a skill **não está instalada**. Existe no cache do
+marketplace, mas `installed_plugins.json` só tem o `superpowers`. Precisa de
+`/plugin install frontend-design@claude-plugins-official`.
+
+**A questão que o redesign abre, e que é do Arquiteto:** o `SKILL.md` lista,
+como primeiro traço de "design gerado por IA", justamente *fundo creme quente
+perto de `#F4F1EA`*. A 13.1 fixou `--background: 40 20% 97%` = `#f9f8f6`. Não é
+o traço inteiro (nosso display é sans e o acento é dourado, não terracota), mas
+é o mesmo bairro. Se o creme/dourado é **brief** do Chefe, a skill respeita; se
+foi default, é o que ela manda revisar.
+
+## Pendências para o próximo /start
+
+- [ ] 🔴 **Instalar a skill:** `/plugin install frontend-design@claude-plugins-official`.
+      Sem isso ninguém invoca o `frontend-design`.
+- [x] ~~Extensão do Chrome desconectada~~ — **conectada em 22/09**. Os 3
+      breakpoints foram medidos e **passam**: `/`, `/login`, `/cadastro` e
+      `/barbearias` sem rolagem horizontal nem texto truncado em 375/768/1440.
+      Fecha a pendencia que vinha da 13.1.
+- [ ] 🔴 **O dourado reprova como TEXTO no tema claro** (medido na tela
+      renderizada): `text-primary` #FFB200 sobre o creme #f9f8f6 da **1.70**.
+      Tres casos: headline "em um lugar so" (72px, min 3.0) e os links
+      "Cadastre-se" e "Faca login" (14px, min 4.5) — que sao o unico caminho
+      entre login e cadastro. **A excecao autorizada pelo Chefe nao cobre
+      isto**: ela vale para rotulo escuro sobre botao preenchido (10.24) e diz
+      explicitamente que nao cobre primario sem rotulo. Aqui o dourado e cor de
+      texto. Tema escuro: 0 reprovacoes. **Entrada do brief do redesign, nao
+      corrigido de proposito.**
+- [ ] 🔴 **Escopo do redesign não definido:** landing+login, painel inteiro, ou
+      área do cliente? Três projetos de tamanhos muito diferentes. O painel tem
+      a complicação de o `TemaDaBarbearia` sobrescrever `--primary` em runtime
+      — lá a cor é da barbearia, não nossa.
+- [ ] 🔴 **Armadilha para quem mexer nos tokens:** `--background` tem espelho em
+      `paleta.ts` (`FUNDO`). Mudar um sem o outro não quebra teste nenhum e faz
+      a garantia de contraste das barbearias ser medida contra fundo
+      inexistente. Já aconteceu na 13.1 (2 de 18 verificações abaixo de 3.0).
+      A exceção do dourado no `index.css` também precisa ser remedida, não
+      herdada, se o primário mudar.
+- [ ] 🟡 **Barbearia nova entra no catálogo público vazia** (medido). Continua
+      valendo mesmo com a cobrança engavetada.
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] Sem alarme para falha do job de lembrete.

@@ -1469,3 +1469,335 @@ O escopo da **Fase 13.2** é resolver as pontas soltas visuais e preparar o terr
    - Crie o rascunho arquitetural (no `DEV_LOG.md` ou arquivo de design) das tabelas/colunas que suportarão o Onboarding e a assinatura (ex: tabela `tenant_billing`, status de `trial`). Não crie migrations ainda, apenas projete o esquema.
 
 **Regra:** Mantenha o rigor nos testes e não introduza bibliotecas novas sem pedir. Execute, valide e reporte.
+
+---
+
+## [OPUS 5] 2026-09-22 — FASE 13.2: o item 2 achou dois defeitos, o item 1 segue bloqueado
+
+Peguei a 13.2 pelos itens que não dependem do navegador e deixei o item 1 por
+último, porque ele continua parado pelo mesmo motivo de ontem. Começo pelo que
+rendeu.
+
+### O ITEM 2 ERA UMA VALIDAÇÃO E VIROU DUAS CORREÇÕES
+
+Você pediu para simular o pedido como Vitor e aprovar como dono. Fiz o fluxo
+inteiro no banco, como os dois papéis de verdade (JWT trocado, RLS valendo),
+dentro de `BEGIN ... ROLLBACK`.
+
+**O esqueleto está certo.** A 00028 fez o que prometia:
+
+| momento | jornada vigente de Vitor na segunda |
+|---|---|
+| antes | 09:00–18:00 |
+| Vitor pede 11:00 (pendente) | **09:00–18:00 — intacta** |
+| dono aprova | 11:00–18:00 |
+
+O P0-1 continua fechado. O problema está em outro lugar.
+
+#### DEFEITO 1 — A 00028 CONSERTOU O BANCO E CEGOU A TELA DO BARBEIRO
+
+Este é o item 2 na veia: a UX **não** reflete o estado do banco.
+
+Medido, lado a lado, logo depois do pedido:
+
+```
+o que a tela de Vitor lê (obterJornada -> horario_trabalho)
+  segunda, 09:00-18:00, aprovado        <- o horário ANTIGO
+
+o que existe no banco e a RLS deixa ele ler (solicitacao_jornada)
+  alterar, 11:00-18:00, pendente        <- ninguém lê isto
+```
+
+Não é bug da 00028 — é consequência dela. Tirar a proposta de dentro de
+`horario_trabalho` é exatamente o que impede um "não" do dono de destruir a
+jornada; só que `JornadaTrabalho.tsx` nunca leu outra coisa além de
+`horario_trabalho`. Então o barbeiro salva, vê um toast, o toast some, e a tela
+volta a exibir o horário velho **sem nenhum vestígio do pedido**.
+
+Pior: a policy `solicitacao_jornada_retirada`, criada na 00028 para ele poder
+desistir, **nunca teve tela**. O direito existia e era inalcançável.
+
+E o caso pior é o barbeiro sem jornada nenhuma: ele pede "incluir sábado", e a
+tela mostra o `EmptyState` "Nenhum horário definido", como se ele não tivesse
+pedido nada.
+
+#### DEFEITO 2 — E A CEGUEIRA DO 1 PRODUZIA DADO INVÁLIDO
+
+Sem ver o pedido, o reflexo é clicar salvar de novo. Segui o reflexo:
+
+```
+Vitor pede "sábado 19:00-22:00" duas vezes ...... 2 pendentes idênticos
+o dono vê duas linhas indistinguíveis e aprova as duas
+faixas de sábado depois .......................... 09:00-18:00
+                                                   19:00-22:00
+                                                   19:00-22:00
+sobreposições na jornada ......................... 1
+```
+
+A causa raiz não é o clique duplo: **a validação de sobreposição mora só no
+frontend**, em `horariosService.salvarJornada`. O caminho do gestor passa por
+lá; o caminho da aprovação escreve de dentro da RPC e passa por fora. É o mesmo
+formato do que aconteceu na F9 com a `ocupacao_publica` — regra no frontend,
+`SECURITY DEFINER` escrevendo direto por baixo.
+
+E isso chega ao cliente: `gerarHorariosDisponiveis` percorre faixa a faixa e
+empilha sem deduplicar, então cada horário da faixa repetida apareceria **duas
+vezes** na tela de agendamento.
+
+### O QUE FIZ
+
+**Migration `00029_jornada_sem_sobreposicao.sql`** — duas travas, em camadas
+diferentes, porque uma só não cobre o caso:
+
+1. índice parcial único na fila (`NULLS NOT DISTINCT`, que é o que faz valer
+   para `operacao = 'criar'`, onde `horario_id` é nulo — sem isso dois nulos
+   seriam "diferentes" e o índice não pegaria exatamente o caso medido);
+2. guarda dentro da RPC: nenhuma aprovação produz jornada sobreposta, venha o
+   pedido de onde vier.
+
+Medido depois: o reenvio bate no índice; um pedido **legítimo e não duplicado**
+que sobrepõe (sábado 17:00–20:00 contra a faixa 09:00–18:00) bate na guarda com
+mensagem em português; e o caminho legítimo continua passando, inclusive o
+`alterar`, que não pode conflitar com a própria faixa que ele altera. Zero
+resíduo depois do `ROLLBACK` — 7 faixas e 0 solicitações, como antes.
+
+**`PedidosDeJornada.tsx`** — o lado do barbeiro que faltava. Mostra o que ele
+pediu ("Você pediu para mudar segunda para 11:00 às 18:00"), com selo
+aguardando/aprovado/recusado, e o botão de retirar que usa a policy órfã.
+Fica **acima** da jornada de propósito: como a lista abaixo volta a mostrar o
+horário antigo — que é o que continua valendo —, sem o painel logo antes isso
+parece que o pedido se perdeu. Também entra no ramo do `EmptyState`.
+
+Traz os respondidos dos últimos 7 dias junto: "foi recusado" é informação que
+só existe nessa tabela, `horario_trabalho` não guarda rastro de uma recusa.
+
+O erro cru do índice novo virou frase: o barbeiro leria
+`duplicate key value violates unique constraint` se eu não traduzisse.
+
+### O ITEM 3 — O DESENHO DO ONBOARDING
+
+Está em `docs/10-fases/FASE-13_onboarding_e_assinatura.md`. Nenhuma migration,
+como você mandou. Três pontos que mudaram o desenho depois de eu ir ver o que
+já existe:
+
+- **O auto-cadastro já existe** (`criar_barbearia_e_vincular` cria a barbearia,
+  promove a `owner`, gera slug e a `configuracao_barbearia`). A Fase 13 não
+  precisa construí-lo, precisa dar a ele estado comercial e um caminho guiado.
+- **`barbearia.status` não serve para cobrança.** Hoje `suspenso` significa "o
+  admin desligou" — abuso, decisão humana. Enfiar inadimplência ali faria um
+  pagamento religar automaticamente uma conta banida. São dois eixos, duas
+  colunas.
+- **A regra de acesso tem que ser uma função SQL única**, consumida pela RLS e
+  por toda RPC `SECURITY DEFINER`. O documento traz a tabela dos seis pontos
+  que perguntam `status = 'ativo'` hoje e teriam que mudar juntos — a
+  `ocupacao_publica` já provou duas vezes que esquecer um deles não dá erro,
+  dá comportamento errado em silêncio.
+
+**E achei um defeito de hoje pelo caminho**, que registrei lá e repito aqui
+porque o auto-cadastro vai multiplicá-lo: `barbearia_publica` filtra só por
+`listada_no_catalogo` e `status`, e `listada_no_catalogo` nasce `true`. Medido
+com um `INSERT` dentro de `ROLLBACK`: **a barbearia entra no catálogo público
+no instante em que nasce, com 0 serviços, 0 profissionais e 0 jornada.** O
+cliente acha a página e não consegue marcar nada. As três do banco hoje estão
+completas — é sorte de estarem configuradas, não proteção do código.
+
+O documento termina com cinco decisões que não são minhas: dias de trial,
+cartão no trial ou não, o que o cliente final vê quando a assinatura vence, o
+destino dos agendamentos já marcados, e se limite de plano é trava ou aviso.
+
+### O ITEM 1 CONTINUA BLOQUEADO, E É O MESMO BLOQUEIO
+
+`list_connected_browsers` devolve `[]` e `tabs_context_mcp` responde que a
+extensão não está conectada. **Não é o `resize_window` quebrado desta vez** —
+é que não há navegador nenhum do outro lado.
+
+O resto da infra está de pé, e verifiquei: Supabase local saudável, dev server
+respondendo 200 em `localhost:5173`. Falta só a extensão.
+
+Não instalei Playwright para contornar: sua ordem diz para não introduzir
+biblioteca nova sem pedir, e headless browser não é uma dependência que se
+adiciona de passagem. **Está com o Chefe**: ou ele conecta a extensão, ou
+autoriza o Playwright como devDependency. Enquanto isso, os 3 breakpoints
+seguem 🔴 — é a segunda fase seguida em que a 13.1 não é vista por ninguém.
+
+`tsc` 0 · 93 testes · oxlint 0 erros / 13 warnings (mesmo número de antes) ·
+build ok.
+
+---
+
+## [OPUS 5] 2026-09-22 — Onboarding e cobrança ENGAVETADOS; a Fase 13 vira redesign
+
+Decisão do Chefe, registrada para você não retomar o fio errado: **a Fase 13
+não é mais onboarding e cobrança.** Vira **redesign**, conduzido pela skill
+`frontend-design` do Claude Code.
+
+O documento `docs/10-fases/FASE-13_onboarding_e_assinatura.md` fica no
+repositório com um aviso de engavetado no topo. Não foi descartado — nenhuma
+migration chegou a existir, então não há nada para reverter, e as cinco
+decisões abertas lá continuam válidas para quando o assunto voltar.
+
+**O que NÃO é engavetado:** a migration `00029` e o `PedidosDeJornada` desta
+mesma sessão. Aqueles são correção do fluxo de jornada (item 2 da 13.2), já
+estão aplicados e medidos, e nada têm a ver com cobrança.
+
+### A SKILL NÃO ESTÁ INSTALADA
+
+`frontend-design` existe no cache do marketplace
+(`claude-plugins-official/plugins/frontend-design`) mas **não está em
+`installed_plugins.json`** — só o `superpowers` está. Por isso ela não aparece
+na lista de skills da sessão. O Chefe precisa rodar:
+
+```
+/plugin install frontend-design@claude-plugins-official
+```
+
+Enquanto não rodar, nenhuma sessão consegue invocá-la.
+
+### O PONTO QUE VOCÊ PRECISA DECIDIR ANTES DE O REDESIGN COMEÇAR
+
+Li o `SKILL.md`. Ele tem uma seção de calibragem que lista os traços em que o
+design gerado por IA se agrupa hoje, para evitá-los. O **primeiro da lista**:
+
+> fundo creme quente (perto de `#F4F1EA`), display serifado de alto contraste,
+> e acento terracota ou argila quente
+
+**A Fase 13.1, entregue ontem, fixou exatamente um fundo creme:**
+`--background: 40 20% 97%` = `#f9f8f6`. Não é coincidência de leitura minha —
+é o mesmo bairro.
+
+Sendo justo, não é o traço inteiro: nosso display é **sans** (`Outfit`), não
+serifado, e o acento é **dourado**, não terracota. Mas a base está na
+vizinhança que a skill manda gastar liberdade fora.
+
+Então o redesign nasce com uma pergunta que é sua, não minha:
+
+1. **O creme/carvão/dourado é brief ou é default?** A skill diz que "as
+   palavras do brief sempre ganham, inclusive quando pedem um desses looks".
+   Se o Chefe escolheu o dourado como identidade do CutHub — e ele escolheu,
+   explicitamente, mantendo o vibrante contra a minha medição de 1.69 —, então
+   é brief e a skill respeita. Se foi eu que cheguei nele por default, é
+   exatamente o que ela manda revisar.
+2. **O redesign reabre os tokens ou parte deles?** Muda tudo: se reabre, a
+   13.1 inteira volta à mesa.
+
+### A ARMADILHA QUE O PRÓXIMO VAI PISAR SE NINGUÉM AVISAR
+
+Se o redesign mexer em `--background`, **tem que mexer em `paleta.ts` junto.**
+
+A constante `FUNDO` espelha os fundos do `index.css` e é ela que mede se a cor
+escolhida por cada barbearia tem contraste suficiente. Mudar um sem o outro
+**não quebra nada** — nenhum teste fica vermelho, nada estoura na tela. A
+garantia só deixa de valer, em silêncio, medida contra um fundo que não existe
+mais. Isso já aconteceu uma vez, na própria 13.1: 2 das 18 verificações caíram
+abaixo dos 3.0 que a função promete.
+
+Hoje a constante é exportada justamente para o teste consumir a mesma fonte.
+**Quem mudar o token muda os dois, ou a promessa às barbearias vira mentira.**
+
+Vale o mesmo para a exceção do dourado escrita no `index.css`: ela diz que o
+`1.69` é aceito **porque o rótulo preto sobre o botão tem 10.24**, e que a
+exceção **não cobre** componente primário sem rótulo. Se o primário mudar, a
+exceção precisa ser remedida ou apagada — não herdada.
+
+### PRÓXIMOS PASSOS, NA ORDEM
+
+1. **Chefe:** instalar o plugin (`/plugin install frontend-design@claude-plugins-official`).
+2. **Chefe:** conectar a extensão do Chrome. Num redesign isso deixa de ser
+   item de checklist e vira ferramenta de trabalho — a própria skill manda
+   tirar screenshot e criticar o próprio resultado ("a picture is worth 1000
+   tokens"). Continua desconectada; é a terceira fase seguida sem tela vista.
+3. **OPUS 4.6:** responder as duas perguntas do bloco acima e dar o brief —
+   qual tela, qual público, qual o trabalho principal dela. A skill exige
+   assunto concreto antes de desenhar, e "redesign do CutHub" ainda não é um.
+4. **OPUS 5:** só então o plano de design (tokens, tipografia, layout em ASCII)
+   e a crítica dele contra o brief, antes de escrever código.
+
+**Escopo ainda em aberto e que eu não assumo sozinho:** redesign de *quê*.
+Landing e login (a 13.1 mexeu neles), o painel inteiro, ou a área do cliente?
+São três projetos de tamanhos muito diferentes, e o painel tem a complicação de
+o `TemaDaBarbearia` sobrescrever `--primary` em tempo de execução: lá a cor não
+é nossa, é da barbearia.
+
+---
+
+## [OPUS 5] 2026-09-22 — O item 1 finalmente foi medido, e o dourado não passa onde é TEXTO
+
+O Chefe conectou a extensão. Os 3 breakpoints estavam 🔴 desde a 13.1; saíram
+de lá. E a tela, vista pela primeira vez, entregou um achado que muda o brief
+do redesign.
+
+### RESPONSIVIDADE: PASSA
+
+Iframe da própria origem, como o `CLAUDE.md` §3 manda (o `resize_window`
+continua quebrado). Medido `documentElement.scrollWidth` contra `clientWidth`,
+mais varredura de todo elemento que ultrapassa a borda e de todo nó de texto
+com `scrollWidth > clientWidth`:
+
+| rota | 375 | 768 | 1440 |
+|---|---|---|---|
+| `/` | sem rolagem | sem rolagem | sem rolagem |
+| `/login` | sem rolagem | sem rolagem | sem rolagem |
+| `/cadastro` | sem rolagem | sem rolagem | sem rolagem |
+| `/barbearias` | sem rolagem | sem rolagem | sem rolagem |
+
+Zero estouro horizontal, zero texto truncado (fora dos `sr-only`, que clipam
+em 1px por definição). Visto também em imagem: o aside de marca some no mobile
+e a ilustração do hero (`hidden lg:block`) some em 768, como projetado.
+
+**A ressalva da 13.1 — "não há risco óbvio de estouro" — se confirmou.** Mas
+ela era palpite, e agora é medida.
+
+### O ACHADO: A EXCEÇÃO DO DOURADO NÃO COBRE ESTES TRÊS CASOS
+
+Auditei contraste na tela renderizada, nos dois temas, com o alfa composto de
+verdade (leitura de pixel em canvas — o `getComputedStyle` devolve
+`color(srgb …)` em alguns casos e meu primeiro parser leu float 0–1 como 0–255;
+os "1.13" da primeira rodada eram bug meu, não achado).
+
+**Tema escuro: 0 reprovações.** O dourado sobre o carvão se comporta.
+
+**Tema claro: 3, todas a mesma causa** — `text-primary` (#FFB200) sobre o creme
+(#f9f8f6), **1.70**:
+
+| onde | tamanho | mínimo | medido |
+|---|---|---|---|
+| headline "em um lugar só" (`/`) | 72px | 3.0 | **1.70** |
+| link "Cadastre-se" (`/login`) | 14px | 4.5 | **1.70** |
+| link "Faça login" (`/cadastro`) | 14px | 4.5 | **1.70** |
+
+O 1.70 bate com o 1.69 que eu tinha calculado na 13.1 por token — dois métodos
+independentes no mesmo número, o que me deixa confiante na medida.
+
+**E aqui está o ponto, que não é reabrir a decisão do Chefe.** A exceção que
+ele autorizou está escrita no `index.css` com um limite explícito: vale porque
+**o rótulo preto sobre o botão preenchido tem 10.24**, e **não cobre componente
+primário sem rótulo**. Os três casos acima não são nem um nem outro — são o
+dourado usado como **cor de texto**. A exceção, do jeito que está redigida, não
+os autoriza. Não estou pedindo para rever o dourado do botão; estou dizendo que
+ele vazou para fora do lugar onde foi autorizado.
+
+Os dois links são o caso sério. Não é estética: **"Cadastre-se" e "Faça login"
+são o único caminho entre as duas telas de entrada**, têm 14px, e no tema claro
+ficam em 1.70 — na imagem que salvei, somem no fundo. Quem tem baixa visão não
+acha a porta.
+
+O primeiro filtro apontou 11 falhas; 8 eram artefato de medir durante o fade do
+`ScrollReveal` (texto em opacidade intermediária dá razão perto de 1.0).
+Neutralizei a animação antes de medir e sobraram estas 3. Registro porque a
+diferença entre 11 e 3 é a diferença entre assustar e informar.
+
+### POR QUE ISSO IMPORTA PARA O REDESIGN
+
+Eu tinha registrado que o creme/dourado cai na vizinhança do primeiro traço que
+a `frontend-design` manda evitar, e perguntei se era brief ou default. **Agora
+a pergunta tem uma segunda perna, mais dura que a estética:** no tema claro
+esse par simplesmente não sustenta texto. O redesign não precisa escolher entre
+"manter a identidade" e "passar no contraste" — precisa decidir **onde o
+dourado pode aparecer**. Botão preenchido com rótulo escuro: funciona, medido,
+10.24. Texto e link sobre o creme: não funciona, medido, 1.70.
+
+Não corrigi nada disto: mexer em `--primary` ou em `text-primary` no meio de
+uma decisão de redesign seria trabalhar contra a fase que o Chefe acabou de
+abrir. Fica como entrada do brief, não como bug solto.
+
+**Imagem salva:** `screenshot-1790100086876-0.jpg` (login e landing no claro).
