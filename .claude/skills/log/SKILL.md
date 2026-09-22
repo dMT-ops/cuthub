@@ -35,6 +35,26 @@ Leia o arquivo antes de tomar qualquer decisão.
 
 ---
 
+## SOBRE O HISTÓRICO TRUNCADO
+
+O `log.md` é rotacionado pela `/end` quando passa de 2.500 linhas: as entradas
+antigas são cortadas do arquivo, não arquivadas em volume.
+
+Se o topo do arquivo trouxer um bilhete `> **Rotacionado em ...**`, o contexto
+anterior **não se perdeu** — ele está no histórico do git, no comando que o
+próprio bilhete informa:
+
+```
+git show <sha>:docs/_pair-engineering/log.md
+```
+
+Não conclua que falta contexto, e não peça ao Chefe que recomponha o que foi
+truncado. Se a resposta que você precisa estiver claramente antes do corte,
+rode o `git show` e leia de lá — mas só nesse caso: o arquivo atual cobre as
+sessões recentes e, para continuar o trabalho, quase sempre basta.
+
+---
+
 ## PAPEL DO AGENTE
 
 Ao executar `/log`, assuma automaticamente o papel definido para você no projeto:

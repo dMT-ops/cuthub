@@ -93,15 +93,53 @@ Pendência tem que ser **acionável**: "revisar o financeiro" não serve;
 "P0-1: proposta de jornada recusada apaga a jornada aprovada — decidir o
 modelo antes de corrigir" serve.
 
-### 6. Rotação
+### 6. Rotação dos logs
 
-Se o `DEV_LOG.md` passar de **300 linhas**, mova as entradas mais antigas para
-`docs/09-log/archive/AAAA-MM.md` e deixe no topo do `DEV_LOG.md` uma linha por
-período arquivado:
+**`DEV_LOG.md` — arquiva.** Se passar de **300 linhas**, mova as entradas mais
+antigas para `docs/09-log/archive/AAAA-MM.md` e deixe no topo do `DEV_LOG.md`
+uma linha por período arquivado:
 
 ```markdown
 > Arquivado: [2026-09](archive/2026-09.md) — Fases 6 a 12.
 ```
+
+**`log.md` — trunca.** O log de pareamento é narrativa reproduzível pelo git,
+não contabilidade; ele não é arquivado em volume, é cortado.
+
+```
+wc -l docs/_pair-engineering/log.md
+```
+
+Se passar de **2.500 linhas**, mantenha apenas as entradas mais recentes até o
+arquivo ficar abaixo de **~1.500 linhas**. Dispara em 2.500 e corta até 1.500
+de propósito: se os dois números fossem iguais, a rotação rodaria todo dia.
+
+Três regras no corte, e nenhuma é opcional:
+
+1. **Trave antes de cortar.** Se `git status --porcelain docs/_pair-engineering/log.md`
+   retornar qualquer coisa, **commite primeiro**. Truncar conteúdo que ainda não
+   está em nenhum commit apaga ele de verdade — não há de onde recuperar.
+
+2. **Corte só em `^## [`.** Os cabeçalhos de entrada são
+   `## [OPUS 5]`, `## [OPUS 4.6]`, `## [CHEFE]`. Há dezenas de `^## ` que são
+   seções internas (`## CONTEXTO`, `## INVESTIGAÇÃO 1`, `## REQUISITOS`) —
+   cortar num desses parte uma entrada ao meio. Preserve sempre o preâmbulo
+   (título + explicação do canal) do topo do arquivo.
+
+3. **Grave o bilhete.** Logo abaixo do preâmbulo, substituindo o bilhete
+   anterior, com o SHA obtido por
+   `git log -1 --format=%h -- docs/_pair-engineering/log.md`:
+
+```markdown
+> **Rotacionado em AAAA-MM-DD.** As N entradas anteriores (AAAA-MM-DD → AAAA-MM-DD)
+> foram truncadas deste arquivo. Conteúdo íntegro em:
+> `git show <sha>:docs/_pair-engineering/log.md`
+```
+
+Sem o SHA no arquivo, "recuperável pelo git" é teoria. Com ele, é um comando.
+
+Depois de cortar, confira antes de seguir: contagem de entradas restantes, e a
+linha logo após o bilhete tem que ser um `## [` íntegro.
 
 ### 7. Commit e push
 
