@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { hexParaHsl, hslParaHex, paletaDaMarca, contrasteEntreHex } from './paleta';
+import { hexParaHsl, hslParaHex, paletaDaMarca, contrasteEntreHex, FUNDO } from './paleta';
 
 /** Cores reais e casos-limite: marca do produto, a do Renan, preto e quase branco. */
 const MARCAS = ['#F0B323', '#008000', '#111111', '#FAFAFA', '#2B6CB0', '#C53030'];
+
+/**
+ * Os fundos REAIS da pagina, como estao no `index.css` da Fase 13.1 (creme e
+ * carvao). Se `index.css` mudar e isto nao, a garantia de contraste passa a
+ * ser medida contra um fundo que nao existe -- foi exatamente o que a 13.1
+ * quase provocou.
+ */
+const FUNDO_CLARO = FUNDO.claro;
+const FUNDO_ESCURO = FUNDO.escuro;
 
 describe('conversão de cor', () => {
   it('ida e volta preserva a cor dentro de 1/255 por canal', () => {
@@ -52,8 +61,6 @@ describe('paletaDaMarca', () => {
   });
 
   it('garante que o botão se separa do fundo da página (WCAG 1.4.11, 3.0)', () => {
-    const FUNDO_CLARO = '#ffffff';
-    const FUNDO_ESCURO = '#0a0a0a';
     for (const hex of MARCAS) {
       expect(contrasteEntreHex(paletaDaMarca(hex, false)!.primariaHex, FUNDO_CLARO)).toBeGreaterThanOrEqual(3);
       expect(contrasteEntreHex(paletaDaMarca(hex, true)!.primariaHex, FUNDO_ESCURO)).toBeGreaterThanOrEqual(3);
@@ -88,7 +95,7 @@ describe('paletaDaMarca', () => {
     ];
     for (const [hex, escuro] of NAVALHA) {
       const p = paletaDaMarca(hex, escuro)!;
-      const fundo = escuro ? '#0a0a0a' : '#ffffff';
+      const fundo = escuro ? FUNDO_ESCURO : FUNDO_CLARO;
       expect(contrasteEntreHex(p.primariaHex, fundo)).toBeGreaterThanOrEqual(3);
     }
   });

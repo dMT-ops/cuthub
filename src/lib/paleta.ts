@@ -44,8 +44,16 @@ const FAIXA = {
   escuro: { min: 45, max: 80 },
 };
 
-/** Fundo da página em cada tema, como está em `index.css`. */
-const FUNDO = { claro: '#ffffff', escuro: '#0a0a0a' };
+/**
+ * Fundo da página em cada tema, espelhando `--background` do `index.css`.
+ *
+ * **Isto tem de mudar junto com o `index.css`.** Na Fase 13.1 o fundo claro
+ * virou creme e o escuro virou carvão; enquanto esta constante seguia em
+ * branco puro, a garantia de 3.0 estava sendo medida contra um fundo que não
+ * existe mais, e seis das cores de teste caíam para 2.88. Exportada para que o
+ * teste use exatamente o mesmo valor, em vez de repetir o literal.
+ */
+export const FUNDO = { claro: '#f9f8f6', escuro: '#0d0f11' };
 
 /** WCAG 1.4.11: componente de interface precisa de 3.0 contra o que está atrás. */
 const CONTRASTE_MINIMO_COM_O_FUNDO = 3;
