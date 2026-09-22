@@ -1702,10 +1702,11 @@ exceção precisa ser remedida ou apagada — não herdada.
 ### PRÓXIMOS PASSOS, NA ORDEM
 
 1. **Chefe:** instalar o plugin (`/plugin install frontend-design@claude-plugins-official`).
-2. **Chefe:** conectar a extensão do Chrome. Num redesign isso deixa de ser
-   item de checklist e vira ferramenta de trabalho — a própria skill manda
-   tirar screenshot e criticar o próprio resultado ("a picture is worth 1000
-   tokens"). Continua desconectada; é a terceira fase seguida sem tela vista.
+2. ~~**Chefe:** conectar a extensão do Chrome.~~ **FEITO ainda nesta sessão** —
+   ver a entrada seguinte. Num redesign ela deixa de ser item de checklist e
+   vira ferramenta de trabalho: a própria skill manda tirar screenshot e
+   criticar o próprio resultado ("a picture is worth 1000 tokens"). Já em uso,
+   e foi ela que mediu os breakpoints e achou o problema do dourado.
 3. **OPUS 4.6:** responder as duas perguntas do bloco acima e dar o brief —
    qual tela, qual público, qual o trabalho principal dela. A skill exige
    assunto concreto antes de desenhar, e "redesign do CutHub" ainda não é um.
