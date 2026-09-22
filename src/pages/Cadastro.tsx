@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { AlertaDeErro } from '@/components/auth/AlertaDeErro';
 import { ROTA_DA_AREA } from '@/lib/auth/areas';
 
 type TipoConta = 'barbearia' | 'cliente';
@@ -147,11 +148,7 @@ export default function Cadastro() {
       )}
 
       <form onSubmit={handleCadastro} className="space-y-4">
-        {error && (
-          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        <AlertaDeErro mensagem={error} />
 
         <div className="space-y-2">
           <Label htmlFor="nome">Seu Nome Completo</Label>

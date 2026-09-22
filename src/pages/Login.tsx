@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { AlertaDeErro } from '@/components/auth/AlertaDeErro';
 import { authService } from '@/services/auth.service';
 import { rotaInicialDoPapel } from '@/lib/auth/areas';
 
@@ -71,11 +72,7 @@ export default function Login() {
       }
     >
       <form onSubmit={handleLogin} className="space-y-4">
-        {error && (
-          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        <AlertaDeErro mensagem={error} />
 
         <div className="space-y-2">
           <Label htmlFor="email">E-mail</Label>

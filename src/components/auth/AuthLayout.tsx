@@ -30,25 +30,31 @@ export function AuthLayout({ titulo, descricao, children, rodape }: AuthLayoutPr
       {/* -------------------------------------------------------------- */}
       {/* Painel de marca — escondido no mobile, onde o formulário manda  */}
       {/* -------------------------------------------------------------- */}
-      <aside className="relative hidden overflow-hidden bg-card lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute left-[-6rem] top-[-6rem] h-[26rem] w-[26rem] rounded-full bg-primary/20 blur-3xl" />
-          <div className="absolute bottom-[-8rem] right-[-4rem] h-[22rem] w-[22rem] rounded-full bg-primary/10 blur-3xl" />
-        </div>
+      <aside className="relative hidden overflow-hidden bg-brand-ink text-brand-ink-foreground lg:flex lg:flex-col lg:justify-between lg:p-12">
+        {/* Uma faixa dourada fina no topo e uma trama diagonal discreta. Isto
+            substituiu duas bolhas de desfoque: desfoque colorido e o visual
+            padrao de template, e nao dizia nada sobre barbearia. */}
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 14px)',
+          }}
+        />
 
-        <Link to="/" className="flex w-fit items-center gap-2 font-semibold tracking-tight">
+        <Link to="/" className="flex w-fit items-center gap-2 tracking-tight">
           <Scissors className="h-6 w-6 text-primary" aria-hidden="true" />
-          <span className="text-lg">CutHub</span>
+          <span className="font-display text-lg font-semibold">CutHub</span>
         </Link>
 
         <div className="max-w-md">
-          <p className="text-3xl font-bold leading-tight tracking-tight">
-            Sua barbearia inteira{' '}
-            <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              em um lugar só
-            </span>
+          <p className="font-display text-4xl font-bold leading-[1.1] tracking-tight">
+            Sua barbearia inteira
+            <span className="mt-1 block text-primary">em um lugar só</span>
           </p>
-          <ul className="mt-8 space-y-3 text-sm text-muted-foreground">
+          <ul className="mt-10 space-y-4 text-sm text-brand-ink-foreground/70">
             {DESTAQUES.map((item) => (
               <li key={item} className="flex items-start gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
@@ -58,7 +64,7 @@ export function AuthLayout({ titulo, descricao, children, rodape }: AuthLayoutPr
           </ul>
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-brand-ink-foreground/50">
           © {new Date().getFullYear()} CutHub
         </p>
       </aside>
@@ -78,10 +84,10 @@ export function AuthLayout({ titulo, descricao, children, rodape }: AuthLayoutPr
 
           <div className="flex items-center gap-2 lg:hidden">
             <Scissors className="h-6 w-6 text-primary" aria-hidden="true" />
-            <span className="text-lg font-semibold tracking-tight">CutHub</span>
+            <span className="font-display text-lg font-semibold tracking-tight">CutHub</span>
           </div>
 
-          <h1 className="mt-6 text-2xl font-bold tracking-tight lg:mt-0">{titulo}</h1>
+          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight lg:mt-0">{titulo}</h1>
           <p className="mt-2 text-sm text-muted-foreground">{descricao}</p>
 
           <div className="mt-8">{children}</div>
