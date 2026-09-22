@@ -65,3 +65,94 @@ estrutura de log/arquivo.
 - [ ] Nenhuma tela foi inspecionada visualmente — vale uma passada do Chefe na
       fila de jornada nova (pedir mudança como Vitor, responder como dono).
 - [ ] Sem alarme para falha do job de lembrete (só registro passivo).
+
+---
+
+## 2026-09-21
+
+> Entrada **reconstruída em 2026-09-22** a partir do commit `00a1b0f` e do log
+> de pareamento. Aquela sessão terminou sem `/end`, então nem o `DEV_LOG` nem o
+> `PROJECT_STATUS` registraram a Fase de identidade — o `/start` seguinte teria
+> aberto o dia na Fase 12, sem enxergar nada disto.
+
+**Feito:** Identidade de marca, Nível 1 — o painel da barbearia passa a usar a
+cor, a logo e o nome dela. `TemaDaBarbearia` sobrescreve `--primary`,
+`--primary-foreground` e `--ring` em `documentElement` (e não numa div, senão
+diálogo, dropdown e toast — que renderizam em portal no `body` — ficariam com o
+amarelo do CutHub). Logo na sidebar expandida, recolhida e no menu mobile;
+título da aba e saudação com o nome. Limpa no unmount para o tema não vazar
+para a área do cliente nem para o console do admin.
+
+**Decisões:**
+- **Nível 1 escolhido pelo Chefe**, com a regra "a barbearia escolhe o matiz, o
+  sistema garante a leitura". Níveis 2 (paleta completa com prévia ao vivo) e 3
+  (login por slug, PWA por barbearia) ficam propostos.
+- **Travar a luminosidade numa faixa não bastou, e o teste provou**: amarelo em
+  L=52 tem 1.94 de contraste contra o branco, porque luminância percebida
+  depende do matiz. A faixa virou só o limite, e entrou uma busca que caminha
+  o L um passo por vez até o botão se separar do fundo.
+- **Não haverá branding na área do cliente** (`/minha-conta`): ela é neutra
+  desde a Fase 4 porque o cliente é de várias barbearias ao mesmo tempo.
+
+**Registrado e não corrigido:** o amarelo padrão do produto
+(`--primary: 45 93% 47%`) não passa em 3.0 contra o branco no tema claro — o
+tema base tem o mesmo defeito que a função impede nas barbearias. Mudar a cor
+do produto é decisão de marca.
+
+**Quality gate:** tsc ✅ · testes ✅ (81) · oxlint ✅ · build ✅
+**Commit:** `00a1b0f`
+
+## Pendências para o próximo /start
+
+- [ ] Aguardando o Arquiteto: Fase 13 (onboarding e cobrança).
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] Nenhuma tela foi vista — vale o Chefe entrar em Configurações →
+      Identidade e marca e alternar claro/escuro.
+- [ ] Sem alarme para falha do job de lembrete.
+
+---
+
+## 2026-09-22
+
+**Feito:** Correção de precisão em `src/lib/paleta.ts` e regularização dos
+arquivos de estado (esta entrada e a de 21/09, que não existiam).
+
+**Decisões:**
+- **A promessa "a cor da barbearia fica intacta" não era verdade.** O ida-e-volta
+  hex → HSL inteiro → hex perde até **5/255 por canal**; varrendo o espaço de cor
+  (636 mil amostras), só **11%** das cores voltavam idênticas. As duas cores reais
+  do banco (`#e11d48`, `#16a34a`) já passam no contraste, a busca nem rodava, e
+  mesmo assim saíam alteradas. A conversão agora preserva a precisão; o
+  arredondamento para inteiro ficou só em `hexParaHsl`, que ninguém usa para
+  pintar.
+- **O `--primary` passa a aceitar decimal** (`42.15 87.23% 39.92%`). É o que faz
+  o canal voltar ao mesmo byte; `hsl()` aceita e o design system não se importa.
+- **Quantizar depois da busca era o erro sutil**, e ele custou uma regressão
+  minha: mexia um canal em 1/255 depois da medição e derrubava o contraste de
+  3.00 para 2.98 em **389 cores**. O laço media uma cor e a função devolvia
+  outra. Agora quantiza uma vez, antes da busca — medir e pintar usam o mesmo
+  número.
+- `l !== limite` virou comparação por direção: com L fracionário aquela guarda
+  nunca casaria e daria laço infinito.
+
+**Verificação:** varredura de 1.264.152 pares cor/tema saturados, mesma métrica
+rodada no código de 21/09 e no de hoje — cores intactas: **92.111 → 861.501**;
+cor alterada sem precisar: **769.390 → 0** (61% das cores saturadas mudavam à
+toa); contraste final abaixo de 3: **0 → 0**; triplo do CSS divergente do hex
+medido: **0 → 0**. Os dois últimos nunca foram defeito do código antigo: os 389
+e os 12.662 saíram da minha tentativa intermediária. Os 3 testes novos foram
+confirmados contra o código defeituoso antes de valer.
+
+**Quality gate:** tsc ✅ · testes ✅ (84) · oxlint ✅ (0 erros, 13 warnings) · build ✅
+
+## Pendências para o próximo /start
+
+- [ ] Aguardando o Arquiteto: Fase 13 (onboarding e cobrança).
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] 🟡 **Nenhuma tela foi vista.** App em `localhost:5173`. Vale entrar em
+      Configurações → Identidade e marca, trocar a cor e alternar claro/escuro.
+- [ ] Sem alarme para falha do job de lembrete (só registro passivo).
+- [ ] O amarelo padrão do produto não passa em 3.0 no tema claro — decisão de
+      marca, levantada em 21/09 e ainda aberta.
+- [ ] 🟡 As skills do projeto (`/log`, `/start`, `/end`, `/push`) **só carregam
+      se o Claude Code for aberto em `PROJETO\cuthub`**, não em `PROJETO`.

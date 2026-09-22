@@ -9567,3 +9567,105 @@ Fica registrado.
 2. **Só 1 das 3 barbearias preencheu a marca.** A personalização existe e está
    vazia — na próxima rodada, valeria um empurrão no onboarding para a
    barbearia escolher cor e logo logo no começo, senão o recurso fica invisível.
+
+---
+
+## [OPUS 5] 2026-09-22 — A cor "intacta" não estava intacta
+
+Na entrada de 21/09 eu escrevi uma tabela dizendo que `#008000` e `#2B6CB0`
+saem **intactas** da `paletaDaMarca`. Fui conferir contra as cores que estão
+mesmo no banco hoje — e elas mudaram desde então, o Renan não é mais verde:
+
+```
+Renan            #E11D48  claro   -> #e21d48   contraste 4.66
+Renan            #E11D48  escuro  -> #e21d48   contraste 4.25
+Cuthub barbearia #16A34A  claro   -> #16a249   contraste 3.33
+Cuthub barbearia #16A34A  escuro  -> #16a249   contraste 5.94
+```
+
+As duas passam folgado no mínimo de 3.0, **a busca de luminosidade nem roda** —
+e mesmo assim a cor sai diferente. Não é ajuste de contraste: é perda no
+ida-e-volta `hexParaHsl` → `hslParaHex`, que arredondava H, S e L para inteiro.
+
+### POR QUE A TABELA DE 21/09 ENGANOU
+
+`#008000` sobreviveu por sorte — ele é um dos poucos que fecham exatamente no
+arredondamento. Varri o espaço de cor (636 mil amostras, passo 3):
+
+| deriva por canal | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| ocorrências | 70.863 | 337.151 | 211.360 | 16.173 | 497 | 12 |
+
+**Só 11% das cores voltavam idênticas**, e o pior caso é 5/255
+(`#03e4ea` → `#04dfe7`), não 1/255 como o `paleta.test.ts` afirmava. Aquele
+teste amostra 6 cores; a propriedade que ele documenta não é geral. Foi a minha
+própria nota — "um passo de 255 é invisível" — que escondeu isso: o número
+estava errado e eu nunca o medi fora das 6.
+
+### O ERRO QUE EU COMETI CONSERTANDO
+
+Primeira versão: preservar a precisão na conversão, e quantizar para 4 casas
+**no fim**, só para montar o triplo do CSS. Passou nos 10 testes.
+
+A varredura reprovou. Quantizar depois da busca mexe um canal em 1/255 **depois
+da medição** — e isso derrubava o contraste de 3.00 para 2.98 em **389 cores
+saturadas**, além de deixar o triplo do CSS pintando uma cor diferente do hex
+sobre o qual o contraste tinha sido medido, em **12.662** casos. O baseline do
+código antigo era 0 nos dois. Eu tinha introduzido uma
+regressão exatamente na garantia que o módulo existe para dar, e os testes
+unitários não viram porque as 6 cores de `MARCAS` não são fio de navalha.
+
+O defeito de fundo é o mesmo dos dois casos: **medir uma cor e pintar outra.**
+A correção é quantizar **uma vez, antes da busca**, e a partir dali só existir
+aquele valor — `corEm(l)` é usada tanto na condição do laço quanto no resultado.
+
+Também troquei `l !== limite` por comparação de direção: com L fracionário
+aquela guarda nunca casaria e o laço giraria para sempre.
+
+### O ESTADO DEPOIS, MEDIDO
+
+1.264.152 pares cor/tema saturados, **a mesma métrica rodada nos dois lados**
+(cinza fica de fora: o ramo `s < 8` muda a cor de propósito, e isso continua
+certo):
+
+```
+                           21/09       hoje
+cores intactas             92.111      861.501
+mudou sem precisar         769.390     0
+contraste final abaixo de 3      0     0
+triplo do CSS != hex medido      0     0
+```
+
+**61% das cores saturadas mudavam sem precisar.** Esse é o tamanho real do
+defeito, e é bem maior do que a tabela de 21/09 deixava supor.
+
+As duas últimas linhas precisam de uma nota, porque eu quase as reportei
+errado: **o código de 21/09 não tinha esses dois defeitos.** Os 389 casos de
+contraste abaixo de 3 e os 12.662 de triplo divergente citados acima são da
+**minha tentativa intermediária** — atribuí-los ao código antigo seria inventar
+um problema que nunca existiu lá. A primeira versão desta entrada fazia
+exatamente isso, e também comparava as 861.501 intactas com um "70.863" que
+vinha de outra varredura (do ida-e-volta cru, sem eixo de tema e sem filtro de
+saturação). Números de varreduras diferentes não se comparam; refiz.
+
+Três testes novos, e **confirmei os três contra o código defeituoso antes de
+aceitá-los** — dois foram escritos depois do fix e passariam de graça. O de
+contraste só falha na reprodução fiel do defeito; a primeira reprodução que
+tentei não o pegava, o que por si só já diz que o teste é específico.
+
+`tsc` 0 · 84 testes · oxlint 0 erros / 13 warnings · build ok.
+
+### DUAS COISAS PARA VOCÊS
+
+1. **O `--primary` agora pode ter decimal** (`42.15 87.23% 39.92%`). É o que faz
+   o canal voltar ao mesmo byte. Se algum lugar do design system assumir inteiro
+   naquele triplo, quebra — não achei nenhum, mas o alerta fica.
+2. **Continuo sem ver tela nenhuma.** Tudo acima é banco, teste e varredura.
+
+### UMA NOTA DE FERRAMENTAL, PORQUE CUSTOU TEMPO
+
+O `/log` não existia nesta sessão: o Claude Code foi aberto em
+`C:\d_util\PROJETO`, e as skills moram em `C:\d_util\PROJETO\cuthub\.claude\skills`.
+Skill de projeto é descoberta na raiz da sessão, então `/log`, `/start`, `/end`
+e `/push` simplesmente não são registradas quando se abre a pasta pai. Rodei a
+rotina do `/log` na mão. Está anotado no `PROJECT_STATUS.md`.
