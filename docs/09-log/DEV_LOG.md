@@ -156,3 +156,71 @@ confirmados contra o código defeituoso antes de valer.
       marca, levantada em 21/09 e ainda aberta.
 - [ ] 🟡 As skills do projeto (`/log`, `/start`, `/end`, `/push`) **só carregam
       se o Claude Code for aberto em `PROJETO\cuthub`**, não em `PROJETO`.
+
+---
+
+## 2026-09-22 (fechamento) — FASE 13.1: fundação visual e identidade
+
+**Feito:** tokens de tema refeitos (creme/carvão, dourado, tipografia
+`Outfit`/`Inter`), `ScrollReveal` nativo, `AuthLayout` com painel de marca
+escuro, `AlertaDeErro` compartilhado e hero da Landing assimétrico. Escopo
+respeitado: nada de dashboard nem de catálogo.
+
+**UI/UX consolidado:**
+- **`--brand-ink`** — superfície escura que **não segue o tema**, usada no aside
+  do login e na chamada final da Landing. Inverter no tema claro apagaria o
+  contraste, que é o ponto da peça.
+- **`font-display` (`Outfit`)** para títulos e marca, `Inter` para texto. Carregadas
+  por `<link>` no `index.html` com `preconnect`, e **não** por `@import` no CSS:
+  o `@import` só dispara depois que o CSS é baixado e parseado, encadeando duas
+  idas ao servidor antes da primeira letra.
+- **Decoração:** bolhas de desfoque coloridas saíram das duas telas. Entraram
+  trama diagonal a 45° e um filete dourado — desfoque colorido é acabamento de
+  template e não diz nada sobre barbearia.
+- **Erro de formulário** virou componente com `AlertCircle` e
+  `animate-in fade-in zoom-in-95`, mais **`role="alert"`**: cor e animação
+  resolvem para quem olha o formulário; o `role` é o que faz o leitor de tela
+  anunciar. Nenhuma lógica de form ou de Supabase Auth foi tocada.
+- **Hero assimétrico** 7/5 alinhado à esquerda, com agenda ilustrativa
+  `aria-hidden` (dado falso lido em voz alta como se fosse real confunde).
+
+**Decisões:**
+- **O dourado `42 100% 50%` tem 1.69 contra o fundo creme**, abaixo dos 3.0 que
+  `paletaDaMarca` exige das barbearias. Decisão do Chefe: manter o vibrante e
+  **registrar a exceção**, porque o rótulo preto sobre ele tem 10.24 e é o
+  rótulo que identifica o controle. A exceção **não cobre** componente primário
+  sem rótulo (ícone solto, barra, indicador) — esse precisa de borda própria.
+  Está escrito no `index.css`, junto do token.
+- **`FUNDO` em `paleta.ts` era um bug esperando a Fase 13.1.** A constante
+  fixava branco/preto "como está em index.css". Trocar os fundos sem ela faria
+  a garantia das barbearias ser medida contra um fundo inexistente: 2 das 18
+  verificações caíram abaixo de 3.0 (`#F0B323` claro em 2.89, `#002178` escuro
+  em 2.99). Corrigida e **exportada**, para o teste usar a mesma fonte em vez de
+  repetir o literal.
+- **`destructive` no escuro virou vermelho claro com texto escuro**: o vermelho
+  escuro dava 3.96 como `text-destructive` na caixa de erro, abaixo de 4.5.
+- **`prefers-reduced-motion` não anima nem observa.** Quem pede menos movimento
+  não recebe nem fade, e o observer sequer é criado. Teste confirmado contra o
+  componente sem a regra.
+
+**Verificação:** todos os pares de token medidos nos dois temas (texto, card,
+muted, destructive, borda) — passam em 4.5, com a exceção do dourado
+documentada acima. 9 testes novos.
+
+**Quality gate:** tsc ✅ · testes ✅ (93, era 84) · oxlint ✅ (0 erros, 13 warnings) · build ✅
+
+**Armadilha reencontrada:** `tsc --noEmit` passou e o `tsc -b` do build reprovou
+(TS1294, propriedade de parâmetro sob `erasableSyntaxOnly`). A `/end` avisa que
+os dois não olham a mesma coisa; é verdade, e custou um ciclo.
+
+## Pendências para o próximo /start
+
+- [ ] 🔴 **Os 3 breakpoints (375/768/1440) NÃO foram validados.** O Arquiteto
+      pediu explicitamente. Tentei abrir o navegador e a extensão do Chrome não
+      está conectada. É o único item da 13.1 que ficou por fazer.
+- [ ] 🔴 **Nenhuma tela foi vista, de novo.** Toda a Fase 13.1 é contraste
+      calculado e teste — não há prova visual de nada. App em `localhost:5173`.
+- [ ] Níveis 2 e 3 da identidade continuam propostos e não decididos.
+- [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
+- [ ] Sem alarme para falha do job de lembrete.
+- [ ] As skills do projeto só carregam se o Claude Code abrir em `PROJETO\cuthub`.

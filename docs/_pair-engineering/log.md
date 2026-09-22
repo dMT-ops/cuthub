@@ -9669,3 +9669,149 @@ O `/log` não existia nesta sessão: o Claude Code foi aberto em
 Skill de projeto é descoberta na raiz da sessão, então `/log`, `/start`, `/end`
 e `/push` simplesmente não são registradas quando se abre a pasta pai. Rodei a
 rotina do `/log` na mão. Está anotado no `PROJECT_STATUS.md`.
+
+---
+
+### [ARQUITETURA] FASE 13.1 — FUNDAÇÃO VISUAL E IDENTIDADE (2026-09-22)
+
+**Para o Engenheiro (Opus 5):**
+O objetivo desta fase é abandonar o aspecto de "SaaS Genérico" na porta de entrada (Landing Page, Login e Cadastro) e estabelecer uma identidade autêntica de barbearia de alto padrão. Não toque no dashboard nem no catálogo agora, apenas na fundação pública/auth.
+
+**Diretrizes e Restrições Arquiteturais:**
+
+1. **Tokens Visuais (`index.css`):**
+   - **Tipografia:** Importe `Outfit` (display) e `Inter` (sans) do Google Fonts. Atualize `--font-sans` e `--font-display`.
+   - **Paleta Premium:** O amarelo e o escuro devem ser mantidos, mas refinados. Fundo claro (creme/areia: ex `40 20% 97%`), fundo escuro (`220 13% 6%` para um carvão profundo, em vez de preto puro). O `--primary` vira um amarelo/dourado vibrante e rico (ex `42 100% 50%`).
+
+2. **Movimento (Scroll Reveal):**
+   - Não instale `framer-motion` (já temos `tailwindcss-animate`).
+   - Crie o componente utilitário `src/components/ui/scroll-reveal.tsx` usando `IntersectionObserver` nativo.
+   - **MUITO IMPORTANTE:** O componente deve respeitar estritamente a preferência do usuário verificando `window.matchMedia('(prefers-reduced-motion: reduce)')`. Se ativo, pule a animação (apenas exiba o elemento estático).
+
+3. **Layout de Autenticação (`AuthLayout.tsx`):**
+   - Remova aquelas bolhas de desfoque genéricas.
+   - O painel lateral (aside) deve possuir um fundo *sempre* escuro/premium contrastando com o formulário, criando uma estética de marca forte e de alto contraste, utilizando a fonte `Outfit` para os títulos.
+
+4. **Recuperação de Erro na UI (Login e Cadastro):**
+   - Refatore a `div` de erro nos formulários (`Login.tsx` e `Cadastro.tsx`).
+   - Adicione o ícone `AlertCircle` (`lucide-react`) e use as classes do `tailwindcss-animate` (ex: `animate-in fade-in zoom-in-95 duration-300`) para chamar a atenção ativamente quando uma validação falhar (mitigação da Heurística 9).
+   - **Restrição Intocável:** Nenhuma lógica de formulário ou Supabase Auth deve ser tocada. Apenas feedback visual.
+
+5. **Landing Page (`Landing.tsx`):**
+   - Aplique o `ScrollReveal` ao rolar a página.
+   - Adicione assimetria ao Hero, abandonando o modelo "tudo centralizado".
+   - Siga Mobile-first e valide nos 3 breakpoints de sempre (375px, 768px, 1440px).
+
+**Regra de Ouro:** Execute o plano com a visão de um designer, documente o que foi consolidado de UI/UX e grave seu reporte no `DEV_LOG.md` ao encerrar.
+
+---
+
+## [OPUS 5] 2026-09-22 — FASE 13.1 entregue, com uma ressalva medida e um bug que a própria ordem ia criar
+
+Executei a 13.1 inteira menos um item. Começo pelo que mais importa.
+
+### O SEU ITEM 1 IA QUEBRAR O TRABALHO DE 21/09
+
+`paleta.ts` tinha isto, com este comentário:
+
+```ts
+/** Fundo da página em cada tema, como está em `index.css`. */
+const FUNDO = { claro: '#ffffff', escuro: '#0a0a0a' };
+```
+
+Trocar `--background` para creme e carvão **sem tocar nessa constante** deixa a
+garantia de contraste das barbearias sendo medida contra um fundo que não
+existe mais. Não é teórico: apontei o teste para os fundos novos antes de
+corrigir, e **duas** das 18 verificações caíram abaixo dos 3.0 que a função
+promete — `#F0B323` no tema claro (**2.89**) e `#002178` no escuro (**2.99**).
+
+Dois casos em dezoito é um estrago modesto, e prefiro dar o número certo a
+inflá-lo: a primeira versão desta entrada dizia "seis cores caíram para 2.88",
+o que eu não tinha medido. O argumento não depende do tamanho — uma garantia
+que o código anuncia e não cumpre é falsa em 2 casos ou em 200, e o número
+cresce com o catálogo de cores que as barbearias escolherem.
+
+A constante virou `{ claro: '#f9f8f6', escuro: '#0d0f11' }` e passou a ser
+**exportada**, para o teste consumir a mesma fonte em vez de repetir o literal
+e as duas poderem divergir de novo.
+
+Vale registrar o padrão, porque ele vai voltar: **todo token de fundo tem um
+espelho em `paleta.ts`.** Mudar um sem o outro é silencioso — nada quebra, só a
+garantia deixa de valer.
+
+### O DOURADO: MEDI, DISCORDEI, E O CHEFE DECIDIU
+
+`--primary: 42 100% 50%` (`#ffb300`) contra o creme `#f9f8f6` dá **1.69**. O
+mínimo que `paletaDaMarca` impõe às barbearias é 3.0. Pior: se uma barbearia
+escolhesse exatamente esse dourado, a função escureceria para `#c28800`. O
+produto passaria a usar um primário que ele mesmo rejeita nos clientes — é a
+incoerência que levantei em 21/09, agora ampliada, não reduzida.
+
+Sendo justo com o outro lado, e foi o que pesou: **texto preto sobre ele tem
+10.24**, e a 1.4.11 exige 3.0 do que *identifica* o componente. Num botão
+preenchido com rótulo legível dá para sustentar que o rótulo identifica.
+
+**O Chefe decidiu manter o vibrante** e registrar a exceção. Implementei assim.
+A exceção está escrita no `index.css`, ao lado do token, com o limite explícito:
+**ela não cobre componente primário sem rótulo** — ícone solto, barra, badge,
+indicador. Esses continuam precisando de borda própria, e quem for criar um
+desses daqui a seis meses precisa esbarrar nessa frase.
+
+### O RESTO, EM UMA LINHA CADA
+
+- **`--destructive` no escuro** dava 3.96 como `text-destructive` na caixa de
+  erro. Virou vermelho claro com texto escuro por cima: 5.82 sobre o fundo,
+  4.53 sobre o `muted`. Medi cada par de token nos dois temas antes de aceitar.
+- **`prefers-reduced-motion`**: não anima **e não observa** — o observer nem é
+  criado. Confirmei o teste contra o componente sem a regra, senão ele não
+  prova nada.
+- **Fontes por `<link>` no `index.html`, não `@import` no CSS.** O `@import` só
+  dispara depois que o CSS é baixado e parseado; numa landing em que a
+  tipografia é o argumento, essa ida extra aparece.
+- **Erro de formulário virou componente** em vez de ser refatorado duas vezes —
+  a `div` era idêntica em `Login` e `Cadastro`, pelo mesmo motivo que o
+  `AuthLayout` já existe. Ganhou `role="alert"`: a animação resolve para quem
+  está olhando, o `role` é o que faz o leitor de tela anunciar.
+- **Agenda do hero é `aria-hidden`.** Horário e nome falsos anunciados como se
+  fossem dados reais confundem mais do que ajudam.
+
+### O QUE EU NÃO FIZ, E É O SEU ITEM 5
+
+**Não validei os 3 breakpoints.** Tentei abrir o navegador para ver 375, 768 e
+1440 de verdade — a extensão do Chrome não está conectada nesta máquina. Então
+a 13.1 inteira é contraste calculado e teste de unidade; **não há prova visual
+de nada**, de novo. As classes de breakpoint estão coerentes e a ilustração do
+hero é `hidden lg:block`, então não há risco óbvio de estouro horizontal — mas
+"não há risco óbvio" não é a mesma coisa que ter olhado.
+
+Isso está como 🔴 no topo das pendências do `DEV_LOG`.
+
+`tsc` 0 · 93 testes (era 84) · oxlint 0 erros / 13 warnings · build ok.
+
+### UMA ARMADILHA QUE VOCÊ JÁ TINHA REGISTRADO, E EU CAÍ NELA
+
+`npx tsc --noEmit` passou limpo e o `tsc -b` do build reprovou — TS1294,
+propriedade de parâmetro de construtor sob `erasableSyntaxOnly`, num stub de
+teste. A `/end` diz que os dois não olham a mesma coisa. Diz porque é verdade.
+
+---
+
+### [ARQUITETURA] FASE 13.2 — VALIDAÇÃO VISUAL E PREPARAÇÃO PARA ONBOARDING (2026-09-22)
+
+**Para o Engenheiro (Opus 5):**
+Excelente trabalho blindando a paleta e os componentes de erro na 13.1. A fundação visual está consolidada e alinhada às heurísticas de acessibilidade.
+
+O escopo da **Fase 13.2** é resolver as pontas soltas visuais e preparar o terreno para o auto-cadastro de barbearias:
+
+1. **Validação Visual e Responsividade (Pendente da 13.1):**
+   - O Chefe exige que a UI seja responsiva e visualmente validada nos 3 breakpoints (375px, 768px, 1440px). 
+   - Habilite/conecte o navegador ou use screenshots gerados localmente para garantir que o Hero da Landing Page, o AuthLayout e os alertas de erro não quebram ou sobrepõem no mobile.
+
+2. **Fluxo de Nova Jornada (Pendente da Fase 10/12):**
+   - Ninguém validou na interface o fluxo de "Aprovação de Jornada/Folgas". Entre no sistema, simule um pedido de nova jornada como um profissional (ex: Vitor) e aprove como dono. Valide se a UX reflete perfeitamente o estado do banco.
+
+3. **Arquitetura de Onboarding Self-Service (O Começo):**
+   - O objetivo da Fase 13 é permitir que uma barbearia se cadastre sozinha e configure sua marca.
+   - Crie o rascunho arquitetural (no `DEV_LOG.md` ou arquivo de design) das tabelas/colunas que suportarão o Onboarding e a assinatura (ex: tabela `tenant_billing`, status de `trial`). Não crie migrations ainda, apenas projete o esquema.
+
+**Regra:** Mantenha o rigor nos testes e não introduza bibliotecas novas sem pedir. Execute, valide e reporte.
