@@ -2281,3 +2281,72 @@ tsc 0 · **94 testes** (era 93) · oxlint 0 erros/13 warnings · build ok.
 **Não vi a página renderizada.** O `captureScreenshot` estourou o timeout de 30s
 três vezes na sessão anterior e eu não insisti; toda a validação acima é
 medição de DOM. Para julgar a estética, `localhost:5173` numa janela anônima.
+
+---
+
+## [OPUS 5] 2026-09-22 — Landing em 1920×1080: eram dois problemas, não um
+
+O Chefe pediu para a landing "preencher a tela inteira" em 1920×1080 e achou
+que seria simples. Era — mas só depois de medir, porque o sintoma tinha **duas**
+causas e eu teria consertado só a primeira.
+
+### O QUE A MEDIÇÃO MOSTROU
+
+```
+miolo do conteudo ...... 1152px num viewport de 1920  -> 384px de margem VAZIA de cada lado
+hero termina em ........ 649px de 1080               -> ocupava 60% da primeira tela
+preview do painel ...... 524px
+h1 ..................... 60px
+```
+
+A largura era o problema óbvio. **A altura não era**, e é o que fazia a página
+"começar apertada no alto": o hero acabava antes da metade da dobra e a seção
+seguinte aparecia pela metade.
+
+### O QUE MUDOU, E SÓ A PARTIR DE 2xl
+
+Todo o ajuste está em variantes `2xl:` (≥1536). **Abaixo disso nada mudou**, de
+propósito: 1440, 768 e 375 já tinham sido medidos limpos e eu não mexo no que
+está provado.
+
+- contêiner `max-w-6xl` → `2xl:max-w-[1600px]`, com `2xl:px-16`;
+- o hero ganha `2xl:min-h-[calc(100vh-65px)]` com centragem vertical. **`min-h`
+  e não `h`**: se a copy crescer, ele empurra a página em vez de vazar por
+  cima da seção seguinte;
+- tipografia sobe junto (h1 60 → 72px, corpo → `text-xl`, números → `text-6xl`),
+  senão o hero largo fica com letra de tela pequena;
+- **o preview passou de 524 para 704px**, e com isso devolvi o que eu tinha
+  cortado na entrega anterior *por falta de espaço*: os 4 cartões voltam a uma
+  linha só (`2xl:grid-cols-4`) e o nome do serviço volta à lista de
+  agendamentos (`2xl:inline`). Os cortes continuam valendo abaixo de 2xl, que é
+  onde eles foram medidos como necessários.
+
+### MEDIDO DEPOIS
+
+| viewport | margem lateral | hero termina em | preview | h1 | estouro / truncamento / contraste |
+|---|---|---|---|---|---|
+| 1920×1080 | **160** (era 384) | **1080** — a dobra inteira | **704** | 72px | 0 / 0 / 0 |
+| 1536×864 | 8 + 64 de padding | 864 | 665 | 72px | 0 / 0 / 0 |
+| 1440×900 | 144 — **inalterado** | 649 — inalterado | 524 | 60px | 0 / 0 / 0 |
+| 768×1024 | 8 | 1097 | 689 | 48px | 0 / 0 / 0 |
+| 375×812 | 8 | 1084 | 320 | 36px | 0 / 0 / 0 |
+
+tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
+
+### UM ERRO MEU QUE CUSTOU A SESSÃO DO CHEFE
+
+Para medir a landing eu vinha **removendo o token do Supabase do
+`localStorage`** (senão `/` redireciona para `/dashboard`) e guardando a cópia
+em `window.__sessao` para devolver depois.
+
+O renderizador travou no meio — quatro iframes, um deles 1920×1080, foi demais
+— e o `window` morreu junto com a cópia. **A sessão do Chefe no app local se
+perdeu e não deu para recuperar.**
+
+O erro não foi o travamento, foi onde guardei o backup: memória volátil da
+página, que some exatamente no cenário de falha. Se voltar a ser necessário, o
+backup vai para uma **chave do próprio `localStorage`**, que sobrevive a
+recarga e a crash do renderizador.
+
+E há um caminho melhor ainda, que é o que usei no fim: **medir deslogado**.
+Sem sessão, `/` já serve a landing e não há nada para suspender.

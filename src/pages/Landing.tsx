@@ -87,7 +87,7 @@ export default function Landing() {
       {/* Nav                                                                */}
       {/* ----------------------------------------------------------------- */}
       <header className="border-b border-brand-ink-foreground/10">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8 2xl:max-w-[1600px] 2xl:px-16">
           <Marca />
 
           {/* Some abaixo de lg: entre a marca e o botão de conta, este
@@ -115,14 +115,19 @@ export default function Landing() {
         {/* --------------------------------------------------------------- */}
         {/* Hero                                                             */}
         {/* --------------------------------------------------------------- */}
-        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center lg:gap-10">
+        {/* Em 2xl o hero passa a ocupar a primeira tela inteira: medido em
+            1920x1080 ele terminava em 649px e deixava 40% da dobra para a
+            secao seguinte, o que fazia a pagina comecar apertada no alto.
+            `min-h` e nao `h`: se o conteudo crescer, ele empurra em vez de
+            vazar. 65px e a altura real do cabecalho. */}
+        <section className="mx-auto flex max-w-6xl px-5 py-16 sm:px-8 sm:py-24 2xl:min-h-[calc(100vh-65px)] 2xl:max-w-[1600px] 2xl:items-center 2xl:px-16 2xl:py-20">
+          <div className="grid w-full gap-12 lg:grid-cols-12 lg:items-center lg:gap-10 2xl:gap-16">
             <div className="lg:col-span-6">
               <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
                 — GESTÃO DE ALTA PRECISÃO
               </p>
 
-              <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
+              <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl 2xl:text-7xl">
                 Domine cada{' '}
                 {/* Aqui o dourado é letra, e pode ser: sobre o preto ele tem
                     9.87, muito acima dos 3.0 que texto grande exige. A regra
@@ -131,7 +136,7 @@ export default function Landing() {
                 <span className="text-primary">centímetro</span> da operação.
               </h1>
 
-              <p className="mt-7 max-w-[52ch] text-base leading-relaxed text-brand-ink-foreground/70 sm:text-lg">
+              <p className="mt-7 max-w-[52ch] text-base leading-relaxed text-brand-ink-foreground/70 sm:text-lg 2xl:text-xl">
                 Agenda, clientes, equipe e caixa trabalhando juntos. Menos
                 mensagens perdidas, mais cadeiras ocupadas.
               </p>
@@ -156,7 +161,7 @@ export default function Landing() {
         {/* 01 — Resultado na rotina                                          */}
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10">
-          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20 2xl:max-w-[1600px] 2xl:px-16 2xl:py-24">
             <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
               01 / RESULTADO NA ROTINA
             </p>
@@ -167,7 +172,7 @@ export default function Landing() {
             <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:divide-x sm:divide-brand-ink-foreground/10 lg:grid-cols-4">
               {NUMEROS.map(({ valor, texto }) => (
                 <div key={texto} className="sm:px-6 sm:first:pl-0 lg:px-8">
-                  <dt className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">
+                  <dt className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-5xl 2xl:text-6xl">
                     {valor}
                   </dt>
                   <dd className="mt-3 text-[11px] font-medium leading-relaxed tracking-[0.12em] text-brand-ink-foreground/60">
@@ -183,14 +188,14 @@ export default function Landing() {
         {/* 02 — Tudo conectado                                               */}
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10">
-          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24 2xl:max-w-[1600px] 2xl:px-16 2xl:py-28">
             <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
               02 / TUDO CONECTADO
             </p>
 
             <div className="mt-10 grid gap-12 lg:grid-cols-12 lg:gap-16">
               <div className="lg:col-span-5">
-                <h2 className="font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-4xl">
+                <h2 className="font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-4xl 2xl:text-5xl">
                   Da primeira mensagem ao fechamento do caixa.
                 </h2>
                 <p className="mt-6 max-w-[46ch] leading-relaxed text-brand-ink-foreground/70">
@@ -227,11 +232,11 @@ export default function Landing() {
         {/* Chamada final                                                     */}
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10 bg-brand-ink-elevated">
-          <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28">
+          <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28 2xl:max-w-[1600px] 2xl:px-16 2xl:py-32">
             <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
               — PRÓXIMO ATENDIMENTO
             </p>
-            <h2 className="mx-auto mt-6 max-w-[16ch] font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-5xl">
+            <h2 className="mx-auto mt-6 max-w-[16ch] font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-5xl 2xl:text-6xl">
               Coloque sua barbearia no controle.
             </h2>
             <p className="mt-6 text-brand-ink-foreground/70">
@@ -245,7 +250,7 @@ export default function Landing() {
       </main>
 
       <footer className="border-t border-brand-ink-foreground/10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-5 py-10 text-sm sm:flex-row sm:justify-between sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-5 py-10 text-sm sm:flex-row sm:justify-between sm:px-8 2xl:max-w-[1600px] 2xl:px-16">
           <Marca tamanho="h-4 w-4" />
           <p className="text-brand-ink-foreground/50">
             Operação afiada. Gestão no lugar.

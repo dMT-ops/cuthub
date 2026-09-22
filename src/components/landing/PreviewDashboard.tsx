@@ -33,9 +33,9 @@ const FATURAMENTO = [38, 52, 44, 67, 58, 81, 72];
 const DIAS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 
 const AGENDAMENTOS = [
-  { hora: '09:00', cliente: 'Renan A.' },
-  { hora: '10:30', cliente: 'Diego M.' },
-  { hora: '11:15', cliente: 'Vitor S.' },
+  { hora: '09:00', cliente: 'Renan A.', servico: 'Corte + barba' },
+  { hora: '10:30', cliente: 'Diego M.', servico: 'Corte social' },
+  { hora: '11:15', cliente: 'Vitor S.', servico: 'Barba' },
 ];
 
 export function PreviewDashboard() {
@@ -78,7 +78,7 @@ export function PreviewDashboard() {
           {/* 2x2, e nao 4 numa linha: medido em 1440, o preview tem 524px de
               largura, e a 4 colunas o rotulo "Faturamento (Hoje)" recebia 59px
               para 82 de que precisa -- saia cortado. Continuam quatro cartoes. */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 2xl:grid-cols-4">
             {ESTATISTICAS.map(({ rotulo, valor }) => (
               <div
                 key={rotulo}
@@ -126,7 +126,7 @@ export function PreviewDashboard() {
                   Próximos Agendamentos
                 </p>
                 <ul className="mt-2 space-y-1.5">
-                  {AGENDAMENTOS.map(({ hora, cliente }) => (
+                  {AGENDAMENTOS.map(({ hora, cliente, servico }) => (
                     <li key={hora} className="flex items-center gap-2">
                       <span className="font-display text-[9px] tabular-nums text-primary">
                         {hora}
@@ -136,6 +136,9 @@ export function PreviewDashboard() {
                           numa coluna que nunca passa de 200px. */}
                       <span className="min-w-0 flex-1 truncate text-[9px] text-brand-ink-foreground">
                         {cliente}
+                      </span>
+                      <span className="hidden shrink-0 text-[9px] text-brand-ink-foreground/60 2xl:inline">
+                        {servico}
                       </span>
                     </li>
                   ))}
