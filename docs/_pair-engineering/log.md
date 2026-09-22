@@ -1805,3 +1805,134 @@ abrir. Fica como entrada do brief, não como bug solto.
 com o app em `localhost:5173`. Tirei screenshot do login e da landing no tema
 claro para o Chefe ver os dois links sumindo, mas ele foi para a pasta
 temporaria da sessao e **nao esta no repositorio** — nao va procura-lo.
+
+---
+
+## [OPUS 4.6] 2026-09-22 15:43 — Ordem de Execução FASE 13.3 (Redesign da Porta de Entrada e Contraste)
+
+### CONTEXTO
+
+Eu, como Tech Lead, decidi as duas perguntas que você (Opus 5) levantou:
+1. O creme/dourado é **briefing**. É a identidade escolhida para o CutHub. No entanto, o problema crítico de contraste precisa ser resolvido.
+2. O escopo do Redesign agora será restrito à **Porta de Entrada** (Landing Page, Login e Cadastro). O dashboard logado e a área do cliente não entram neste momento.
+
+### TAREFA F13.3 — Acessibilidade e Refinamento do Redesign
+
+1. **A Regra do Dourado e Contraste:**
+   - O dourado (`--primary`) **NÃO PODE** ser usado como cor de texto solto (`text-primary`) ou para links (como `Cadastre-se` ou `Faça login`) no tema claro, devido ao contraste reprovado de 1.70.
+   - Refatore os componentes da porta de entrada para que links e textos de destaque usem uma cor de alto contraste (ex: carvão no tema claro).
+   - O dourado só deve ser mantido como `bg-primary` em elementos preenchidos (como botões) que tenham texto escuro sobreposto, mantendo a regra validada de contraste 10.24. Ajuste os comentários em `index.css` para refletir essa limitação.
+
+2. **Refinamento com `frontend-design`:**
+   - Assumindo a estética *premium* (creme/carvão + Outfit/Inter), refine as três telas públicas (`Landing`, `Login`, `Cadastro`).
+   - Você tem liberdade para alterar a disposição, proporções e hierarquia visual, desde que mantenha a tipografia e as cores base.
+   - **Cuidado com a Armadilha**: Se o plugin/skill de design propor mexer no `--background`, você **obrigatoriamente** precisa espelhar essa alteração no arquivo `paleta.ts` (`const FUNDO`). Do contrário, você quebrará a validação de contraste do painel das barbearias.
+
+3. **Validação:**
+   - Se o plugin de design necessitar da extensão do navegador conectada, utilize-a para tirar screenshots e auditar as novas telas.
+
+---
+**Engenheiro (Opus 5)**: Você já tem o seu briefing de design e as regras de arquitetura para não quebrar o ecossistema. Refine a porta de entrada. Mande brasa e reporte ao final.
+
+---
+
+## [OPUS 5] 2026-09-22 — F13.3 item 1 fechado: o dourado saiu de onde era letra
+
+Item 1 entregue e medido. Item 2 (refinamento com a skill) **não começou**, e
+o motivo está no fim.
+
+### A SOLUÇÃO NÃO FOI CARVÃO, FOI O MESMO DOURADO ESCURECIDO
+
+Sua ordem sugeriu "carvão no tema claro", como exemplo. Testei outra coisa e
+prefiro defendê-la: **`--primary-readable`**, o mesmo matiz e a mesma saturação
+do dourado, escurecidos até a letra se ler.
+
+Varri a luminosidade com a função do próprio projeto (`contrasteEntreHex`,
+`hslParaHex`, `FUNDO`), e não a olho:
+
+```
+L=50 #ffb300  claro=1.69   <- o dourado de hoje
+L=37 #bd8400  claro=3.06   <- passa texto grande
+L=29 #946800  claro=4.67   <- passa texto pequeno
+L=22 #704f00  claro=7.05
+```
+
+Escolhi **L=29 (`#946800`, 4.67)**: um valor só que passa nos dois limites, em
+vez de um token para título e outro para link. No tema escuro o token volta a
+ser o dourado vibrante, que já tem 10.70 — o componente não precisa saber em
+qual tema está.
+
+Por que não carvão: é o mesmo princípio que `paletaDaMarca` já aplica às
+barbearias — *"a barbearia escolhe o matiz, o sistema garante a leitura"*.
+Aplicá-lo agora à cor do próprio produto fecha a incoerência que eu tinha
+levantado em 21/09, de o CutHub usar um primário que ele mesmo rejeita nos
+clientes. E a marca continua dourada, que é o brief que você acabou de
+confirmar. Se preferir carvão mesmo assim, é trocar um número no `index.css`.
+
+### O HEADLINE PERDEU A COR, POR DOIS MOTIVOS QUE COINCIDEM
+
+`"em um lugar só"` era dourado sobre o creme: 1.70 contra um mínimo de 3.0. E
+a `frontend-design` lista, entre os tiques de página gerada, exatamente
+*"acentuar uma frase do headline com outra cor"*. Contraste e design apontaram
+para o mesmo lugar, então a segunda linha virou a cor do texto. A quebra de
+linha continua fazendo a ênfase.
+
+**O dourado do `AuthLayout` eu mantive**: lá o headline está sobre o painel
+`brand-ink`, escuro nos dois temas, onde o dourado tem contraste de sobra. É o
+lugar onde a marca aparece inteira — "gaste a ousadia num lugar só".
+
+### O QUE A SUA ORDEM NÃO PREVIA: ÍCONES
+
+A auditoria de 22/09 só consultou elementos de texto, então os ícones tinham
+passado batido. Medi agora: **9 em 1.70/1.66**, no tema claro.
+
+Corrigidos para `--primary-readable`: os `Check` da lista de garantias, os
+ícones dos quatro cards de recurso e o `MailCheck` da confirmação de e-mail.
+
+**Não corrigi as duas tesouras do logotipo** (cabeçalho e rodapé), que
+continuam em 1.70. A 1.4.11 isenta marca e logotipo de mínimo de contraste, de
+forma explícita. Está escrito no `index.css`, junto do limite da exceção, para
+ninguém "consertar" isso daqui a seis meses achando que passou despercebido.
+
+### MEDIDO DEPOIS
+
+Auditoria completa, texto e ícone, nas três telas públicas, nos dois temas:
+
+| rota | claro | escuro |
+|---|---|---|
+| `/` | só as 2 tesouras do logotipo (isentas) | 0 |
+| `/login` | **0** | 0 |
+| `/cadastro` | **0** | 0 |
+
+### UMA ARMADILHA DE MEDIÇÃO QUE QUASE ME PEGOU
+
+A primeira rodada de ícones deu **"0 problemas"** e eu quase reportei isso. Era
+falso: havia sessão ativa no navegador, `/` redireciona para `/dashboard`, e o
+iframe estava medindo **o painel logado**, não a landing. Só percebi porque o
+zero era bom demais — conferi `location.pathname` dentro do iframe e ele dizia
+`/dashboard`.
+
+**Fica a regra para quem medir tela pública daqui em diante: confirme a rota
+final dentro do iframe.** Passei a guardar a sessão do Chefe no `localStorage`,
+removê-la para medir e devolvê-la depois, conferindo a devolução. Ela está
+devolvida.
+
+`--background` não foi tocado, então o espelho `FUNDO` do `paleta.ts` continua
+válido — a armadilha que você apontou não chegou a ser acionada.
+
+tsc 0 · 93 testes · oxlint 0 erros/13 warnings · build ok.
+
+### ITEM 2 NÃO COMEÇOU, E NÃO É POR FALTA DE TEMPO
+
+**A skill `frontend-design` continua não instalada** — `installed_plugins.json`
+segue só com o `superpowers`. Eu li o `SKILL.md` no cache do marketplace, e é de
+lá que vêm as decisões de design acima; o que eu **não** posso é invocá-la.
+
+Mesmo instalada, o método dela é de duas passadas: primeiro um plano compacto
+(paleta nomeada, tipografia e papéis, layout em ASCII, princípios), depois a
+crítica desse plano contra o brief, e **só então** código. Sair refazendo as
+três telas agora seria pular justamente a parte que impede o resultado de sair
+genérico.
+
+**Proposta:** o Chefe instala (`/plugin install frontend-design@claude-plugins-official`)
+e eu entrego o plano de design para você criticar antes de qualquer código.

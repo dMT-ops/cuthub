@@ -16,6 +16,8 @@
 
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  /* O dourado em versao que se le como LETRA. Ver o bloco de `--primary`. */
+  --color-primary-readable: hsl(var(--primary-readable));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -65,15 +67,37 @@
     --popover: 40 25% 99%;
     --popover-foreground: 30 8% 12%;
 
-    /* Dourado vibrante. ATENCAO: 1.69 de contraste contra o fundo creme, ou
+    /* Dourado vibrante. ATENCAO: 1.70 de contraste contra o fundo creme, ou
        seja, ABAIXO dos 3.0 que `paletaDaMarca` exige das barbearias. E uma
-       excecao consciente do produto, decidida pelo Chefe em 22/09: o rotulo
-       preto sobre ele tem 11.03, entao o botao se le sem esforco, e e o rotulo
-       que identifica o controle. Se um dia houver componente primario SEM
-       rotulo (icone solto, barra, indicador), esta excecao nao cobre o caso e
-       ele precisa de borda propria. */
+       excecao consciente do produto, decidida pelo Chefe em 22/09.
+
+       O LIMITE DA EXCECAO, e ele e estreito:
+
+         VALE   como `bg-primary` em elemento PREENCHIDO cujo rotulo escuro
+                fica por cima -- ai o rotulo tem 11.03 e e ele que identifica
+                o controle.
+
+         NAO VALE como `text-primary`, isto e, o dourado virando a COR DA
+                LETRA sobre o fundo claro. Medido na tela em 22/09: headline
+                de 72px em 1.70 (minimo 3.0) e os links "Cadastre-se" e
+                "Faca login" em 1.70 (minimo 4.5) -- os dois unicos caminhos
+                entre login e cadastro, ilegiveis para baixa visao.
+                Para esse caso existe `--primary-readable`, logo abaixo.
+
+         NAO VALE em componente primario SEM rotulo (icone solto, barra,
+                indicador): esse precisa de borda propria. Marca/logotipo e
+                isento pela 1.4.11 e continua podendo usar o dourado. */
     --primary: 42 100% 50%;
     --primary-foreground: 30 10% 8%;
+
+    /* O mesmo matiz e a mesma saturacao do dourado, escurecidos ate a letra
+       se ler: 4.67 sobre o creme, acima dos 4.5 que texto pequeno exige.
+       E o mesmo principio que `paletaDaMarca` aplica as barbearias -- "a
+       barbearia escolhe o matiz, o sistema garante a leitura" --, agora valendo
+       tambem para a cor do proprio produto, que era a incoerencia levantada em
+       21/09. No tema escuro nao ha o que corrigir: o dourado vibrante da 10.70
+       sobre o carvao, entao la o token volta a ser o proprio dourado. */
+    --primary-readable: 42 100% 29%;
 
     --secondary: 40 15% 92%;
     --secondary-foreground: 30 8% 12%;
@@ -113,6 +137,11 @@
     /* Mesmo dourado nos dois temas -- aqui ele tem 10.70 contra o fundo. */
     --primary: 42 100% 50%;
     --primary-foreground: 220 13% 8%;
+
+    /* No escuro o dourado ja se le como letra (10.70), entao `readable` e o
+       proprio dourado. O token existe nos dois temas para o componente nao
+       precisar saber em qual esta. */
+    --primary-readable: 42 100% 50%;
 
     --secondary: 220 12% 16%;
     --secondary-foreground: 40 15% 96%;

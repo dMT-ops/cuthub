@@ -88,13 +88,13 @@ export default function Cadastro() {
         titulo="Confira seu e-mail"
         descricao="Falta um passo para a conta ficar pronta."
         rodape={
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-primary-readable underline underline-offset-4">
             Ir para o login
           </Link>
         }
       >
         <div className="rounded-md border border-primary/30 bg-primary/10 p-4">
-          <MailCheck className="h-6 w-6 text-primary" aria-hidden="true" />
+          <MailCheck className="h-6 w-6 text-primary-readable" aria-hidden="true" />
           <p className="mt-3 text-sm">
             Enviamos um link de confirmação para{' '}
             <span className="font-medium">{email}</span>. Confirme o endereço e
@@ -116,7 +116,7 @@ export default function Cadastro() {
       rodape={
         <p>
           Já tem uma conta?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-primary-readable underline underline-offset-4">
             Faça login
           </Link>
         </p>

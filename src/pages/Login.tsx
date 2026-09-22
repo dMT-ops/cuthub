@@ -65,7 +65,7 @@ export default function Login() {
       rodape={
         <>
           Não tem uma conta?{' '}
-          <Link to="/cadastro" className="font-medium text-primary hover:underline">
+          <Link to="/cadastro" className="font-medium text-primary-readable underline underline-offset-4">
             Cadastre-se
           </Link>
         </>

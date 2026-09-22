@@ -116,9 +116,17 @@ export default function Landing() {
                   Gestão completa para barbearias
                 </span>
 
+                {/* O headline nao pinta mais a segunda linha de dourado. Dois
+                    motivos, e eles coincidem: no tema claro o dourado como
+                    letra da 1.70 contra o creme (minimo 3.0 para texto grande),
+                    e colorir uma frase solta do titulo e um dos tiques que a
+                    `frontend-design` lista como marca de pagina generica. A
+                    quebra de linha continua fazendo a enfase, sem cor. O
+                    dourado segue brilhando onde ele se le: no painel escuro do
+                    login e nos botoes preenchidos. */}
                 <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
                   Sua barbearia inteira
-                  <span className="mt-2 block text-primary">em um lugar só</span>
+                  <span className="mt-2 block">em um lugar só</span>
                 </h1>
 
                 <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
@@ -142,7 +150,7 @@ export default function Landing() {
                 <ul className="mt-10 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6">
                   {DIFERENCIAIS.map((item) => (
                     <li key={item} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                      <Check className="h-4 w-4 shrink-0 text-primary-readable" aria-hidden="true" />
                       {item}
                     </li>
                   ))}
@@ -200,7 +208,7 @@ export default function Landing() {
                 // salto de bloco; em sequencia o olho acompanha a leitura.
                 <ScrollReveal key={titulo} atraso={i * 90}>
                   <article className="group h-full rounded-xl border border-border bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary-readable transition-colors group-hover:bg-primary/20">
                       <Icone className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <h3 className="mt-5 font-display font-semibold">{titulo}</h3>
