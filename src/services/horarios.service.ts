@@ -3,6 +3,33 @@ import type { Database } from '@/types/database.types';
 
 export type HorarioTrabalho = Database['public']['Tables']['horario_trabalho']['Row'];
 export type HorarioTrabalhoInsert = Database['public']['Tables']['horario_trabalho']['Insert'];
+export type SolicitacaoJornada = Database['public']['Tables']['solicitacao_jornada']['Row'];
+
+const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+/** Janela de "respondido há pouco" — depois disso o aviso vira ruído na tela. */
+function seteDiasAtras(): string {
+  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Descreve o pedido na língua de quem o fez.
+ *
+ * O dono lê a fila dele em `escala.service`; o profissional precisa ler a
+ * mesma linha da posição de quem pediu ("você pediu..."), e não da posição de
+ * quem julga.
+ */
+export function descreverSolicitacao(s: SolicitacaoJornada): string {
+  const faixa =
+    s.hora_inicio && s.hora_fim
+      ? `${String(s.hora_inicio).slice(0, 5)} às ${String(s.hora_fim).slice(0, 5)}`
+      : '';
+  const dia = s.dia_semana !== null ? DIAS[s.dia_semana] : null;
+
+  if (s.operacao === 'criar') return `incluir ${dia}, ${faixa}`;
+  if (s.operacao === 'remover') return 'remover uma faixa da jornada';
+  return dia ? `mudar ${dia} para ${faixa}` : `mudar uma faixa para ${faixa}`;
+}
 
 export const horariosService = {
   async obterJornada(profissionalId: string): Promise<HorarioTrabalho[]> {
@@ -15,6 +42,50 @@ export const horariosService = {
 
     if (error) throw new Error(`Falha ao obter jornada: ${error.message}`);
     return data || [];
+  },
+
+  /**
+   * O que o profissional pediu e ainda não foi respondido.
+   *
+   * Sem isto a tela dele ficava cega: a 00028 tirou a proposta de dentro de
+   * `horario_trabalho` — que é o certo, e foi o que consertou o P0-1 — mas
+   * `obterJornada` continuou sendo a única leitura da tela. Resultado medido:
+   * o barbeiro salvava, via um toast, e a tela voltava a exibir o horário
+   * antigo sem nenhum sinal de que havia um pedido na fila.
+   *
+   * Traz também os respondidos recentes: "foi recusado" é informação que só
+   * existe aqui — `horario_trabalho` não guarda rastro de uma recusa.
+   */
+  async listarSolicitacoes(profissionalId: string): Promise<SolicitacaoJornada[]> {
+    const { data, error } = await supabase
+      .from('solicitacao_jornada')
+      .select('*')
+      .eq('profissional_id', profissionalId)
+      .or(`status.eq.pendente,respondido_em.gte.${seteDiasAtras()}`)
+      .order('criado_em', { ascending: false });
+
+    if (error) throw new Error(`Falha ao listar pedidos de jornada: ${error.message}`);
+    return data || [];
+  },
+
+  /**
+   * Retira um pedido ainda não respondido.
+   *
+   * A policy `solicitacao_jornada_retirada` existe desde a 00028 e **nunca
+   * teve tela**. Sem linha afetada = já foi respondido ou não é dele; dizer
+   * "cancelado" nesse caso seria mentir para o barbeiro.
+   */
+  async cancelarSolicitacao(id: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('solicitacao_jornada')
+      .delete()
+      .eq('id', id)
+      .select('id');
+
+    if (error) throw new Error(`Falha ao retirar o pedido: ${error.message}`);
+    if (!data || data.length === 0) {
+      throw new Error('Não foi possível retirar: a gestão já respondeu este pedido.');
+    }
   },
 
   /**
@@ -164,6 +235,13 @@ export const horariosService = {
       if (error) {
         if (error.message.includes('row-level security')) {
           throw new Error('Você só pode pedir mudança na sua própria jornada.');
+        }
+        // Índice `idx_solicitacao_jornada_sem_duplicata` (00029). Mandar o
+        // texto cru do Postgres para o barbeiro não diz nada a ele.
+        if (error.message.includes('idx_solicitacao_jornada_sem_duplicata')) {
+          throw new Error(
+            'Você já tem esse mesmo pedido aguardando resposta. Ele está logo abaixo, na lista de pedidos.'
+          );
         }
         throw new Error(`Falha ao enviar o pedido de jornada: ${error.message}`);
       }

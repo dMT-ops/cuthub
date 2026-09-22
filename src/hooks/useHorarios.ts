@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { horariosService } from '@/services/horarios.service';
+import type { SolicitacaoJornada } from '@/services/horarios.service';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 /**
@@ -47,6 +48,7 @@ export function useHorarios(profissionalId: string | null | undefined, barbearia
       // A jornada e a fila do dono mudam juntas quando quem salva e o
       // profissional: o pedido dele aparece la na hora.
       queryClient.invalidateQueries({ queryKey: ['requisicoes_pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes_jornada', profissionalId] });
       queryClient.invalidateQueries({ queryKey: ['ocupacao'] });
     },
   });
@@ -60,5 +62,40 @@ export function useHorarios(profissionalId: string | null | undefined, barbearia
     error: query.error,
     salvarJornada: salvarMutation.mutateAsync,
     isSalvando: salvarMutation.isPending,
+  };
+}
+
+/** Mesma razão da `JORNADA_VAZIA`: identidade estável entre renders. */
+const SOLICITACOES_VAZIAS: SolicitacaoJornada[] = [];
+
+/**
+ * Os pedidos de jornada do profissional — o lado que faltava do fluxo da 00028.
+ *
+ * O dono já tinha `useRequisicoesPendentes`; quem pede não tinha nada. Ver
+ * `horariosService.listarSolicitacoes`.
+ */
+export function useSolicitacoesDeJornada(profissionalId: string | null | undefined, habilitado = true) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['solicitacoes_jornada', profissionalId],
+    queryFn: () => horariosService.listarSolicitacoes(profissionalId!),
+    enabled: !!profissionalId && habilitado,
+  });
+
+  const cancelar = useMutation({
+    mutationFn: (id: string) => horariosService.cancelarSolicitacao(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes_jornada', profissionalId] });
+      // A fila do dono encolhe junto: o pedido saiu de lá também.
+      queryClient.invalidateQueries({ queryKey: ['requisicoes_pendentes'] });
+    },
+  });
+
+  return {
+    solicitacoes: query.data ?? SOLICITACOES_VAZIAS,
+    isLoading: query.isLoading,
+    cancelar: cancelar.mutateAsync,
+    isCancelando: cancelar.isPending,
   };
 }

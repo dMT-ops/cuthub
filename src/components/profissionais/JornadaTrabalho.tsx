@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Clock, AlertCircle } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { PedidosDeJornada } from '@/components/profissionais/PedidosDeJornada';
 import { toast } from 'sonner';
 
 interface JornadaTrabalhoProps {
@@ -143,16 +144,22 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
 
   if (!isEditing && horarios.length === 0) {
     return (
-      <EmptyState 
-        icon={Clock}
-        title="Nenhum horário definido"
-        description="Este profissional ainda não tem uma jornada de trabalho configurada."
-        action={
-          <span title={motivoBloqueio ?? undefined}>
-            <Button onClick={() => setIsEditing(true)} disabled={!podeOperar}>Definir Jornada</Button>
-          </span>
-        }
-      />
+      <div className="space-y-4">
+        {/* O caso pior da tela cega: sem nenhuma faixa aprovada, um pedido de
+            "incluir horário" não deixava rastro nenhum — o barbeiro via
+            "Nenhum horário definido" como se não tivesse pedido nada. */}
+        {salvaComoSolicitacao && <PedidosDeJornada profissionalId={profissionalId} />}
+        <EmptyState
+          icon={Clock}
+          title="Nenhum horário definido"
+          description="Este profissional ainda não tem uma jornada de trabalho configurada."
+          action={
+            <span title={motivoBloqueio ?? undefined}>
+              <Button onClick={() => setIsEditing(true)} disabled={!podeOperar}>Definir Jornada</Button>
+            </span>
+          }
+        />
+      </div>
     );
   }
 
@@ -197,6 +204,11 @@ export function JornadaTrabalho({ profissionalId }: JornadaTrabalhoProps) {
           <span>{localError}</span>
         </div>
       )}
+
+      {/* Fica acima da jornada de propósito: depois de salvar, a lista abaixo
+          volta a mostrar o horário ANTIGO — porque é ele que continua valendo.
+          Sem este painel logo antes, isso parece que o pedido se perdeu. */}
+      {salvaComoSolicitacao && <PedidosDeJornada profissionalId={profissionalId} />}
 
       <div className="space-y-4">
         {DIAS_SEMANA.map((dia) => {
