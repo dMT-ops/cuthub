@@ -67,10 +67,29 @@ describe('Landing', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
+  // A copy vem do briefing da referência (F13.4) e vai mudar de novo quando o
+  // briefing mudar — o que este teste guarda não é o texto em si, é que a
+  // landing continue dizendo o que o produto faz em vez de ficar só com o
+  // headline e os botões.
   it('descreve os módulos do produto', () => {
     useAuthMock.mockReturnValue(estado());
     renderLanding();
-    expect(screen.getByText(/Agenda que não deixa furo/i)).toBeInTheDocument();
-    expect(screen.getByText(/Financeiro no lugar certo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Agenda sem ruído/i)).toBeInTheDocument();
+    expect(screen.getByText(/Caixa sob controle/i)).toBeInTheDocument();
+  });
+
+  /**
+   * O retrato do painel no hero é maquete: números fixos, nenhuma chamada ao
+   * Supabase. Se um dia alguém trocar por um componente real, a landing pública
+   * passa a exigir sessão e dados — este teste é o alarme.
+   */
+  it('mostra o retrato do painel sem anunciá-lo a leitor de tela', () => {
+    useAuthMock.mockReturnValue(estado());
+    const { container } = renderLanding();
+    expect(screen.getByText('R$ 2.480')).toBeInTheDocument();
+    expect(screen.getByText('R$ 2.480').closest('[aria-hidden="true"]')).not.toBeNull();
+    // Nenhum dado real: a maquete não pode ter link nem botão navegável.
+    const dentroDaMaquete = container.querySelector('[aria-hidden="true"] a, [aria-hidden="true"] button');
+    expect(dentroDaMaquete).toBeNull();
   });
 });

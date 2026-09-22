@@ -36,6 +36,7 @@
      tema do sistema -- inverter no claro apagaria o contraste que e o ponto. */
   --color-brand-ink: hsl(var(--brand-ink));
   --color-brand-ink-foreground: hsl(var(--brand-ink-foreground));
+  --color-brand-ink-elevated: hsl(var(--brand-ink-elevated));
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -87,7 +88,7 @@
          NAO VALE em componente primario SEM rotulo (icone solto, barra,
                 indicador): esse precisa de borda propria. Marca/logotipo e
                 isento pela 1.4.11 e continua podendo usar o dourado. */
-    --primary: 42 100% 50%;
+    --primary: 43.231 94.239% 47.647%;
     --primary-foreground: 30 10% 8%;
 
     /* O mesmo matiz e a mesma saturacao do dourado, escurecidos ate a letra
@@ -97,7 +98,7 @@
        tambem para a cor do proprio produto, que era a incoerencia levantada em
        21/09. No tema escuro nao ha o que corrigir: o dourado vibrante da 10.70
        sobre o carvao, entao la o token volta a ser o proprio dourado. */
-    --primary-readable: 42 100% 29%;
+    --primary-readable: 43.231 94.239% 29%;
 
     --secondary: 40 15% 92%;
     --secondary-foreground: 30 8% 12%;
@@ -113,11 +114,27 @@
 
     --border: 40 12% 86%;
     --input: 40 12% 86%;
-    --ring: 42 100% 50%;
+    --ring: 43.231 94.239% 47.647%;
 
-    /* Sem contraparte em `.dark`: e o mesmo carvao nos dois temas. */
-    --brand-ink: 220 14% 8%;
-    --brand-ink-foreground: 40 15% 96%;
+    /* A SUPERFICIE DA MARCA — preta nos DOIS temas, de proposito.
+       Sem contraparte em `.dark`.
+
+       A F13.4 pediu a landing com fundo #0A0A0A. Trocar `--background` faria
+       isso, e quebraria o tema claro do app inteiro alem de desalinhar o
+       espelho `FUNDO` do `paleta.ts`. `--brand-ink` ja existia para
+       exatamente este caso: uma superficie que NAO segue o tema. Entao ela
+       recebeu os valores da referencia, e a landing passou a viver nela.
+
+       Preto neutro (#0A0A0A) e nao mais o carvao azulado: e o que a
+       referencia pede. Medido sobre ele -- creme 17.57, dourado 9.87,
+       creme a 70% 8.74, creme a 50% 4.89. */
+    --brand-ink: 0 0% 3.922%;
+    --brand-ink-foreground: 40 37.5% 93.725%;
+
+    /* A secao final da landing, levemente destacada do preto base (#0F1013).
+       Azulado de proposito: a diferenca so se percebe na juncao das duas
+       superficies, que e onde ela trabalha. Creme da 16.89 aqui. */
+    --brand-ink-elevated: 225 11.765% 6.667%;
 
     --radius: 0.5rem;
   }
@@ -134,14 +151,14 @@
     --popover: 220 13% 10%;
     --popover-foreground: 40 15% 96%;
 
-    /* Mesmo dourado nos dois temas -- aqui ele tem 10.70 contra o fundo. */
-    --primary: 42 100% 50%;
+    /* Mesmo dourado nos dois temas -- aqui ele tem 9.87 contra o preto da marca. */
+    --primary: 43.231 94.239% 47.647%;
     --primary-foreground: 220 13% 8%;
 
     /* No escuro o dourado ja se le como letra (10.70), entao `readable` e o
        proprio dourado. O token existe nos dois temas para o componente nao
        precisar saber em qual esta. */
-    --primary-readable: 42 100% 50%;
+    --primary-readable: 43.231 94.239% 47.647%;
 
     --secondary: 220 12% 16%;
     --secondary-foreground: 40 15% 96%;
@@ -160,7 +177,7 @@
 
     --border: 220 12% 18%;
     --input: 220 12% 18%;
-    --ring: 42 100% 50%;
+    --ring: 43.231 94.239% 47.647%;
   }
 }
 

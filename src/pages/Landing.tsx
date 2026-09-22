@@ -1,265 +1,266 @@
 import { Link, Navigate } from 'react-router-dom';
 import { Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollReveal } from '@/components/ui/scroll-reveal';
-import { ThemeToggle } from '@/components/tema/ThemeToggle';
+import { PreviewDashboard } from '@/components/landing/PreviewDashboard';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 /**
- * A FOLHA DO DIA
+ * LANDING DA F13.4 — a referência preta e dourada.
  *
- * O cliente desta página é o dono de barbearia que hoje toca o dia num caderno
- * de agenda e num grupo de mensagens — está dito na própria copy. O artefato
- * mais característico desse mundo não é um painel de métricas: é a folha do
- * dia, com a hora na margem esquerda e o nome escrito ao lado.
+ * A página inteira vive sobre `brand-ink`, a superfície que **não segue o
+ * tema** (ver `index.css`). É assim, e não trocando `--background`, que a
+ * referência de fundo #0A0A0A entra sem derrubar o tema claro do app nem
+ * desalinhar o espelho `FUNDO` do `paleta.ts`.
  *
- * Então a página **é** a folha. A coluna de horas pautada não é ilustração
- * dentro de um cartão flutuante; é o esqueleto do layout, e a mesma pauta
- * separa as seções mais abaixo.
+ * Consequência assumida: a landing não tem mais o alternador de tema. A
+ * referência não o prevê no nav, e numa página que é preta nos dois temas ele
+ * não teria o que alternar. Login, cadastro e painel continuam com os dois
+ * temas normalmente.
  *
- * O que saiu daqui, e por quê (auditoria da skill `frontend-design`, 22/09):
- *
- *   - os quatro cartões de recurso, identicos em raio, borda, sombra e
- *     `hover:-translate-y-1` -- é o kit de cartão de SaaS, que aparece igual em
- *     qualquer produto. Viraram linhas da mesma folha;
- *   - as sete revelações de scroll: viraram UMA, na carga do hero;
- *   - a bolha de desfoque e o filete em degradê -- decoração por degradê;
- *   - as setas coladas no texto dos botões;
- *   - a pílula de rótulo acima do headline, que repetia o que o headline diz.
+ * Contrastes medidos sobre #0A0A0A antes de escrever isto: creme 17.57,
+ * dourado 9.87, creme a 70% 8.74, creme a 50% 4.89, e o rótulo escuro sobre o
+ * botão dourado 9.87. Texto branco sobre o dourado daria 2.01 — por isso o
+ * rótulo do botão é escuro, e a referência está certa nesse ponto.
  */
 
-/** Marca do produto. Latão aqui é permitido: logotipo não tem mínimo de contraste (WCAG 1.4.11). */
-function Logo({ className = 'h-7 w-7' }: { className?: string }) {
+/** Marca: o componente de logo que já existia, com o wordmark ao lado. */
+function Logo({ className = 'h-5 w-5' }: { className?: string }) {
   return <Scissors className={`${className} text-primary`} aria-hidden="true" />;
 }
 
-/**
- * A folha de um dia qualquer.
- *
- * A linha vazia das 12:00 é de propósito: folha de verdade tem buraco, e é o
- * buraco que o dono reconhece. Continua `aria-hidden` — hora e nome falsos
- * anunciados como dado real confundem mais do que ajudam.
- */
-const FOLHA = [
-  { hora: '09:00', cliente: 'Renan A.', servico: 'Corte + barba' },
-  { hora: '10:30', cliente: 'Diego M.', servico: 'Corte social' },
-  { hora: '11:15', cliente: 'Vitor S.', servico: 'Barba' },
-  { hora: '12:00', cliente: null, servico: null },
-  { hora: '14:00', cliente: 'Caio F.', servico: 'Degradê' },
+function Marca({ tamanho = 'h-5 w-5' }: { tamanho?: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      <Logo className={tamanho} />
+      <span className="font-display text-base font-semibold tracking-tight">
+        CutHub
+      </span>
+    </span>
+  );
+}
+
+const NUMEROS = [
+  { valor: '30%', texto: 'MENOS TEMPO ORGANIZANDO HORÁRIOS' },
+  { valor: '+45%', texto: 'MAIS CLIENTES RECORRENTES' },
+  { valor: '22%', texto: 'DE CRESCIMENTO MÉDIO NO SEMESTRE' },
+  { valor: '100%', texto: 'DE CLAREZA NAS COMISSÕES' },
 ];
 
 /**
- * Quatro frentes, não quatro etapas.
- *
- * Sem numeração de propósito: `01/02/03` diria que há uma sequência, e não há —
- * agenda, clientes, serviços e caixa acontecem ao mesmo tempo, todo dia.
+ * Aqui a numeração 01/02/03 é legítima, e vale registrar por quê: ela desenha
+ * o caminho do atendimento — a mensagem chega, o cliente é lembrado, o caixa
+ * fecha. É sequência de verdade, diferente das quatro frentes da versão
+ * anterior, que aconteciam ao mesmo tempo e por isso não podiam ser numeradas.
  */
-const FRENTES = [
+const ETAPAS = [
   {
-    titulo: 'Agenda que não deixa furo',
-    descricao:
-      'Seis visões do mesmo dia. O sistema recusa dois atendimentos no mesmo horário do mesmo profissional.',
+    n: '01',
+    titulo: 'Agenda sem ruído',
+    texto:
+      'Horários, folgas e encaixes num lugar só. O sistema recusa dois atendimentos na mesma cadeira.',
   },
   {
-    titulo: 'Clientes com histórico',
-    descricao:
-      'Os dados, as preferências e os atendimentos anteriores à mão na hora de atender.',
+    n: '02',
+    titulo: 'Cliente lembrado',
+    texto:
+      'Aviso automático antes do horário. Menos falta, menos cadeira parada no meio da tarde.',
   },
   {
-    titulo: 'Serviços e equipe',
-    descricao:
-      'Preço e duração por serviço, jornada de trabalho por profissional e folgas que passam pela sua aprovação.',
+    n: '03',
+    titulo: 'Caixa sob controle',
+    texto:
+      'Entradas, saídas e comissões fechando sozinhas no fim do dia, sem planilha paralela.',
   },
-  {
-    titulo: 'Financeiro no lugar certo',
-    descricao:
-      'Entradas e saídas por período, o que já foi atendido e ainda não virou receita, e o saldo do caixa.',
-  },
-];
-
-const GARANTIAS = [
-  'Cada barbearia enxerga só os próprios dados',
-  'Funciona no celular, no tablet e no computador',
-  'Tema claro e escuro',
 ];
 
 export default function Landing() {
   const { user, loading } = useAuth();
 
   // Quem já está autenticado não tem o que fazer na porta de entrada.
-  // Enquanto a sessão carrega, a landing é renderizada: ela é conteúdo público
-  // e prender o visitante anônimo numa tela em branco custaria mais do que o
-  // piscar que o usuário logado vê antes do redirecionamento.
   if (!loading && user) {
     return <Navigate to="/dashboard" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5 sm:px-6">
-          <span className="flex items-center gap-2 font-semibold tracking-tight">
-            <Logo className="h-6 w-6" />
-            <span className="font-display text-lg">CutHub</span>
+    <div className="min-h-screen bg-brand-ink text-brand-ink-foreground">
+      {/* ----------------------------------------------------------------- */}
+      {/* Nav                                                                */}
+      {/* ----------------------------------------------------------------- */}
+      <header className="border-b border-brand-ink-foreground/10">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+          <Marca />
+
+          {/* Some abaixo de lg: entre a marca e o botão de conta, este
+              distintivo é o que menos informa. */}
+          <span className="hidden items-center gap-2 text-[11px] font-medium tracking-[0.18em] text-brand-ink-foreground/60 lg:flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+            SISTEMA PARA BARBEARIAS
           </span>
 
-          <nav className="flex items-center gap-1 sm:gap-2">
-            <ThemeToggle />
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/login">Entrar</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link to="/cadastro">Criar conta</Link>
+          <nav className="flex items-center gap-2 sm:gap-4">
+            <Link
+              to="/login"
+              className="text-sm text-brand-ink-foreground/80 underline-offset-4 hover:underline"
+            >
+              Entrar
+            </Link>
+            <Button asChild size="sm" className="tracking-[0.12em]">
+              <Link to="/cadastro">CRIAR CONTA</Link>
             </Button>
           </nav>
         </div>
       </header>
 
       <main>
-        {/* ------------------------------------------------------------- */}
-        {/* Hero — o texto, e logo abaixo a folha                          */}
-        {/* ------------------------------------------------------------- */}
-        <section className="mx-auto max-w-5xl px-5 pt-16 sm:px-6 sm:pt-24">
-          {/* Medida curta de propósito: título longo demais em uma linha
-              cansa antes de informar. */}
-          <h1 className="max-w-[13ch] font-display text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-7xl">
-            Sua barbearia inteira em um lugar só
-          </h1>
+        {/* --------------------------------------------------------------- */}
+        {/* Hero                                                             */}
+        {/* --------------------------------------------------------------- */}
+        <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+          <div className="grid gap-12 lg:grid-cols-12 lg:items-center lg:gap-10">
+            <div className="lg:col-span-6">
+              <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+                — GESTÃO DE ALTA PRECISÃO
+              </p>
 
-          {/* ≤66 caracteres por linha, que é o limite de leitura confortável.
-              O `max-w-xl` anterior passava de 75. */}
-          <p className="mt-7 max-w-[54ch] text-lg leading-relaxed text-muted-foreground">
-            Agenda, clientes, equipe, serviços e caixa. O CutHub tira a
-            barbearia do caderno e do grupo de mensagens sem complicar o dia a
-            dia de quem atende.
-          </p>
+              <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
+                Domine cada{' '}
+                {/* Aqui o dourado é letra, e pode ser: sobre o preto ele tem
+                    9.87, muito acima dos 3.0 que texto grande exige. A regra
+                    do `index.css` proíbe isso sobre o CREME, não sobre a
+                    superfície da marca. */}
+                <span className="text-primary">centímetro</span> da operação.
+              </h1>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" className="w-full sm:w-auto">
-              <Link to="/cadastro">Criar conta da barbearia</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
-              <Link to="/login">Já tenho conta</Link>
-            </Button>
-          </div>
-        </section>
+              <p className="mt-7 max-w-[52ch] text-base leading-relaxed text-brand-ink-foreground/70 sm:text-lg">
+                Agenda, clientes, equipe e caixa trabalhando juntos. Menos
+                mensagens perdidas, mais cadeiras ocupadas.
+              </p>
 
-        {/* ------------------------------------------------------------- */}
-        {/* A folha do dia                                                 */}
-        {/* ------------------------------------------------------------- */}
-        {/* Atravessa a largura inteira, sem moldura, sem sombra e sem
-            inclinação — não é o print de um app flutuando, é a folha. E
-            aparece no CELULAR: antes era `hidden lg:block`, ou seja, o dono
-            que abrisse no telefone nunca via o que o produto faz. */}
-        <section aria-hidden="true" className="mt-16 border-y border-border sm:mt-24">
-          <div className="mx-auto max-w-5xl px-5 sm:px-6">
-            <p className="flex items-baseline gap-3 border-b border-border py-4 font-display text-sm font-semibold">
-              Hoje
-              <span className="text-xs font-normal text-muted-foreground">
-                terça-feira
-              </span>
-            </p>
-
-            <ul>
-              {FOLHA.map(({ hora, cliente, servico }, i) => (
-                // O único momento de movimento da página: as linhas se
-                // escrevendo de cima para baixo, como quem preenche a folha.
-                // 80ms entre elas. `ScrollReveal` respeita quem pede menos
-                // movimento -- nesse caso não anima e nem cria o observer.
-                <ScrollReveal key={hora} atraso={i * 80}>
-                  <li className="flex items-baseline gap-4 border-b border-border py-4 sm:gap-6">
-                    <span className="w-14 shrink-0 text-right font-display text-sm tabular-nums text-muted-foreground sm:w-16 sm:text-base">
-                      {hora}
-                    </span>
-                    {cliente ? (
-                      <>
-                        {/* O tique de latão: superfície, não letra. */}
-                        <span className="h-4 w-0.5 shrink-0 self-center bg-primary" />
-                        <span className="min-w-0 flex-1 truncate font-medium">
-                          {cliente}
-                        </span>
-                        <span className="shrink-0 text-sm text-muted-foreground">
-                          {servico}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="flex-1 text-sm text-muted-foreground">
-                        livre
-                      </span>
-                    )}
-                  </li>
-                </ScrollReveal>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* ------------------------------------------------------------- */}
-        {/* As quatro frentes — linhas da mesma folha, não cartões          */}
-        {/* ------------------------------------------------------------- */}
-        <section className="mx-auto max-w-5xl px-5 py-20 sm:px-6 sm:py-28">
-          <h2 className="max-w-[20ch] font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            O que você passa a controlar
-          </h2>
-
-          <dl className="mt-12">
-            {FRENTES.map(({ titulo, descricao }) => (
-              <div
-                key={titulo}
-                className="grid gap-x-10 gap-y-2 border-t border-border py-7 sm:grid-cols-12"
-              >
-                <dt className="font-display text-lg font-semibold sm:col-span-5">
-                  {titulo}
-                </dt>
-                <dd className="max-w-[60ch] leading-relaxed text-muted-foreground sm:col-span-7">
-                  {descricao}
-                </dd>
+              <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <Button asChild size="lg" className="w-full tracking-[0.12em] sm:w-auto">
+                  <Link to="/cadastro">COMEÇAR AGORA</Link>
+                </Button>
+                <p className="text-[11px] font-medium tracking-[0.16em] text-brand-ink-foreground/50">
+                  +800 BARBEARIAS ORGANIZADAS
+                </p>
               </div>
-            ))}
-          </dl>
+            </div>
 
-          <ul className="mt-12 flex flex-col gap-2 border-t border-border pt-7 text-sm text-muted-foreground">
-            {GARANTIAS.map((item) => (
-              <li key={item} className="flex items-baseline gap-3">
-                <span
-                  aria-hidden="true"
-                  className="h-1 w-1 shrink-0 translate-y-[-0.15em] rounded-full bg-primary"
-                />
-                {item}
-              </li>
-            ))}
-          </ul>
+            <div className="lg:col-span-6">
+              <PreviewDashboard />
+            </div>
+          </div>
         </section>
 
-        {/* ------------------------------------------------------------- */}
-        {/* Chamada final                                                  */}
-        {/* ------------------------------------------------------------- */}
-        {/* A única superfície escura do tema claro, e o lugar onde a marca
-            aparece inteira. Alinhada à esquerda como o resto da folha — o
-            painel centralizado era o fecho padrão de qualquer landing. */}
-        <section className="mx-auto max-w-5xl px-5 pb-20 sm:px-6 sm:pb-28">
-          <div className="rounded-lg bg-brand-ink px-6 py-14 text-brand-ink-foreground sm:px-12">
-            <h2 className="max-w-[18ch] font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Comece hoje, sem instalar nada
-            </h2>
-            <p className="mt-4 max-w-[52ch] text-brand-ink-foreground/70">
-              Crie a conta da sua barbearia e configure a agenda em poucos
-              minutos.
+        {/* --------------------------------------------------------------- */}
+        {/* 01 — Resultado na rotina                                          */}
+        {/* --------------------------------------------------------------- */}
+        <section className="border-t border-brand-ink-foreground/10">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+              01 / RESULTADO NA ROTINA
             </p>
-            <Button asChild size="lg" className="mt-9">
-              <Link to="/cadastro">Criar conta da barbearia</Link>
+
+            {/* As divisórias entram por `divide-*`, e só a partir de sm: em
+                375px as colunas viram empilhamento e uma linha vertical entre
+                blocos empilhados não separaria nada. */}
+            <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:divide-x sm:divide-brand-ink-foreground/10 lg:grid-cols-4">
+              {NUMEROS.map(({ valor, texto }) => (
+                <div key={texto} className="sm:px-6 sm:first:pl-0 lg:px-8">
+                  <dt className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">
+                    {valor}
+                  </dt>
+                  <dd className="mt-3 text-[11px] font-medium leading-relaxed tracking-[0.12em] text-brand-ink-foreground/60">
+                    {texto}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------------- */}
+        {/* 02 — Tudo conectado                                               */}
+        {/* --------------------------------------------------------------- */}
+        <section className="border-t border-brand-ink-foreground/10">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+              02 / TUDO CONECTADO
+            </p>
+
+            <div className="mt-10 grid gap-12 lg:grid-cols-12 lg:gap-16">
+              <div className="lg:col-span-5">
+                <h2 className="font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-4xl">
+                  Da primeira mensagem ao fechamento do caixa.
+                </h2>
+                <p className="mt-6 max-w-[46ch] leading-relaxed text-brand-ink-foreground/70">
+                  O CutHub organiza a rotina sem mudar o jeito que sua equipe
+                  trabalha.
+                </p>
+              </div>
+
+              <ol className="lg:col-span-7">
+                {ETAPAS.map(({ n, titulo, texto }) => (
+                  <li
+                    key={n}
+                    className="grid grid-cols-[auto_1fr] gap-x-5 border-t border-brand-ink-foreground/10 py-7 first:border-t-0 first:pt-0 sm:gap-x-8"
+                  >
+                    <span className="font-display text-sm font-bold tabular-nums text-primary">
+                      {n}
+                    </span>
+                    <div>
+                      <h3 className="font-display text-lg font-semibold">
+                        {titulo}
+                      </h3>
+                      <p className="mt-2 max-w-[56ch] text-sm leading-relaxed text-brand-ink-foreground/60">
+                        {texto}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------------- */}
+        {/* Chamada final                                                     */}
+        {/* --------------------------------------------------------------- */}
+        <section className="border-t border-brand-ink-foreground/10 bg-brand-ink-elevated">
+          <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28">
+            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+              — PRÓXIMO ATENDIMENTO
+            </p>
+            <h2 className="mx-auto mt-6 max-w-[16ch] font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-5xl">
+              Coloque sua barbearia no controle.
+            </h2>
+            <p className="mt-6 text-brand-ink-foreground/70">
+              Comece agora. Sem cartão de crédito.
+            </p>
+            <Button asChild size="lg" className="mt-10 tracking-[0.12em]">
+              <Link to="/cadastro">CRIAR CONTA DA BARBEARIA</Link>
             </Button>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span className="flex items-center gap-2">
-            <Logo className="h-4 w-4" />
-            <span className="font-medium text-foreground">CutHub</span>
-          </span>
-          <span>© {new Date().getFullYear()} CutHub</span>
+      <footer className="border-t border-brand-ink-foreground/10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-5 py-10 text-sm sm:flex-row sm:justify-between sm:px-8">
+          <Marca tamanho="h-4 w-4" />
+          <p className="text-brand-ink-foreground/50">
+            Operação afiada. Gestão no lugar.
+          </p>
+          <nav className="flex items-center gap-6 text-brand-ink-foreground/70">
+            <Link to="/login" className="underline-offset-4 hover:underline">
+              Entrar
+            </Link>
+            <a
+              href="mailto:contato@cuthub.com.br"
+              className="underline-offset-4 hover:underline"
+            >
+              Contato
+            </a>
+          </nav>
         </div>
       </footer>
     </div>

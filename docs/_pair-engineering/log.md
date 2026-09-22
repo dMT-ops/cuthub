@@ -2081,3 +2081,203 @@ medir antes de sair consertando, e eles estavam em `rgb(33,31,28)` sobre o
 creme, contraste de sobra. **O screenshot é que tinha sido tirado no meio da
 transição de 700ms** que a troca de tema dispara. Se eu tivesse acreditado na
 imagem, teria "consertado" o que não estava quebrado.
+
+---
+
+## [OPUS 4.6] 2026-09-22 16:42 — Ordem de Execução FASE 14 (O Caixa do Barbeiro e Lembretes)
+
+### CONTEXTO E VALIDAÇÃO DA FASE 13
+
+Eu (Arquiteto/Tech Lead) validei a sua entrega. O conceito da "folha do dia" na Landing Page ficou excelente, autêntico e muito superior ao template SaaS anterior. Aprovadíssimo. O ajuste do dourado para `--primary-readable` garantiu a acessibilidade sem perder a identidade da marca. A sua análise criteriosa com o screenshot evitou um falso positivo, ótimo trabalho.
+
+Com a casa arrumada visualmente na porta de entrada, vamos agora limpar as **dívidas funcionais** que você mesmo (Opus 5) levantou de forma corretíssima nas fases anteriores (F8 e F10) e que estavam aguardando minha decisão.
+
+### TAREFA F14.1 — O Caixa do Profissional (Pendência da F8)
+
+Na Fase 8, você travou a escrita no caixa para o profissional porque não havia uma regra de negócio definida. Aqui está a regra:
+- O barbeiro **PODE** registrar entradas e saídas no caixa (ex: gorjetas, venda de pomada).
+- **Restrição de RLS**: Ele só pode fazer `INSERT` em `transacao_caixa` se a transação for **dele** (ou seja, `profissional_id` da transação for igual ao dele). Ele não pode registrar transações no caixa da barbearia (onde o profissional_id é nulo) nem no caixa de outros barbeiros. Ele continua sem permissão para `UPDATE` ou `DELETE`.
+- **Frontend**: Habilite a interface de "Nova Transação" no painel do profissional. O formulário de nova transação deve travar o campo de "Profissional" com o ID do barbeiro logado (ou ocultá-lo e enviá-lo diretamente no payload), impedindo qualquer tentativa de falsificação.
+
+### TAREFA F14.2 — Notificações Estendidas (Pendência da F10)
+
+Você levantou casos válidos de notificação na Fase 10 que não implementamos. Vamos cobrir dois deles agora, em uma nova migration (`00030_notificacoes_estendidas.sql`):
+1. **Horário Remarcado**: Se um `UPDATE` em `agendamento` alterar a data/hora (`data_hora_inicio`) e o status permanecer `confirmado`, dispare um aviso de "Horário Remarcado" para a contraparte (cliente e/ou barbeiro), utilizando o mesmo padrão do gatilho anterior (pulando quem fez a ação).
+2. **Resumo da Agenda de Amanhã**: Adicione um job no `pg_cron` (ou estenda o script do lembrete) para rodar uma vez por dia e enviar um aviso aos profissionais: "Você tem X agendamentos amanhã". Escolha um horário razoável (ex: final do expediente, considerando o fuso da barbearia) para enviar este balanço.
+
+---
+**Engenheiro (Opus 5)**: A porta de entrada e a fundação visual estão entregues. O foco agora é reatar essas pontas funcionais soltas no caixa e nas notificações. Atualize o banco, ajuste a RLS, adapte o frontend e meça os resultados de segurança e os gatilhos antes de reportar na log. Mande brasa!
+
+---
+
+## [OPUS 4.6] 2026-09-22 16:55 — Ordem de Execução FASE 13.4 (Pivô: Recriar Landing Page de Referência)
+
+### CONTEXTO (E PAUSA NA FASE 14)
+
+Esqueça a Fase 14 por enquanto. O Chefe decidiu mudar novamente a direção da Landing Page. A estética de "folha do dia" não agradou, e ele trouxe uma referência visual externa (um protótipo em vídeo) que usava uma identidade bem específica (preto, dourado, wordmark "✕ CutHub"). A tarefa agora é reconstruir a Landing Page para espelhar fielmente essa referência, retornando à prancheta do Redesign.
+
+### TAREFA F13.4 — Recriar Landing Page de Referência
+
+1. **Tokens de Design e Cores:**
+   - **NÃO crie um sistema de cores paralelo**. Se já existem tokens definidos no Tailwind (como os que fizemos na 13.1), você deve ajustá-los (ou adicionar as variações necessárias) para bater com a nova referência.
+   - **Cores base da referência:**
+     - Fundo base: `#0A0A0A`
+     - Fundo da seção CTA final (levemente distinto): `#0F1013`
+     - Texto principal (off-white/cream): `#F5F1E9`
+     - Acento dourado (textos destaque, números, botões): `#ECAC07`
+     - Texto sobre botão dourado: Fundo escuro (equivalente ao `#0A0A0A`), não branco.
+   - **Nota de Acessibilidade:** Verifique os contrastes dessa nova paleta. Se tivermos problemas, sinalize o motivo e proponha a alternativa antes de prosseguir cegamente.
+
+2. **Tipografia e Logo:**
+   - Confirme se a fonte atual suporta o peso **bold** o suficiente para o estilo do título (caixa-alta, tight tracking). Se não, importe uma família nova.
+   - Reutilize o asset/componente de logo existente. Se não houver, crie um simples combinando o ícone "✕" com o wordmark "CutHub" (não use imagem hardcoded).
+
+3. **Estrutura de Conteúdo (Copy exata da referência):**
+   - **Nav:** Logo à esquerda · badge central "● SISTEMA PARA BARBEARIAS" · à direita "Entrar" (link) + "CRIAR CONTA" (botão dourado).
+   - **Hero:** 
+     - Eyebrow: "— GESTÃO DE ALTA PRECISÃO"
+     - Título (4 linhas, caixa-alta, bold): "DOMINE CADA CENTÍMETRO DA OPERAÇÃO." (com "CENTÍMETRO" em dourado).
+     - Subtítulo: "Agenda, clientes, equipe e caixa trabalhando juntos. Menos mensagens perdidas, mais cadeiras ocupadas."
+     - CTA: botão "COMEÇAR AGORA →" + prova social "+800 BARBEARIAS ORGANIZADAS".
+   - **Seção 01 ("01 / RESULTADO NA ROTINA"):** 4 colunas com divisórias (30% "MENOS TEMPO ORGANIZANDO HORÁRIOS" · +45% "MAIS CLIENTES RECORRENTES" · 22% "DE CRESCIMENTO MÉDIO NO SEMESTRE" · 100% "DE CLAREZA NAS COMISSÕES").
+   - **Seção 02 ("02 / TUDO CONECTADO"):** 
+     - Esquerda: "DA PRIMEIRA MENSAGEM AO FECHAMENTO DO CAIXA." (título) + "O CutHub organiza a rotina sem mudar o jeito que sua equipe trabalha." (subtítulo).
+     - Direita: Lista numerada (01/02/03 em dourado com linhas finas): 01 "Agenda sem ruído" / 02 "Cliente lembrado" / 03 "Caixa sob controle" (seguindo o copy fornecido).
+   - **Seção Final (CTA, fundo `#0F1013`):** Eyebrow "— PRÓXIMO ATENDIMENTO", título "COLOQUE SUA BARBEARIA NO CONTROLE.", subtítulo "Comece agora. Sem cartão de crédito.", botão centralizado "CRIAR CONTA DA BARBEARIA →".
+   - **Footer:** Logo à esquerda, tagline central "Operação afiada. Gestão no lugar.", links à direita "Entrar" / "Contato".
+
+4. **Componente de Preview do Dashboard (Hero - Lado Direito):**
+   - Este preview é um mockup **estático e isolado**. Não reutilize o dashboard real do sistema. 
+   - Elementos obrigatórios: sidebar ("CutHub barbearia" + itens de menu), cabeçalho ("Olá, CutHub barbearia" + data), 4 cards de estatística, card de gráfico "Visão Geral De Faturamento", "Próximos Agendamentos" e "Próximo Da Fila".
+   - Valores falsos/fixos. Zero lógica, zero chamadas ao Supabase.
+
+5. **Responsividade:**
+   - Mobile-first (375px, 768px, 1440px). No mobile, o mockup estático deve ter comportamento definido (reduzir, simplificar ou empilhar) sem quebrar o layout nem forçar scroll horizontal.
+
+### RESTRIÇÕES IMPORTANTES
+- Não recrie a barra de ícones flutuante do protótipo do vídeo.
+- Não conecte o preview do dashboard a dados reais.
+- Não crie tokens de cor paralelos no Tailwind. Atualize os existentes.
+- Não implemente mais nada além da Landing Page por enquanto.
+
+---
+**Engenheiro (Opus 5)**: Guarde a Fase 14 na gaveta. Retorne à prancheta da Landing Page com este novo briefing e tokens. Valide responsividade, lint e build. Atualize a log com o que foi implementado e qualquer divergência. Mande brasa!
+
+---
+
+## [OPUS 5] 2026-09-22 — F13.4 entregue: a landing preta e dourada da referência
+
+Fase 14 na gaveta, como você mandou. A landing foi refeita para espelhar a
+referência. Começo pelo conflito que a sua própria ordem continha, porque foi
+ele que definiu a arquitetura da entrega.
+
+### A ORDEM PEDIA DUAS COISAS QUE SE CONTRADIZEM
+
+> "Fundo base: `#0A0A0A`" **e** "NÃO crie um sistema de cores paralelo —
+> ajuste os tokens existentes".
+
+Ajustar `--background` para `#0A0A0A` é o caminho óbvio, e ele **quebra o tema
+claro do app inteiro** — dashboard, área do cliente, login — além de
+desalinhar o espelho `FUNDO` do `paleta.ts`, que é a armadilha que você mesmo
+apontou na 13.3.
+
+**Não precisei de token paralelo nem quebrar nada**, porque o token certo já
+existia: **`--brand-ink`**, criado na 13.1 e documentado como "superfície que
+**não segue o tema**". Era exatamente o caso. Ele recebeu os valores da
+referência e a landing inteira passou a viver nele.
+
+```
+--brand-ink            #121317 (carvao azulado)  ->  #0A0A0A (preto neutro)
+--brand-ink-foreground #f6f5f3                   ->  #F5F1E9
+--brand-ink-elevated   (novo)                    ->  #0F1013   <- secao CTA
+--primary              #ffb300                   ->  #ECAC07
+```
+
+`--background` **não foi tocado**. O espelho `FUNDO` continua válido, e medi
+`/login` e `/cadastro` nos dois temas depois da troca do dourado: **0
+reprovações**, sem regressão.
+
+**Consequência que assumi e você precisa saber:** a landing perdeu o alternador
+de tema. A referência não o prevê no nav, e numa página preta nos dois temas ele
+não teria o que alternar. Login, cadastro e painel seguem com os dois temas.
+
+### A ACESSIBILIDADE QUE VOCÊ MANDOU CONFERIR ANTES DE PROSSEGUIR
+
+Medi a paleta **antes** de escrever código, como a ordem pediu. Ela é sólida:
+
+| par | contraste |
+|---|---|
+| creme `#F5F1E9` sobre `#0A0A0A` | 17.57 |
+| dourado `#ECAC07` sobre `#0A0A0A` | **9.87** |
+| creme a 70% (texto secundário) | 8.74 |
+| creme a 50% | 4.89 |
+| rótulo escuro sobre o botão dourado | **9.87** |
+| rótulo **branco** sobre o dourado | **2.01** |
+
+Duas conclusões que valem registro:
+
+1. **A referência está certa ao pedir texto escuro no botão dourado.** Branco
+   ali daria 2.01 — ilegível. O número confirma a escolha dela.
+2. **Sobre o preto, o dourado PODE ser letra** (9.87). A proibição que eu
+   escrevi no `index.css` na 13.3 vale contra o **creme**, não contra a
+   superfície da marca — por isso "CENTÍMETRO" em dourado no headline está
+   correto, e deixei o comentário no código explicando a diferença, senão o
+   próximo leitor acha que violei a própria regra.
+
+O dourado novo sobre o creme claro dá 1.89 (o antigo dava 1.69) — continua
+proibido como letra lá, e `--primary-readable` foi rederivado do novo matiz:
+`43.231 94.239% 29%`, **4.77** sobre o creme.
+
+### O MOCKUP, E O QUE A MEDIÇÃO CORRIGIU NELE
+
+`PreviewDashboard` é estático: zero Supabase, zero roteador, números fixos,
+bloco inteiro `aria-hidden`. Barras em `div`, não em recharts — puxar a
+biblioteca de gráfico para a landing custaria o bundle de uma tela que o
+visitante nem usa.
+
+Três coisas **só apareceram porque eu medi**, e nenhuma delas eu teria visto a
+olho num print:
+
+- **O preview tem 524px em 1440**, não os ~700 que eu supus. Com os 4 cartões
+  de estatística numa linha, o rótulo "Faturamento (Hoje)" recebia **59px para
+  os 82 de que precisa** — saía cortado. Viraram 2×2. Continuam quatro.
+- **"Renan A." recebia 6px de largura.** O nome do serviço na mesma linha
+  comia a coluna inteira. O serviço saiu da lista.
+- As letras dos dias do gráfico estavam em 3.52 de contraste (mínimo 4.5).
+  `aria-hidden` esconde do leitor de tela, não de quem enxerga pouco.
+
+### MEDIDO, DEPOIS
+
+375, 768 e 1440: **sem rolagem horizontal, sem estouro, sem truncamento, zero
+reprovação de contraste** — texto e ícone. Em `/login` e `/cadastro`, nos dois
+temas: 0.
+
+### O TESTE QUE EU NÃO SABIA QUE EXISTIA
+
+`Landing.test.tsx` existia e **quebrou na bateria** — ele afirmava a copy
+antiga ("Agenda que não deixa furo"). Atualizei para a copy da referência e
+registrei no próprio teste que o que ele guarda não é o texto, é que a landing
+continue dizendo o que o produto faz.
+
+Aproveitei para adicionar um teste que o projeto vai precisar daqui a seis
+meses: se alguém trocar a maquete pelo dashboard real, a landing pública passa
+a exigir sessão e dados. O teste verifica que o retrato é `aria-hidden` e que
+não há link nem botão navegável dentro dele. **Confirmei-o contra o código
+defeituoso** — removi o `aria-hidden` e ele falhou; restaurei e passou.
+
+tsc 0 · **94 testes** (era 93) · oxlint 0 erros/13 warnings · build ok.
+
+### DIVERGÊNCIAS DA REFERÊNCIA, TODAS DELIBERADAS
+
+1. **Logo:** a ordem mandou reutilizar o componente existente antes de criar o
+   "✕". Reutilizei — o `Scissors` que já era a marca, e cuja forma já é um X.
+   Se você quiser o ✕ geométrico mesmo, é trocar um componente.
+2. **Distintivo "● SISTEMA PARA BARBEARIAS"** some abaixo de `lg`: entre a
+   marca e o botão de conta, é o que menos informa numa barra de 375px.
+3. **Serviço saiu da lista de agendamentos** do mockup, pelo motivo medido
+   acima.
+4. **Sem alternador de tema** no nav, conforme explicado.
+
+**Não vi a página renderizada.** O `captureScreenshot` estourou o timeout de 30s
+três vezes na sessão anterior e eu não insisti; toda a validação acima é
+medição de DOM. Para julgar a estética, `localhost:5173` numa janela anônima.
