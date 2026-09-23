@@ -2350,3 +2350,76 @@ recarga e a crash do renderizador.
 
 E há um caminho melhor ainda, que é o que usei no fim: **medir deslogado**.
 Sem sessão, `/` já serve a landing e não há nada para suspender.
+
+---
+
+## [OPUS 5] 2026-09-23 — Área do cliente: largura em 1920, faixa de abertura e o botão de agendar
+
+Pedido do Chefe: a aba do cliente devia preencher a tela em 1920×1080, ganhar um
+botão chamativo de "novo agendamento" no topo — como o do painel da barbearia —
+e ter um ar mais promocional.
+
+### A LARGURA
+
+`ClienteLayout` já subia por breakpoint até `xl:max-w-7xl` (1280px). Em 1920
+isso deixa **320px vazios de cada lado**. Entrou o degrau
+`2xl:max-w-[1600px]` nos três pontos do arquivo (cabeçalho, abas e `main`),
+mesmo tratamento que a landing recebeu ontem.
+
+### O BOTÃO
+
+Ele foi para o **cabeçalho do `ClienteLayout`**, não para dentro de uma página:
+assim aparece em toda a área do cliente, que é o equivalente ao lugar que o
+"Novo Agendamento" ocupa no painel da barbearia.
+
+Duas decisões que valem registro:
+
+**Leva para `/barbearias`, não para um formulário.** O cliente não tem como
+marcar sem antes escolher onde — quem abre o formulário é a barbearia, em
+`/b/:slug/agendar`. Um botão que prometesse "novo agendamento" e caísse num
+passo intermediário seria rótulo mentindo sobre o destino.
+
+**Abaixo de `sm` fica só o ícone**, com `aria-label`. Em 375px o cabeçalho já
+carrega marca, sino, tema e sair; o rótulo inteiro empurraria tudo para fora. O
+nome do usuário passou de `sm:inline` para `lg:inline` pelo mesmo motivo.
+
+### O "CHAMATIVO"
+
+A abertura de `MinhaConta` virou uma **faixa em `brand-ink`** com a saudação
+grande, uma linha de contexto e o botão primário em tamanho `lg`.
+
+**A superfície é a marca do CutHub, e nunca a de uma barbearia.** Essa não é
+escolha estética: o cliente é de várias barbearias ao mesmo tempo, e herdar a
+cor de uma delas seria arbitrário — é a regra que o próprio `ClienteLayout`
+documenta desde a Fase 4. A única marca neutra entre elas é a do produto.
+
+A linha de contexto muda conforme o estado: quem já tem horário marcado lê
+"Você já tem horário marcado. Quer garantir o próximo?"; quem não tem lê
+"Escolha a barbearia, o profissional e o horário."
+
+Para o resto do "ar promocional" usei o que **já existe no sistema** em vez de
+inventar espaço: a coluna de ofertas das barbearias favoritas passa de 320 para
+420px em 2xl e mostra até 6 promoções em vez de 4. É conteúdo real, não
+enchimento.
+
+tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
+
+### O QUE NÃO FOI MEDIDO, E POR QUÊ
+
+**Nada disto foi medido na tela renderizada.** A área do cliente está atrás de
+`ProtectedRoute`, e não há sessão no navegador — foi a sessão que eu mesmo
+perdi ontem. Sem login, `/minha-conta` redireciona e o iframe mede a porta de
+entrada, não a área do cliente. Já caí nessa armadilha uma vez, medindo o
+dashboard achando que media a landing, e não vou reportar número que não medi.
+
+Então estas três coisas estão **por verificar**:
+
+1. se o cabeçalho cabe em 375px com o botão novo (protegi escondendo o rótulo
+   abaixo de `sm`, mas proteger não é o mesmo que medir);
+2. se em 1920 a coluna principal, agora com ~1.150px, não estica demais o
+   cartão de "próximo agendamento";
+3. o contraste da faixa `brand-ink` nos dois temas — o par creme/preto tem
+   17.57 medido ontem, mas o botão primário dentro dela não foi conferido no
+   contexto novo.
+
+**Basta o Chefe entrar como cliente que eu meço as três e reporto.**

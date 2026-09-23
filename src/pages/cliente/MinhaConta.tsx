@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Heart, Store } from 'lucide-react';
+import { CalendarDays, Heart, Plus, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,18 +43,37 @@ export default function MinhaConta() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          {primeiroNome ? `Olá, ${primeiroNome}` : 'Olá'}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Seus agendamentos e as barbearias que você acompanha.
-        </p>
-      </div>
+      {/* Faixa de abertura na superfície de marca do CutHub.
+          `brand-ink` e NAO a cor de uma barbearia: o cliente e de varias ao
+          mesmo tempo, e herdar a de uma delas seria arbitrario -- e a regra
+          que o `ClienteLayout` ja documenta. Aqui a marca que fala e a do
+          proprio produto, que e neutra entre as barbearias.
+          A faixa nao segue o tema, como toda superficie `brand-ink`. */}
+      <section className="overflow-hidden rounded-2xl bg-brand-ink px-6 py-8 text-brand-ink-foreground sm:px-10 sm:py-10 2xl:px-14 2xl:py-12">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl 2xl:text-5xl">
+              {primeiroNome ? `Olá, ${primeiroNome}` : 'Olá'}
+            </h1>
+            <p className="mt-3 max-w-[52ch] text-brand-ink-foreground/70">
+              {proximo
+                ? 'Você já tem horário marcado. Quer garantir o próximo?'
+                : 'Escolha a barbearia, o profissional e o horário. Leva menos de um minuto.'}
+            </p>
+          </div>
+
+          <Button asChild size="lg" className="w-full shrink-0 gap-2 sm:w-auto">
+            <Link to="/barbearias">
+              <Plus className="h-5 w-5" aria-hidden="true" />
+              Novo agendamento
+            </Link>
+          </Button>
+        </div>
+      </section>
 
       {/* Em `lg` vira duas colunas; abaixo disso continua empilhado, como foi
           validado no mobile. */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] 2xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="min-w-0 space-y-8">
       <section>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Próximo agendamento</h2>
@@ -131,7 +150,7 @@ export default function MinhaConta() {
           <h2 className="text-sm font-medium text-muted-foreground">
             Ofertas nas suas barbearias
           </h2>
-          {promocoes.slice(0, 4).map((p) => {
+          {promocoes.slice(0, 6).map((p) => {
             const b = p.barbearia_id ? porId.get(p.barbearia_id) : undefined;
             return (
               <CardPromocao

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { CalendarDays, Heart, Home, LogOut, Percent, Scissors, Store } from 'lucide-react';
+import { CalendarDays, Heart, Home, LogOut, Percent, Plus, Scissors, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/tema/ThemeToggle';
@@ -31,16 +31,35 @@ export function ClienteLayout() {
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] items-center justify-between px-4 sm:px-6">
           <Link to="/minha-conta" className="flex items-center gap-2 font-semibold tracking-tight">
             <Scissors className="h-6 w-6 text-primary" aria-hidden="true" />
             <span className="text-lg">CutHub</span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <span className="hidden text-sm text-muted-foreground sm:inline">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="hidden text-sm text-muted-foreground lg:inline">
               {perfil?.nome}
             </span>
+
+            {/* A ação principal da área do cliente, no topo e em todas as
+                páginas dela — o mesmo lugar que o botão "Novo Agendamento"
+                ocupa no painel da barbearia.
+
+                Leva para `/barbearias` e não para um formulário: o cliente não
+                tem como marcar sem antes escolher onde. O rótulo diz o destino
+                real em vez de prometer um passo que não existe.
+
+                Abaixo de `sm` fica só o ícone, com `aria-label` — em 375px o
+                cabeçalho ja carrega marca, sino, tema e sair, e o rótulo
+                inteiro empurraria tudo para fora. */}
+            <Button asChild size="sm" className="gap-1.5">
+              <Link to="/barbearias" aria-label="Novo agendamento">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Novo agendamento</span>
+              </Link>
+            </Button>
+
             <NotificationBell />
             <ThemeToggle />
             <Button
@@ -56,7 +75,7 @@ export function ClienteLayout() {
         </div>
 
         {/* Navegação em abas no desktop */}
-        <nav className="mx-auto hidden w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl gap-1 px-4 pb-2 sm:px-6 md:flex">
+        <nav className="mx-auto hidden w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] gap-1 px-4 pb-2 sm:px-6 md:flex">
           {ITENS.map(({ to, label, icon: Icone, end }) => (
             <NavLink
               key={to}
@@ -79,8 +98,10 @@ export function ClienteLayout() {
 
       {/* Largura por breakpoint, e nao fixa: com max-w-4xl (896px) uma tela de
           1920px deixava mais de 500px vazios de cada lado. O teto existe para
-          o texto nao virar linha de 2000px, que e ilegivel. */}
-      <main className="mx-auto w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl px-4 py-6 sm:px-6">
+          o texto nao virar linha de 2000px, que e ilegivel.
+          O degrau `2xl` entrou em 23/09: mesmo com xl:max-w-7xl (1280px),
+          medido em 1920 sobravam 320px de cada lado. */}
+      <main className="mx-auto w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] px-4 py-6 sm:px-6">
         <Outlet />
       </main>
 
