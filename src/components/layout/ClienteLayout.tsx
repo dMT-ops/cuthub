@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { CalendarDays, Heart, Home, LogOut, Percent, Plus, Scissors, Store } from 'lucide-react';
+import { CalendarDays, Heart, Home, LogOut, Percent, Scissors, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/tema/ThemeToggle';
@@ -37,29 +37,10 @@ export function ClienteLayout() {
             <span className="text-lg">CutHub</span>
           </Link>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="hidden text-sm text-muted-foreground lg:inline">
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-muted-foreground sm:inline">
               {perfil?.nome}
             </span>
-
-            {/* A ação principal da área do cliente, no topo e em todas as
-                páginas dela — o mesmo lugar que o botão "Novo Agendamento"
-                ocupa no painel da barbearia.
-
-                Leva para `/barbearias` e não para um formulário: o cliente não
-                tem como marcar sem antes escolher onde. O rótulo diz o destino
-                real em vez de prometer um passo que não existe.
-
-                Abaixo de `sm` fica só o ícone, com `aria-label` — em 375px o
-                cabeçalho ja carrega marca, sino, tema e sair, e o rótulo
-                inteiro empurraria tudo para fora. */}
-            <Button asChild size="sm" className="gap-1.5">
-              <Link to="/barbearias" aria-label="Novo agendamento">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Novo agendamento</span>
-              </Link>
-            </Button>
-
             <NotificationBell />
             <ThemeToggle />
             <Button

@@ -2423,3 +2423,33 @@ Então estas três coisas estão **por verificar**:
    contexto novo.
 
 **Basta o Chefe entrar como cliente que eu meço as três e reporto.**
+
+---
+
+## [OPUS 5] 2026-09-23 — O botão sai do cabeçalho do cliente
+
+O Chefe viu e reprovou: o "Novo agendamento" no cabeçalho ficou estranho.
+Removido.
+
+**Fica só o da faixa de abertura de `MinhaConta`**, que é onde ele tem espaço
+para ser grande e vir acompanhado da linha de contexto. O cabeçalho voltou
+exatamente ao que era — nome do usuário de novo a partir de `sm`, que eu tinha
+empurrado para `lg` só para abrir lugar para o botão.
+
+Vale registrar o motivo, porque ele contraria o que eu tinha argumentado: eu
+coloquei no cabeçalho para a ação aparecer em **todas** as páginas do cliente,
+espelhando o painel da barbearia. Só que o cabeçalho do cliente não é o do
+painel — ali já moram marca, nome, sino, tema e sair, e um botão primário
+disputando com cinco elementos vira ruído em vez de destaque. A analogia com o
+painel era minha, não do produto.
+
+**Consequência assumida:** em `/minha-conta/agendamentos`, `/favoritos` e
+`/promocoes` não há mais atalho direto para agendar — o caminho é a aba
+"Explorar" da navegação, que já existia e continua em todas as páginas. Se o
+Chefe quiser a ação nas telas internas também, o lugar certo é o topo de cada
+uma delas, não o cabeçalho compartilhado.
+
+tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
+
+A verificação continua pendente pelo mesmo motivo da entrada anterior: sem
+sessão de cliente, não dá para medir a área.
