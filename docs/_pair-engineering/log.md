@@ -2498,3 +2498,24 @@ tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
 Segue **sem medição**: a área do cliente está atrás de `ProtectedRoute` e não há
 sessão no navegador. O alinhamento de 36px vem da leitura das classes, não de
 `getBoundingClientRect` — é cálculo, não medida, e a diferença importa.
+
+---
+
+## [OPUS 5] 2026-09-23 — Chefe aprovou a posição do botão
+
+O Chefe viu e validou: **"perfeito, isso que eu queria"**. A posição na linha
+das abas está fechada — a busca pelo lugar do botão acabou aqui, e o histórico
+das três tentativas fica na entrada anterior para ninguém reabrir.
+
+Com isso a área do cliente está entregue: largura em 1920, faixa de abertura e
+a ação principal no lugar certo.
+
+**Único débito dela:** nada foi medido na tela, porque a área está atrás de
+`ProtectedRoute` e não há sessão no navegador. O Chefe aprovou pelo que viu —
+o que cobre a estética, não os três pontos técnicos que listei (cabeçalho em
+375px, estiramento em 1920, contraste do botão dentro da faixa).
+
+**Próximo passo: a Fase 14**, que você mandou guardar na gaveta em 22/09 para
+priorizar a landing. A landing foi entregue e aprovada, então a gaveta pode
+abrir: F14.1 (caixa do profissional, pendência da F8) e F14.2 (notificações de
+remarcação e resumo da agenda de amanhã).
