@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { CalendarDays, Heart, Home, LogOut, Percent, Scissors, Store } from 'lucide-react';
+import { CalendarDays, Heart, Home, LogOut, Percent, Plus, Scissors, Store } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/tema/ThemeToggle';
@@ -55,8 +55,10 @@ export function ClienteLayout() {
           </div>
         </div>
 
-        {/* Navegação em abas no desktop */}
-        <nav className="mx-auto hidden w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] gap-1 px-4 pb-2 sm:px-6 md:flex">
+        {/* Navegação em abas no desktop, com a ação principal na mesma linha.
+            `items-center` + `size="sm"` alinham o botão à altura das abas: a
+            aba é `px-3 py-2 text-sm`, que fecha nos mesmos 36px do botão. */}
+        <nav className="mx-auto hidden w-full max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] items-center gap-1 px-4 pb-2 sm:px-6 md:flex">
           {ITENS.map(({ to, label, icon: Icone, end }) => (
             <NavLink
               key={to}
@@ -74,6 +76,17 @@ export function ClienteLayout() {
               {label}
             </NavLink>
           ))}
+
+          {/* `ml-auto` empurra para a direita, do lado oposto às abas: é ação,
+              não navegação, e misturá-la à fileira faria parecer mais uma aba.
+              Leva para `/barbearias` porque o cliente não marca sem antes
+              escolher onde — quem abre o formulário é a barbearia. */}
+          <Button asChild size="sm" className="ml-auto gap-1.5">
+            <Link to="/barbearias">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Novo agendamento
+            </Link>
+          </Button>
         </nav>
       </header>
 

@@ -62,7 +62,12 @@ export default function MinhaConta() {
             </p>
           </div>
 
-          <Button asChild size="lg" className="w-full shrink-0 gap-2 sm:w-auto">
+          {/* Só no celular. No desktop esta ação mora na linha das abas, no
+              `ClienteLayout`; repeti-la aqui deixaria dois botões idênticos a
+              poucos pixels um do outro. Abaixo de `md` aquela fileira não
+              existe, e sem este botão o telefone — que é onde a área do
+              cliente mais é usada — ficaria sem a ação principal. */}
+          <Button asChild size="lg" className="w-full shrink-0 gap-2 md:hidden">
             <Link to="/barbearias">
               <Plus className="h-5 w-5" aria-hidden="true" />
               Novo agendamento

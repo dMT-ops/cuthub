@@ -2453,3 +2453,48 @@ tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
 
 A verificação continua pendente pelo mesmo motivo da entrada anterior: sem
 sessão de cliente, não dá para medir a área.
+
+---
+
+## [OPUS 5] 2026-09-23 — O botão de agendar sobe para a linha das abas
+
+Terceira posição tentada, e a que o Chefe quis: **na mesma fileira de "Início,
+Agenda, Favoritos, Ofertas, Explorar"**, à direita, na mesma altura.
+
+O alinhamento não foi no olho: a aba é `px-3 py-2 text-sm`, que fecha em 36px,
+e é exatamente a altura do botão `size="sm"`. A fileira ganhou `items-center` e
+o botão, `ml-auto` — ele fica do lado oposto às abas de propósito, porque é
+**ação e não navegação**, e no meio da fileira pareceria mais uma aba.
+
+### A PARTE QUE O PEDIDO NÃO COBRIA, E EU NÃO PODIA IGNORAR
+
+Aquela fileira é `md:flex` — **não existe no celular**, onde a navegação é a
+barra inferior. Apagar o botão da faixa e subi-lo para lá deixaria o telefone
+sem a ação principal, e o próprio `ClienteLayout` registra que a área do
+cliente "é o uso que mais acontece no telefone, na rua, antes ou depois do
+corte".
+
+Então o botão da faixa **não sumiu: virou `md:hidden`**. Divisão de trabalho:
+
+- **desktop** — o botão vive na linha das abas, e a faixa fica só com a
+  saudação e a linha de contexto;
+- **celular** — a fileira não existe, e o botão continua na faixa, largura
+  cheia.
+
+Nunca aparecem os dois ao mesmo tempo. Se eu tivesse feito só o que a frase
+pedia, o resultado seria uma regressão silenciosa na plataforma que mais
+importa para essa tela.
+
+### HISTÓRICO DAS TRÊS POSIÇÕES, PARA NÃO SE REPETIR
+
+1. **Cabeçalho** — reprovado pelo Chefe. Disputava com marca, nome, sino, tema
+   e sair; virou ruído em vez de destaque.
+2. **Só na faixa** — funcionava, mas ficava longe da navegação.
+3. **Linha das abas (atual)** — junto do resto dos caminhos, sem disputar com o
+   cabeçalho.
+
+tsc 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
+
+Segue **sem medição**: a área do cliente está atrás de `ProtectedRoute` e não há
+sessão no navegador. O alinhamento de 36px vem da leitura das classes, não de
+`getBoundingClientRect` — é cálculo, não medida, e a diferença importa.
