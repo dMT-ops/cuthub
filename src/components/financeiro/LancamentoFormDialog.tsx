@@ -45,12 +45,21 @@ interface LancamentoFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Quando presente, o dialogo edita este lancamento em vez de criar um novo */
   lancamentoAEditar?: LancamentoComDetalhes | null;
+  /**
+   * Id do profissional logado, quando quem abre o diálogo é o próprio barbeiro
+   * (F14.1). Trava o lançamento na linha dele e reduz as categorias ao que a
+   * RLS aceita — a trava real está na policy `financeiro_lancamento_do_
+   * profissional`; aqui o objetivo é não deixar o formulário oferecer uma
+   * opção que o banco vai recusar depois do usuário preencher tudo.
+   */
+  profissionalFixo?: string | null;
 }
 
 export function LancamentoFormDialog({
   open,
   onOpenChange,
   lancamentoAEditar,
+  profissionalFixo = null,
 }: LancamentoFormDialogProps) {
   const { barbeariaId, user } = useAuth();
   const { criarLancamento, isCriando, atualizarLancamento, isAtualizando } = useFinanceiro(barbeariaId);
@@ -61,7 +70,7 @@ export function LancamentoFormDialog({
     resolver: zodResolver(lancamentoSchema),
     defaultValues: {
       tipo: 'entrada',
-      categoria: 'atendimento',
+      categoria: profissionalFixo ? 'venda_produto' : 'atendimento',
       valor: 0,
       data: format(new Date(), 'yyyy-MM-dd'),
       forma_pagamento: 'dinheiro',
@@ -71,7 +80,14 @@ export function LancamentoFormDialog({
   });
 
   const tipo = useWatch({ control: form.control, name: 'tipo' });
-  const categoriasDisponiveis = CATEGORIAS_POR_TIPO[tipo];
+  // Espelha `categoria_permitida_ao_profissional` da migration 00030. O
+  // barbeiro não lança `atendimento` (é a base da comissão dele) nem
+  // `comissao` (é a barbearia pagando ele).
+  const categoriasDisponiveis = useMemo(() => {
+    const doTipo = CATEGORIAS_POR_TIPO[tipo];
+    if (!profissionalFixo) return doTipo;
+    return doTipo.filter((c) => c === 'venda_produto' || c === 'insumos' || c === 'outro');
+  }, [tipo, profissionalFixo]);
 
   useEffect(() => {
     if (!open) return;
@@ -99,10 +115,10 @@ export function LancamentoFormDialog({
       valor: 0,
       data: format(new Date(), 'yyyy-MM-dd'),
       forma_pagamento: 'dinheiro',
-      profissional_id: SEM_PROFISSIONAL,
+      profissional_id: profissionalFixo ?? SEM_PROFISSIONAL,
       descricao: '',
     });
-  }, [open, form, lancamentoAEditar]);
+  }, [open, form, lancamentoAEditar, profissionalFixo]);
 
   // Trocar de tipo pode deixar a categoria incoerente (ex.: "aluguel" como entrada)
   useEffect(() => {
@@ -276,6 +292,11 @@ export function LancamentoFormDialog({
                 )}
               />
 
+              {/* Para o barbeiro o campo nao existe: o lancamento e sempre dele.
+                  Escondido em vez de desabilitado porque um select travado com
+                  uma opcao so nao e escolha, e ocupa espaco pedindo atencao. O
+                  valor segue no payload pelo `form.reset`, e a RLS confere. */}
+              {profissionalFixo ? null : (
               <FormField
                 control={form.control}
                 name="profissional_id"
@@ -301,6 +322,7 @@ export function LancamentoFormDialog({
                   </FormItem>
                 )}
               />
+              )}
             </div>
 
             <FormField

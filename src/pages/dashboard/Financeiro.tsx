@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useAtendimentosAReceber, useComissoesAPagar, useFinanceiro } from '@/hooks/useFinanceiro';
+import { useProfissionais } from '@/hooks/useProfissionais';
 import { LancamentosTable } from '@/components/financeiro/LancamentosTable';
 import { LancamentoFormDialog } from '@/components/financeiro/LancamentoFormDialog';
 import { AtendimentosAReceber } from '@/components/financeiro/AtendimentosAReceber';
@@ -23,13 +24,21 @@ type TipoLancamento = Database['public']['Enums']['tipo_lancamento'];
 type CategoriaLancamento = Database['public']['Enums']['categoria_lancamento'];
 
 export default function Financeiro() {
-  const { barbeariaId, podeOperar, motivoBloqueio, tipo: tipoDeUsuario } = useAuth();
+  const { barbeariaId, podeOperar, motivoBloqueio, tipo: tipoDeUsuario, perfil } = useAuth();
+  const { profissionais } = useProfissionais(barbeariaId, { status: 'ativo' });
 
   // O profissional entrou nesta tela na Fase 8, mas ele nao gerencia o caixa:
   // a RLS so lhe da LEITURA dos proprios lancamentos. Mostrar os paineis de
   // gestao seria oferecer botoes que o banco recusa -- e as listas de
   // "a lancar" e "a pagar" viriam vazias, parecendo defeito.
   const ehProfissional = tipoDeUsuario === 'profissional';
+
+  // A ficha do barbeiro logado. Mesmo caminho da AgendaHome: `usuario_perfil.id`
+  // nao e `profissional.id`, e e o segundo que a RLS do caixa compara.
+  const meuProfissionalId = useMemo(
+    () => (ehProfissional ? (profissionais.find((p) => p.usuario_id === perfil?.id)?.id ?? null) : null),
+    [ehProfissional, profissionais, perfil]
+  );
 
   const [mesReferencia, setMesReferencia] = useState(() => new Date());
   const [tipo, setTipo] = useState<'todos' | TipoLancamento>('todos');
@@ -108,13 +117,17 @@ export default function Financeiro() {
             </p>
           )}
         </div>
-        {!ehProfissional && (
-          <span title={motivoBloqueio ?? undefined}>
-            <Button onClick={() => { setLancamentoAEditar(null); setFormOpen(true); }} disabled={!podeOperar}>
-              <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
-            </Button>
-          </span>
-        )}
+        {/* F14.1: o barbeiro passa a lançar no caixa. O botão é o mesmo — o que
+            muda é o que o formulário oferece: a linha já vem travada na dele e
+            as categorias caem para o que a RLS aceita. */}
+        <span title={motivoBloqueio ?? undefined}>
+          <Button
+            onClick={() => { setLancamentoAEditar(null); setFormOpen(true); }}
+            disabled={!podeOperar || (ehProfissional && !meuProfissionalId)}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
+          </Button>
+        </span>
       </div>
 
       {/* Período */}
@@ -259,6 +272,7 @@ export default function Financeiro() {
         open={formOpen}
         onOpenChange={fecharForm}
         lancamentoAEditar={lancamentoAEditar}
+        profissionalFixo={meuProfissionalId}
       />
     </div>
   );

@@ -2519,3 +2519,73 @@ o que cobre a estética, não os três pontos técnicos que listei (cabeçalho e
 priorizar a landing. A landing foi entregue e aprovada, então a gaveta pode
 abrir: F14.1 (caixa do profissional, pendência da F8) e F14.2 (notificações de
 remarcação e resumo da agenda de amanhã).
+
+---
+
+## [OPUS 5] 2026-09-23 — F14.1: o profissional escreve no caixa, e a ordem tinha um buraco
+
+Entregue a F14.1. **A F14.2 (notificações) não começou.**
+
+### DUAS CORREÇÕES NA ORDEM, AS DUAS DE FATO
+
+**1. `transacao_caixa` não existe.** O caixa deste projeto é
+`lancamento_financeiro` desde a Fase 5.
+
+**2. A regra "só a própria linha" não bastava — e isso é grave.** A comissão é
+apurada de dentro da MESMA tabela (`financeiro.service.ts`):
+
+```
+receita do profissional = tipo 'entrada' + categoria 'atendimento'
+comissao ja paga        = tipo 'saida'   + categoria 'comissao'
+```
+
+Com INSERT livre na própria linha, o barbeiro lançaria
+`entrada`/`atendimento` e **inflaria a base da própria comissão** — passaria a
+mandar em quanto a barbearia lhe deve. O índice
+`lancamento_atendimento_unico_por_agendamento` não pega: ele só vale quando
+`agendamento_id` não é nulo, e a linha forjada não precisa de agendamento.
+
+Então a policy restringe também a **categoria**: `venda_produto`, `insumos` e
+`outro` (a gorjeta cai aqui). Ficam de fora `atendimento` e `comissao`.
+
+### MEDIDO, COMO O VITOR, EM BEGIN/ROLLBACK
+
+| tentativa | resultado |
+|---|---|
+| gorjeta na própria linha | **passa** |
+| venda de pomada | **passa** |
+| `entrada`/`atendimento` para si | **recusado** |
+| caixa da casa (`profissional_id` nulo) | **recusado** |
+| linha de outro profissional | **recusado** |
+| `comissao` para si | **recusado** |
+| UPDATE do próprio lançamento | **0 linhas** |
+| DELETE do próprio lançamento | **0 linhas** |
+| base de comissão depois | **inalterada** |
+
+Zero resíduo após o rollback.
+
+### FRONTEND
+
+Botão "Novo Lançamento" liberado para o barbeiro. O campo "Profissional" some
+para ele — o lançamento é sempre dele, e select travado com uma opção só não é
+escolha. As categorias do formulário espelham a função SQL da migration.
+
+Mantive o rótulo **"Novo Lançamento"** e não "Nova Transação" como a ordem
+escreveu: é o vocabulário que a tela já usa, e trocar só nesse botão criaria
+dois nomes para a mesma coisa.
+
+### A ARMADILHA QUE REENCONTREI
+
+`npx tsc --noEmit` passou **com duas variáveis fora de escopo**
+(`profissionais` e `perfil`). Só `tsc -b` pegaria. É a terceira vez que este
+projeto registra que os dois não olham a mesma coisa — e desta vez quem caiu
+fui eu, de novo. Corrigido antes do commit; `tsc -b` limpo.
+
+tsc -b 0 · 94 testes · oxlint 0 erros/13 warnings · build ok.
+
+**Não medido:** a tela do profissional não foi vista — sem sessão no navegador.
+A regra está provada no banco, que é onde ela vale; o formulário está provado
+por tipo e por leitura.
+
+**Próximo:** F14.2 — notificação de horário remarcado e resumo da agenda de
+amanhã, em `00031` (a ordem pedia `00030`, que ficou com o caixa).
