@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { AlertaDeErro } from '@/components/auth/AlertaDeErro';
+import { CampoDeSenha } from '@/components/auth/CampoDeSenha';
 import { authService } from '@/services/auth.service';
 import { rotaInicialDoPapel } from '@/lib/auth/areas';
 
@@ -86,16 +87,7 @@ export default function Login() {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Senha</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
+        <CampoDeSenha id="password" valor={password} aoMudar={setPassword} />
 
         <Button className="w-full" type="submit" disabled={loading}>
           {loading ? 'Entrando...' : 'Entrar'}

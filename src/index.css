@@ -189,3 +189,40 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* AUTOFILL DO CHROME — sem isto o tema escuro quebra no login.
+
+   Quando o navegador preenche e-mail e senha sozinho, ele pinta o fundo do
+   campo de branco por conta propria. No tema claro passa despercebido; no
+   escuro o campo vira uma caixa branca no meio do carvao, e tudo que e da cor
+   do texto (quase branco la) some dentro dela. Foi assim que o botao de ver
+   senha "desapareceu" em 24/09 -- a cor do icone estava certa o tempo todo, o
+   fundo e que tinha mudado.
+
+   O Chrome ignora `background-color` em `:-webkit-autofill`. O que ele respeita
+   e sombra interna: uma sombra solida de 1000px cobre a area toda e faz as
+   vezes de fundo. `-webkit-text-fill-color` e necessario pelo mesmo motivo --
+   `color` sozinho nao pega no texto preenchido.
+
+   ESTE BLOCO FICA FORA DE `@layer`, E ISSO E OBRIGATORIO.
+
+   Dentro de `@layer base` ele nao funciona, e o modo de falhar e traicoeiro: o
+   `Input` usa `shadow-sm`, que o Tailwind emite em `@layer utilities`. Em
+   cascade layers a camada posterior ganha INDEPENDENTE DE ESPECIFICIDADE, entao
+   `utilities` sobrescrevia o `box-shadow` daqui. Sobrava o branco do Chrome com
+   o `-webkit-text-fill-color` quase branco por cima: campo branco E texto
+   branco, que foi o que o Chefe viu em 24/09. CSS sem camada vence qualquer
+   camada -- e o que resolve. Medido no CSS gerado: a regra saia no offset ~11k
+   (`base`) e o `.shadow-sm` no ~51k (`utilities`).
+
+   A transicao de 9999s e o truque conhecido para a cor de autofill nao
+   reaparecer por um instante depois do preenchimento: ela nunca chega ao fim. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+  -webkit-text-fill-color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+  transition: background-color 9999s ease-out 0s;
+}

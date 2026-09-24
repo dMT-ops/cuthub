@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { AlertaDeErro } from '@/components/auth/AlertaDeErro';
+import { CampoDeSenha } from '@/components/auth/CampoDeSenha';
 import { ROTA_DA_AREA } from '@/lib/auth/areas';
 
 type TipoConta = 'barbearia' | 'cliente';
@@ -186,17 +187,7 @@ export default function Cadastro() {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Senha</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-          />
-        </div>
+        <CampoDeSenha id="password" valor={password} aoMudar={setPassword} minLength={6} />
 
         <Button className="w-full" type="submit" disabled={loading}>
           {loading ? 'Cadastrando...' : 'Cadastrar'}

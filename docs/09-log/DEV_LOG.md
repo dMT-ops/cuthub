@@ -512,3 +512,95 @@ sessão. Fica pendente, com o desbloqueio identificado.
 - [ ] 🟡 `supabase_vector_cuthub` em `Restarting`.
 - [ ] **Próximo passo combinado: F14.2** (horário remarcado + resumo da agenda
       de amanhã, migration `00031`), aguardando aprovação.
+
+## 2026-09-24 (tarde) — Botão de ver senha, e o autofill do Chrome quebrando o tema escuro
+
+Pedido do Chefe: botão de ver senha no login e no cadastro. Entregue — mas o
+caminho até ele achou um bug bem maior, que não tinha nada a ver com o botão.
+
+### O COMPONENTE
+
+`src/components/auth/CampoDeSenha.tsx`, compartilhado entre `Login` e
+`Cadastro` pelo mesmo motivo do `AlertaDeErro`: os dois tinham o mesmo bloco de
+senha copiado.
+
+- `type="button"` no botão. Dentro de `<form>`, botão sem `type` vira `submit`
+  por padrão do HTML — clicar no olho dispararia o `signUp` com a senha pela
+  metade.
+- `aria-label` que muda com o estado ("Mostrar senha" / "Ocultar senha") mais
+  `aria-pressed`, senão o leitor de tela anuncia um botão sem nome.
+- Nada de `text-primary`: o dourado dá 1.89 sobre o fundo claro, e elemento sem
+  rótulo precisa de 3.0.
+
+**5 testes, e testei o teste.** Removi o `type="button"`, rodei, e o caso "o
+botão não submete o formulário" ficou vermelho; restaurei e voltou verde. Teste
+que não pode falhar não vale nada — foi o vício que eu mesmo encontrei no teste
+de 23/09 nesta mesma manhã.
+
+### O BUG DE VERDADE: AUTOFILL DO CHROME
+
+O Chefe relatou o olho "sumindo". Persegui a cor do ícone por **quatro
+rodadas** — `text-muted-foreground`, depois `text-foreground/80`, depois
+`text-foreground` puro — e nenhuma medição explicava o sumiço, porque o
+contraste calculado passava folgado nos dois temas em todas elas.
+
+**Quem achou a causa foi o Chefe, olhando a tela:** quando o Chrome preenche
+e-mail e senha sozinho, ele pinta o fundo do campo de branco por conta própria.
+No tema escuro o campo vira uma caixa branca no meio do carvão, e o ícone — que
+ali é quase branco, porque segue `--foreground` — some dentro dela. **A cor do
+ícone esteve certa o tempo todo.**
+
+### A CORREÇÃO, E A ARMADILHA DENTRO DELA
+
+O Chrome ignora `background-color` em `:-webkit-autofill`; o que ele respeita é
+sombra interna. Sombra sólida de 1000px faz as vezes de fundo, e
+`-webkit-text-fill-color` cuida do texto, que `color` sozinho não alcança.
+
+**Primeira tentativa falhou, e de um jeito que vale registrar.** Pus a regra em
+`@layer base`. O `Input` usa `shadow-sm`, que o Tailwind emite em
+`@layer utilities`. Em cascade layers **a camada posterior ganha independente de
+especificidade**, então `utilities` atropelava o `box-shadow` da regra: sobrava
+o branco do Chrome com o `text-fill-color` quase branco por cima — campo branco
+E texto branco. Foi essa descrição precisa do Chefe que deu o diagnóstico.
+
+CSS **sem camada** vence qualquer camada. Movida para fora de `@layer`, medido
+no CSS gerado:
+
+| | offset da regra | offset do `.shadow-sm` | quem ganha |
+|---|---|---|---|
+| antes | ~11k (`@layer base`) | ~51k (`utilities`) | `shadow-sm` |
+| depois | **82706, sem camada** | ~51k | **autofill** |
+
+A regra é global, em `src/index.css`: vale para todo input do app, não só o
+login. **Confirmado na tela pelo Chefe.**
+
+### BATERIA
+
+`tsc -b` 0 · **99 testes** (eram 94) · oxlint 0 erros / 13 warnings · build ok.
+
+### A LIÇÃO, QUE É MINHA
+
+A extensão do Chrome está desconectada, então eu não conseguia medir a tela — e
+segui inferindo pelas classes mesmo assim, que é exatamente o que o `CLAUDE.md`
+proíbe. Quatro rodadas do Chefe foram gastas nisso. O certo, na primeira, era
+dizer "não consigo medir" e perguntar o que estava branco: foi essa resposta,
+quando enfim veio, que resolveu em uma tentativa.
+
+## Pendências para o próximo /start
+
+- [x] ~~Botão de ver senha no login e no cadastro~~ — entregue e confirmado na
+      tela.
+- [ ] 🔴 **Extensão do Chrome desconectada** — subiu de prioridade. Foi o que
+      transformou um ajuste de dez minutos em quatro rodadas.
+- [ ] 🔴 **`text-primary` a 1.89 para barbearia sem cor** — 39 usos, 33
+      arquivos. Decisão de produto.
+- [ ] 🔴 **Sem login de barbeiro e de cliente no seed.**
+- [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
+- [ ] 🟡 Barbearia nova entra no catálogo vazia.
+- [ ] 🟡 Sem alarme para falha do job de lembrete.
+- [ ] 🟡 `notificacao` sem `agendamento_id`.
+- [ ] 🟡 `supabase_vector_cuthub` em `Restarting`.
+- [ ] 🟡 **`src/App.css` é arquivo morto** — tem regras de `:hover` e não é
+      importado por ninguém. Foi suspeito nesta investigação à toa.
+- [ ] **F14.2** (horário remarcado + resumo da agenda de amanhã, `00031`),
+      aguardando aprovação.
