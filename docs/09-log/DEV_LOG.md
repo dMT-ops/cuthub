@@ -331,3 +331,184 @@ foi default, é o que ela manda revisar.
       valendo mesmo com a cobrança engavetada.
 - [ ] Decisão aberta desde a Fase 8: escrita do profissional no caixa.
 - [ ] Sem alarme para falha do job de lembrete.
+
+## 2026-09-23 (registro retroativo, escrito em 24/09) — F14.1: o profissional escreve no caixa
+
+> Entrada escrita **de forma retroativa** na sessão de 24/09. A F14.1 foi
+> commitada em 23/09 (`ec45501`) e registrada no log de pareamento, mas não
+> chegou ao DEV_LOG — quem desse `/start` no dia seguinte não a enxergaria.
+
+Fecha a pendência aberta desde a **Fase 8**. Migration
+`00030_caixa_do_profissional.sql`.
+
+**Duas correções na ordem, as duas de fato:**
+
+1. `transacao_caixa` não existe — o caixa é `lancamento_financeiro` desde a
+   Fase 5.
+2. "Só a própria linha" não bastava. A comissão é apurada de dentro da mesma
+   tabela (`receita = entrada+atendimento`, `comissao paga = saida+comissao`).
+   Com INSERT livre na própria linha, o barbeiro inflaria a base da própria
+   comissão. Por isso a policy restringe também a **categoria**:
+   `venda_produto`, `insumos` e `outro` passam; `atendimento` e `comissao` não.
+
+**Frontend:** botão "Novo Lançamento" liberado para o barbeiro, campo
+"Profissional" escondido para ele, categorias espelhando a função SQL.
+
+**Não medido na época:** a tela do profissional não foi vista.
+
+## 2026-09-24 — Sessão de verificação e arrumação, antes da F14.2
+
+Sessão sem código de funcionalidade. Objetivo: provar a F14.1 no banco, revisar
+pendências e sincronizar a documentação.
+
+### O ACHADO DA SESSÃO: `tsc --noEmit` nunca checou nada
+
+O `tsconfig.json` raiz tem `"files": []` e só *project references*. O
+`tsc --noEmit` **não segue reference** — isso só acontece com `-b`. Medido:
+
+```
+ARQUIVOS DE src/ CHECADOS POR 'tsc --noEmit': 0
+ARQUIVOS DE src/ CHECADOS POR 'tsc -b'      : 180
+```
+
+Todo "tsc --noEmit passou" da história deste projeto foi **vazio**. É a
+explicação real das três ocorrências de variável fora de escopo que "passaram
+no tsc": não passaram, não foram olhadas. O `npm run build` sempre esteve certo
+(`tsc -b && vite build`) — quem mentia era a bateria manual. `CLAUDE.md`
+corrigido para `npx tsc -b`.
+
+### AMBIENTE — e um diagnóstico falso desfeito
+
+O Docker **estava de pé** durante o `/start`; a stack subiu 47 min antes. Quem
+não o alcança é o **Bash tool**, que roda em sandbox e não abre o named pipe do
+Docker Desktop. Pelo PowerShell funciona. O `/start` reportou "Docker fora do
+ar" — errado; o certo era "a ferramenta não alcança o Docker". Comando de
+Docker neste projeto vai pelo PowerShell.
+
+`supabase_vector_cuthub` está em `Restarting` (coletor de logs, não afeta o
+banco).
+
+### DRIFT DE MIGRATION — aplicada sem registro
+
+`schema_migrations` tinha até a `00028`. As `00029` e `00030` **não constavam**
+— mas os objetos das duas **existiam no schema** (função, índice e policy
+conferidos um a um). Foram aplicadas por fora, por psql direto, sem gravar o
+registro.
+
+Como as duas são inteiramente idempotentes (`IF NOT EXISTS`,
+`CREATE OR REPLACE`, `DROP POLICY IF EXISTS`), rodei `supabase migration up`. A
+definição da policy ficou **idêntica** antes e depois — a re-execução foi no-op
+no schema; só o registro estava faltando. Agora: 30 migrations, `00001`–`00030`,
+sem buraco. **Não usei `db reset`.**
+
+### F14.1 PROVADA NO BANCO — sessão simulada, `BEGIN…ROLLBACK`
+
+Como o Vitor (`profissional`), via `request.jwt.claims`:
+
+| tentativa | resultado |
+|---|---|
+| (a) gorjeta (`entrada`/`outro`) na própria linha | **passa** |
+| (a2) venda de pomada (`entrada`/`venda_produto`) | **passa** |
+| (b) linha de outro profissional (Medina) | **recusado** |
+| (b2) caixa da casa (`profissional_id` nulo) | **recusado** |
+| (c) `entrada`/`atendimento` para si | **recusado** |
+| (c2) `saida`/`comissao` para si | **recusado** |
+| (c3) lançamento em outra barbearia | **recusado** |
+
+Como o Renan (`owner`), para provar ausência de regressão:
+
+| tentativa | resultado |
+|---|---|
+| (d1) lança no caixa da casa | **passa** |
+| (d2) lança `atendimento` para o profissional | **passa** |
+| (d3) lança `comissao` | **passa** |
+| (d4) UPDATE | **1 linha** |
+| (d5) DELETE | **1 linha** |
+| (d6) alcançar outra barbearia | **recusado** |
+
+Resíduo zero nas duas baterias.
+
+**CORRIJO UM TESTE DE 23/09.** O log de pareamento registra "UPDATE do próprio
+lançamento → 0 linhas" e "DELETE → 0 linhas" como prova. **Não era prova:** o
+Vitor tem **zero** lançamentos no banco, então o `0` vinha de não haver linha,
+não da RLS. Refiz de forma que vale — o Vitor **cria** a linha (permitido) e só
+então tenta alterá-la:
+
+```
+CRIOU=1 (valor=25.00)
+(u) UPDATE da propria linha existente afetou 0 linhas
+VALOR_APOS_UPDATE=25.00
+(d) DELETE da propria linha existente afetou 0 linhas
+AINDA_EXISTE=1
+```
+
+Agora sim: ele cria e não desfaz. A conclusão de 23/09 estava certa; a
+evidência é que era vazia.
+
+### BATERIA
+
+`tsc -b` 0 · **94 testes passam** (12 arquivos) · oxlint **0 erros, 13
+warnings** · `npm run build` ok.
+
+### MEDIÇÕES DE CONTRASTE
+
+| par | razão | mínimo | veredito |
+|---|---|---|---|
+| headline dourado no painel escuro `#ecac07`/`#0a0a0a` | 9.87 | 3.0 | passa |
+| links Login/Cadastro `#906904`/`#f9f8f6` | 4.70 | 4.5 | passa |
+| *(controle)* dourado cheio sobre creme | 1.89 | 4.5 | **reprova** |
+
+O dourado como texto está resolvido na porta de entrada — a correção foi deixar
+de usá-lo sobre o creme, não mudar a cor.
+
+**MAS ISSO ABRE UM BURACO NO PAINEL, E ELE É NOVO.** O `TemaDaBarbearia` só
+sobrescreve `--primary` quando a barbearia **tem cor**; sem cor, o painel cai
+no dourado do CutHub. São **39 usos de `text-primary` em 33 arquivos**, todos a
+**1.89** no tema claro — e **1 das 3 barbearias está sem cor** hoje. O
+`paletaDaMarca` garante contraste da cor *escolhida*; ninguém garante o
+*fallback*. **Não corrigi** — é decisão de produto.
+
+### O QUE MAIS FOI MEDIDO
+
+- **Catálogo:** barbearia com 0 serviços e 0 profissionais **entra** em
+  `barbearia_publica`, com `perfil_completude = 0`. Pendência confirmada.
+- **Job de lembrete:** `lembretes_de_agendamento` ativo, `*/15 * * * *`, todas
+  as execuções `succeeded`. Segue sem alarme de falha.
+- **Personalização:** 2 de 3 com cor; 1 com logo, banner e descrição.
+- **Alcance:** 1 de 9 profissionais e 6 de 54 clientes com conta.
+- **`--background` × `FUNDO`:** batem (`#f9f8f6` / `#0d0f11`).
+- **Caso de 19/09 05:01:** não reprodutível, e agora sei por quê — a tabela
+  `notificacao` **não tem `agendamento_id`**. Não existe como correlacionar
+  aviso e agendamento. É a razão estrutural de o caso ter morrido sem
+  diagnóstico.
+
+### A TELA DO CAIXA CONTINUA SEM SER VISTA — e o motivo é credencial
+
+O seed cria senha (`senha123`) para `admin@cuthub.com`, `ownera@` e `ownerb@`.
+A conta do barbeiro (`vitor@cuthub.com`) existe e tem senha, mas **não é
+`senha123`** — testado com `crypt`. Sem barbeiro no seed não há como logar como
+barbeiro, e mudar a senha dele seria mutação de dado fora do escopo desta
+sessão. Fica pendente, com o desbloqueio identificado.
+
+## Pendências para o próximo /start
+
+- [x] ~~Instalar a skill `frontend-design`~~ — instalada.
+- [x] ~~Dourado reprovando como texto na porta de entrada~~ — resolvido
+      (`2ed6f7d` + `--primary-readable`). Medido: 9.87 e 4.70.
+- [x] ~~Armadilha `--background` × `paleta.ts`~~ — conferido, batem.
+- [x] ~~Escrita do profissional no caixa (aberta desde a Fase 8)~~ — F14.1,
+      provada no banco em 24/09.
+- [x] ~~`00029`/`00030` fora de `schema_migrations`~~ — reconciliadas.
+- [ ] 🔴 **`text-primary` a 1.89 para barbearia sem cor** — 39 usos, 33
+      arquivos, 1 de 3 barbearias afetada hoje. Decisão de produto: dar
+      fallback legível ou exigir cor no onboarding.
+- [ ] 🔴 **Sem login de barbeiro e de cliente no seed** — é o que trava a
+      inspeção visual do caixa, e trava toda inspeção de painel por papel.
+- [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
+- [ ] 🟡 **Barbearia nova entra no catálogo vazia** (reconfirmado em 24/09).
+- [ ] 🟡 **Sem alarme para falha do job de lembrete.**
+- [ ] 🟡 **`notificacao` sem `agendamento_id`** — impede diagnosticar aviso que
+      não saiu.
+- [ ] 🟡 `supabase_vector_cuthub` em `Restarting`.
+- [ ] **Próximo passo combinado: F14.2** (horário remarcado + resumo da agenda
+      de amanhã, migration `00031`), aguardando aprovação.

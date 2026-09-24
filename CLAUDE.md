@@ -50,8 +50,14 @@ Nenhuma alegação de "pronto", "passa" ou "corrigido" sem ter rodado o comando
 registrar a ressalva — foi uma ressalva assim que, uma fase depois, achou o bug
 do nome truncado em mobile.
 
-Bateria padrão antes de fechar: `npx tsc --noEmit`, `npm test`, `npx oxlint src`,
+Bateria padrão antes de fechar: `npx tsc -b`, `npm test`, `npx oxlint src`,
 `npm run build`.
+
+**É `tsc -b`, nunca `tsc --noEmit`.** O `tsconfig.json` raiz tem `"files": []` e
+só *project references*; `--noEmit` não segue reference, então checa **zero**
+arquivo de `src/` e passa sempre. Medido em 24/09 com `--listFiles`: `--noEmit`
+0 arquivos, `-b` 180. Isso explica as três ocorrências de variável fora de
+escopo que "passaram no tsc" — não passaram, não foram olhadas.
 
 ## 5. Git
 
