@@ -604,3 +604,109 @@ quando enfim veio, que resolveu em uma tentativa.
       importado por ninguém. Foi suspeito nesta investigação à toa.
 - [ ] **F14.2** (horário remarcado + resumo da agenda de amanhã, `00031`),
       aguardando aprovação.
+
+## 2026-09-24 (fim de tarde) — Seed com login por papel, e a tela do caixa enfim vista
+
+Duas tarefas do Chefe: conectar a extensão do Chrome e arrumar o seed. Juntas,
+fecharam o gap que aparecia em **todo `/start` desde a Fase 5** — "nenhuma tela
+foi inspecionada".
+
+### POR QUE O SEED NÃO COBRIA BARBEIRO E CLIENTE
+
+O `WHERE email LIKE '%@cuthub.com'` do seed já alcançaria o `vitor@`. O
+problema era antes: a `00008` cria **só** `admin@`, `ownera@` e `ownerb@`. As
+contas de profissional e cliente que existiam (`vitor@`, `medina@`, `renan@`)
+nasceram **pelo app durante o uso** — não vêm de migration, não sobrevivem a um
+`db reset`, e tinham senha que ninguém sabia. Um seed que não cobre todos os
+papéis esconde metade do produto.
+
+### O QUE ENTROU
+
+Duas contas com id fixo, **ancoradas em registros que a `00008` já cria** em vez
+de inventar gente nova:
+
+| conta | papel | ancorada em |
+|---|---|---|
+| `barbeiro@cuthub.com` | profissional | "João C." da `b1b1b1b1` |
+| `cliente@cuthub.com` | cliente | "Cliente A 1" |
+
+Ancorar importa: o barbeiro entra numa agenda que já tem serviço, horário e
+movimento, e não numa tela vazia que não se pode inspecionar.
+
+**Dois detalhes que o seed precisou respeitar:**
+
+1. O trigger `ao_criar_usuario` já cria o `usuario_perfil` a partir de
+   `raw_user_meta_data`, então o INSERT cai no ramo de UPDATE do upsert.
+2. E aí bate no trigger `proteger_campos_de_autorizacao`, que **recusa** mudar
+   `tipo`, `barbearia_id` ou `status` — é ele que impede um usuário de se
+   promover ou se mudar de barbearia pela policy do próprio perfil. **Não
+   desativei nada:** usei `app.vinculo_autorizado`, que é a válvula que o
+   próprio trigger oferece e o caminho que os fluxos legítimos do app já usam.
+   A válvula é fechada com `RESET` logo depois — deixá-la aberta faria o resto
+   do seed rodar sem a proteção.
+
+A saída de confirmação ganhou uma coluna `vinculo`. Conta de profissional sem
+linha em `profissional` loga e mostra tela vazia — é o modo de falhar mais
+caro, porque parece bug de produto e é seed pela metade.
+
+**Testado antes de aplicar:** rodado em `BEGIN…ROLLBACK`, e depois **duas vezes
+seguidas** na mesma transação para provar a idempotência que o cabeçalho
+promete — 0 perfis duplicados. Só então aplicado de verdade.
+
+**Efeito colateral declarado:** o seed reescreve a senha de **todas** as contas
+`@cuthub.com` para `senha123`, incluindo `vitor@`, `medina@` e `renan@`, que
+antes tinham senha própria. É banco local e é o que um `db reset` faria de
+qualquer jeito.
+
+### A TELA DO CAIXA, PELO LADO DO BARBEIRO — MEDIDA, NÃO INFERIDA
+
+Primeira vez que alguém entra como profissional neste projeto. Login em
+`/escolher-acesso`: "Olá, João."
+
+O que a F14.1 prometeu em 23/09 e não tinha sido verificado:
+
+| promessa | medido na tela |
+|---|---|
+| botão "Novo Lançamento" liberado | **presente** |
+| campo "Profissional" escondido | **ausente** — rótulos: Tipo, Categoria, Valor, Data, Forma de pagamento, Descrição |
+| categorias espelham a função SQL | **batem**: Entrada → Venda de produto, Outro · Saída → Insumos, Outro |
+| `atendimento` e `comissao` fora | **nenhuma das duas aparece** |
+| RLS de leitura | **23 linhas, todas de João C.** |
+
+Nada foi gravado: o diálogo foi descartado por navegação. Conferido depois —
+23 lançamentos do João C. (o mesmo de antes) e 0 com "teste" na descrição.
+
+### E A RESSALVA DO BOTÃO DE VER SENHA, FECHADA
+
+Com a extensão conectada, medi o que de manhã só dava para calcular. Tema
+escuro, na tela renderizada:
+
+- contraste do ícone contra o campo: **17.63** (o cálculo previa 17.63)
+- `elementFromPoint` no centro do botão: **o próprio botão** — nada por cima
+- `type` alterna `password` ↔ `text`, e `aria-label`/`aria-pressed` acompanham
+
+### O QUE ISSO MUDA
+
+A extensão conectada mais seed com os quatro papéis significa que **daqui em
+diante toda alegação visual é verificável**. Os itens que ficaram anos como
+"provado no banco, não na tela" agora têm caminho. O primeiro da fila é o
+`text-primary` a 1.89 para barbearia sem cor — agora dá para vê-lo, não só
+calculá-lo.
+
+## Pendências para o próximo /start
+
+- [x] ~~Extensão do Chrome desconectada~~ — conectada.
+- [x] ~~Sem login de barbeiro e de cliente no seed~~ — `barbeiro@cuthub.com` e
+      `cliente@cuthub.com`, ambos `senha123`.
+- [x] ~~A tela do profissional no caixa nunca foi vista~~ — vista e medida.
+      Fecha o gap aberto desde a Fase 5.
+- [ ] 🔴 **`text-primary` a 1.89 para barbearia sem cor** — 39 usos, 33
+      arquivos. Decisão de produto, e **agora verificável na tela**.
+- [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
+- [ ] 🟡 Barbearia nova entra no catálogo vazia.
+- [ ] 🟡 Sem alarme para falha do job de lembrete.
+- [ ] 🟡 `notificacao` sem `agendamento_id`.
+- [ ] 🟡 `supabase_vector_cuthub` em `Restarting`.
+- [ ] 🟡 `src/App.css` é arquivo morto, não importado por ninguém.
+- [ ] **F14.2** (horário remarcado + resumo da agenda de amanhã, `00031`),
+      aguardando aprovação.
