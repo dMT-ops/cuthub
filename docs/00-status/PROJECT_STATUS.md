@@ -1,7 +1,7 @@
 # CutHub — estado atual
 
 **Atualizado em:** 2026-09-25
-**Branch:** feat/fase-implantacao  ·  **Último commit:** 9156443 feat: area do cliente ganha continuidade — chapeu, grade unica, casca e transicao
+**Branch:** feat/fase-implantacao  ·  **Último commit:** 1e4c95b merge de `docs/documentacao-introducao` sobre a sessão de 25/09
 
 ## Fase atual
 

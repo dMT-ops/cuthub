@@ -41,8 +41,13 @@ erros, 13 warnings) · build ✅
       de 22/09 nunca foi implementada. Decidir se entra.
 - [ ] 🟡 **`src/components/ui/scroll-reveal.tsx` é código morto** — usar nas
       listas do cliente ou apagar junto com o teste.
-- [ ] 🟡 **Extensão do Chrome desconectada de novo** — medir por CDP headless
-      (script em `scratchpad`), ou reconectar.
+- [ ] 🟡 **Extensão do Chrome desconectada de novo** (`list_connected_browsers`
+      devolve `[]`). Reconectar, ou medir por **CDP headless**: subir
+      `chrome --headless=new --remote-debugging-port`, falar CDP pelo
+      `WebSocket` nativo do Node, e usar `Emulation.setDeviceMetricsOverride`
+      para o viewport — que também contorna o `resize_window` quebrado. O script
+      de 25/09 morreu com o scratchpad da sessão; se virar rotina, ele merece
+      entrar no repositório.
 - [ ] 🟡 **Painel e admin sem `viewTransition`** (`Sidebar.tsx`, `AdminLayout.tsx`)
       — assimetria assumida, fechar ou declarar.
 - [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
