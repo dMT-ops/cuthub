@@ -1,4 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  RouterProvider,
+  Route,
+  Navigate,
+} from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './lib/auth/AuthContext';
@@ -41,83 +47,106 @@ import Promocoes from './pages/dashboard/Promocoes';
 import Financeiro from './pages/dashboard/Financeiro';
 import Configuracoes from './pages/dashboard/Configuracoes';
 
+/**
+ * As rotas, montadas como **data router**.
+ *
+ * Era `<BrowserRouter>` + `<Routes>` até 25/09. A troca não foi gosto: a
+ * transição de página do React Router é orquestrada **dentro do
+ * `RouterProvider`** — conferido no pacote instalado, em
+ * `chunk-7SIULPXI.js:9724`, onde `document.startViewTransition` é chamado. Com
+ * o router declarativo o prop `viewTransition` do `<Link>` não chega lá e é
+ * ignorado em silêncio: medido, `startViewTransition` era chamado **zero** vez.
+ *
+ * `createRoutesFromElements` existe para esta migração: a árvore de rotas em
+ * JSX continua **idêntica**, linha por linha. Só o invólucro mudou.
+ *
+ * O `AuthProvider` subiu para fora do router porque não usa nenhum hook de
+ * navegação — conferido. Ele segue acima de toda rota, então `useAuth` continua
+ * disponível em qualquer página.
+ */
+const rotas = createRoutesFromElements(
+  <>
+    {/* Rotas Públicas */}
+    <Route path="/" element={<Landing />} />
+    <Route path="/login" element={<Login />} />
+    <Route path="/cadastro" element={<Cadastro />} />
+    {/* Catálogo e perfil da barbearia são públicos de propósito: se o
+        cliente precisar de conta para ver preço e serviço, o perfil
+        deixa de ser divulgação e vira portão. O login aparece na hora
+        de agendar. */}
+    <Route path="/barbearias" element={<Barbearias />} />
+    <Route path="/b/:slug" element={<PerfilBarbearia />} />
+    {/* Público: dá para montar o agendamento inteiro sem conta. O
+        login só é exigido no passo de confirmar. */}
+    <Route path="/b/:slug/agendar" element={<AgendarNaBarbearia />} />
+
+    {/* Escolha do chapeu. Fica na area `cliente` porque desde a
+        F8.4 todos os papeis logados entram nela -- e e justamente
+        quem trabalha numa barbearia que precisa desta tela. */}
+    <Route path="/escolher-acesso" element={<ProtectedRoute area="cliente" />}>
+      <Route index element={<EscolherAcesso />} />
+    </Route>
+
+    {/* Área do cliente — identidade neutra do CutHub */}
+    <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>
+      <Route element={<ClienteLayout />}>
+        <Route index element={<MinhaConta />} />
+        <Route path="agendamentos" element={<MeusAgendamentos />} />
+        <Route path="favoritos" element={<MeusFavoritos />} />
+        <Route path="promocoes" element={<MinhasPromocoes />} />
+      </Route>
+    </Route>
+
+    {/* Console da plataforma — URL separada de propósito: o admin age
+        sobre todos os tenants, e misturar isso com /dashboard já fez
+        ele ver uma tela onde todo botão vinha desabilitado. */}
+    <Route path="/admin" element={<ProtectedRoute area="admin" />}>
+      <Route element={<AdminLayout />}>
+        <Route index element={<AdminHome />} />
+        <Route path="barbearias" element={<AdminBarbearias />} />
+        <Route path="auditoria" element={<AdminAuditoria />} />
+      </Route>
+    </Route>
+
+    {/* Rotas Protegidas */}
+    {/* Dois guardas em serie, com perguntas diferentes: o primeiro
+        diz quem entra na area de gestao, o segundo diz qual papel
+        abre qual tela dentro dela. O profissional passa no primeiro
+        e e barrado no segundo em Servicos, Produtos e afins. */}
+    <Route path="/dashboard" element={<ProtectedRoute area="gestao" />}>
+      <Route element={<GuardaDoDashboard />}>
+      <Route element={<DashboardLayout />}>
+        <Route index element={<DashboardHome />} />
+        <Route path="agenda" element={<AgendaHome />} />
+        <Route path="clientes" element={<Clientes />} />
+        <Route path="profissionais" element={<Profissionais />} />
+        <Route path="servicos" element={<Servicos />} />
+        <Route path="produtos" element={<Produtos />} />
+        <Route path="promocoes" element={<Promocoes />} />
+        <Route path="financeiro" element={<Financeiro />} />
+        <Route path="configuracoes" element={<Configuracoes />} />
+      </Route>
+      </Route>
+    </Route>
+
+    {/* Rota desconhecida cai na porta de entrada pública; quem
+        estiver logado é levado da landing para o painel. */}
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </>
+);
+
+// Fora do componente de propósito: recriar o router a cada render descartaria o
+// estado de navegação e refaria o casamento de rotas sem necessidade.
+const router = createBrowserRouter(rotas);
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="cuthub-theme">
         <Toaster position="bottom-right" />
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              {/* Rotas Públicas */}
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/cadastro" element={<Cadastro />} />
-              {/* Catálogo e perfil da barbearia são públicos de propósito: se o
-                  cliente precisar de conta para ver preço e serviço, o perfil
-                  deixa de ser divulgação e vira portão. O login aparece na hora
-                  de agendar. */}
-              <Route path="/barbearias" element={<Barbearias />} />
-              <Route path="/b/:slug" element={<PerfilBarbearia />} />
-              {/* Público: dá para montar o agendamento inteiro sem conta. O
-                  login só é exigido no passo de confirmar. */}
-              <Route path="/b/:slug/agendar" element={<AgendarNaBarbearia />} />
-
-              {/* Escolha do chapeu. Fica na area `cliente` porque desde a
-                  F8.4 todos os papeis logados entram nela -- e e justamente
-                  quem trabalha numa barbearia que precisa desta tela. */}
-              <Route path="/escolher-acesso" element={<ProtectedRoute area="cliente" />}>
-                <Route index element={<EscolherAcesso />} />
-              </Route>
-
-              {/* Área do cliente — identidade neutra do CutHub */}
-              <Route path="/minha-conta" element={<ProtectedRoute area="cliente" />}>
-                <Route element={<ClienteLayout />}>
-                  <Route index element={<MinhaConta />} />
-                  <Route path="agendamentos" element={<MeusAgendamentos />} />
-                  <Route path="favoritos" element={<MeusFavoritos />} />
-                  <Route path="promocoes" element={<MinhasPromocoes />} />
-                </Route>
-              </Route>
-
-              {/* Console da plataforma — URL separada de propósito: o admin age
-                  sobre todos os tenants, e misturar isso com /dashboard já fez
-                  ele ver uma tela onde todo botão vinha desabilitado. */}
-              <Route path="/admin" element={<ProtectedRoute area="admin" />}>
-                <Route element={<AdminLayout />}>
-                  <Route index element={<AdminHome />} />
-                  <Route path="barbearias" element={<AdminBarbearias />} />
-                  <Route path="auditoria" element={<AdminAuditoria />} />
-                </Route>
-              </Route>
-
-              {/* Rotas Protegidas */}
-              {/* Dois guardas em serie, com perguntas diferentes: o primeiro
-                  diz quem entra na area de gestao, o segundo diz qual papel
-                  abre qual tela dentro dela. O profissional passa no primeiro
-                  e e barrado no segundo em Servicos, Produtos e afins. */}
-              <Route path="/dashboard" element={<ProtectedRoute area="gestao" />}>
-                <Route element={<GuardaDoDashboard />}>
-                <Route element={<DashboardLayout />}>
-                  <Route index element={<DashboardHome />} />
-                  <Route path="agenda" element={<AgendaHome />} />
-                  <Route path="clientes" element={<Clientes />} />
-                  <Route path="profissionais" element={<Profissionais />} />
-                  <Route path="servicos" element={<Servicos />} />
-                  <Route path="produtos" element={<Produtos />} />
-                  <Route path="promocoes" element={<Promocoes />} />
-                  <Route path="financeiro" element={<Financeiro />} />
-                  <Route path="configuracoes" element={<Configuracoes />} />
-                </Route>
-                </Route>
-              </Route>
-
-              {/* Rota desconhecida cai na porta de entrada pública; quem
-                  estiver logado é levado da landing para o painel. */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

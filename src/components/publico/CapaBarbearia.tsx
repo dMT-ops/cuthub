@@ -22,14 +22,26 @@ interface CapaBarbeariaProps {
   bannerUrl?: string | null;
   corPrimaria?: string | null;
   className?: string;
+  /**
+   * Nome de `view-transition-name`, quando este elemento faz parte de uma
+   * transição de página. **Só quem está em trânsito recebe** — ver
+   * `CartaoDeBarbearia` em `Barbearias.tsx`.
+   */
+  nomeDeTransicao?: string;
 }
 
 /** Banner da barbearia, com fundo decente quando não há imagem. */
-export function CapaBarbearia({ bannerUrl, corPrimaria, className = 'h-32' }: CapaBarbeariaProps) {
+export function CapaBarbearia({
+  bannerUrl,
+  corPrimaria,
+  className = 'h-32',
+  nomeDeTransicao,
+}: CapaBarbeariaProps) {
+  const transicao = nomeDeTransicao ? { viewTransitionName: nomeDeTransicao } : undefined;
   if (bannerUrl) {
     return (
       <div className={`relative overflow-hidden bg-muted ${className}`}>
-        <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+        <img src={bannerUrl} alt="" className="h-full w-full object-cover" style={transicao} />
       </div>
     );
   }
@@ -38,7 +50,7 @@ export function CapaBarbearia({ bannerUrl, corPrimaria, className = 'h-32' }: Ca
     <div
       className={`relative flex items-center justify-center overflow-hidden ${className}`}
       // A cor da barbearia, quando existe, já dá identidade mesmo sem banner.
-      style={{ backgroundColor: corPrimaria ?? undefined }}
+      style={{ backgroundColor: corPrimaria ?? undefined, ...transicao }}
       aria-hidden="true"
     >
       {!corPrimaria && <div className="absolute inset-0 bg-gradient-to-br from-muted to-muted/40" />}
@@ -54,6 +66,12 @@ interface LogoBarbeariaProps {
   logoUrl?: string | null;
   corPrimaria?: string | null;
   className?: string;
+  /**
+   * Nome de `view-transition-name`, quando este elemento faz parte de uma
+   * transição de página. **Só quem está em trânsito recebe** — ver
+   * `CartaoDeBarbearia` em `Barbearias.tsx`.
+   */
+  nomeDeTransicao?: string;
 }
 
 /** Logo redonda, com as iniciais como fallback. */
@@ -62,13 +80,16 @@ export function LogoBarbearia({
   logoUrl,
   corPrimaria,
   className = 'h-14 w-14',
+  nomeDeTransicao,
 }: LogoBarbeariaProps) {
+  const transicao = nomeDeTransicao ? { viewTransitionName: nomeDeTransicao } : undefined;
   if (logoUrl) {
     return (
       <img
         src={logoUrl}
         alt={nome}
         className={`${className} shrink-0 rounded-full border-2 border-background object-cover`}
+        style={transicao}
       />
     );
   }
@@ -78,7 +99,7 @@ export function LogoBarbearia({
       className={`${className} flex shrink-0 items-center justify-center rounded-full border-2 border-background text-sm font-semibold ${
         corPrimaria ? '' : 'bg-muted text-muted-foreground'
       }`}
-      style={corPrimaria ? { backgroundColor: corPrimaria, color: '#0a0a0a' } : undefined}
+      style={{ ...(corPrimaria ? { backgroundColor: corPrimaria, color: '#0a0a0a' } : {}), ...transicao }}
       aria-hidden="true"
     >
       {iniciaisDe(nome)}

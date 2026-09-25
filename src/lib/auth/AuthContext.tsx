@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { authService } from '@/services/auth.service';
+import { esquecerAreaAtual } from '@/lib/auth/areaAtual';
 import type { Database } from '@/types/database.types';
 
 type UsuarioPerfil = Database['public']['Tables']['usuario_perfil']['Row'];
@@ -110,6 +111,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // O chapéu (painel ou área do cliente) é da pessoa, não da aba: quem
+    // entrar depois nesta mesma aba não deve herdar a escolha de quem saiu.
+    esquecerAreaAtual();
     await supabase.auth.signOut();
   };
 

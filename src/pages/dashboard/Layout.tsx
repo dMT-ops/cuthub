@@ -1,12 +1,17 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useSidebarState } from '@/hooks/useSidebarState';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { TemaDaBarbearia } from '@/components/tema/TemaDaBarbearia';
 import { TituloDaAba } from '@/components/tema/TituloDaAba';
+import { registrarAreaAtual } from '@/lib/auth/areaAtual';
 
 export default function DashboardLayout() {
   const sidebarState = useSidebarState();
+
+  // O chapéu desta aba é o de trabalho. Ver `areaAtual.ts`.
+  useEffect(() => registrarAreaAtual('gestao'), []);
 
   const recuoDaSidebar =
     sidebarState.isPinned && !sidebarState.isMobile ? 'md:ml-60' : 'md:ml-16';

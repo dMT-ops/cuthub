@@ -67,3 +67,33 @@ export function rotaInicialDoPapel(tipo: TipoUsuario | null | undefined): string
   const area = areaDoPapel(tipo);
   return area ? ROTA_DA_AREA[area] : null;
 }
+
+/**
+ * Para onde "Minha área" leva, respeitando o **chapéu que a pessoa está
+ * usando** — e não só o papel dela.
+ *
+ * `rotaInicialDoPapel` responde "onde este papel trabalha", e para quem tem
+ * dois chapéus a resposta é sempre a gestão, porque `areaDoPapel` checa a
+ * gestão primeiro. Isso está certo no login e **errado** em qualquer volta:
+ * o profissional que escolheu a área do cliente, foi ao catálogo público
+ * (`/barbearias`, que fica fora dos dois layouts) e clicou em "Minha área"
+ * caía no painel do barbeiro, sem caminho de volta. Bug relatado em 24/09.
+ *
+ * A `area` vem de armazenamento do navegador, que o usuário edita à vontade.
+ * Por isso ela é **validada contra o papel**: área que o papel não pode ocupar
+ * é descartada em favor do destino de sempre. Isto não é controle de acesso —
+ * quem barra continua sendo o `ProtectedRoute`. É só o link não mentir.
+ */
+export function rotaDaAreaAtual(
+  area: Area | null | undefined,
+  tipo: TipoUsuario | null | undefined
+): string | null {
+  if (!tipo) return null;
+  if (!area || !PAPEIS_POR_AREA[area].includes(tipo)) return rotaInicialDoPapel(tipo);
+
+  // Dentro da gestão o papel ainda manda na porta: o profissional entra pela
+  // agenda, não pelo índice de métricas, que não é dele.
+  if (area === 'gestao') return ROTA_INICIAL_DO_PAPEL[tipo] ?? ROTA_DA_AREA.gestao;
+
+  return ROTA_DA_AREA[area];
+}

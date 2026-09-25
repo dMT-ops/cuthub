@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePerfilPublico } from '@/hooks/useCatalogo';
 import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia';
+import { TRANSICAO } from '@/lib/ui/movimento';
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
 import { CardPromocao } from '@/components/publico/CardPromocao';
 import { usePromocoesVigentes } from '@/hooks/usePromocoes';
@@ -50,7 +51,7 @@ export default function PerfilBarbearia() {
               : 'O endereço não existe ou esta barbearia não está no catálogo público.'}
           </p>
           <Button asChild>
-            <Link to="/barbearias">Ver o catálogo</Link>
+            <Link to="/barbearias" viewTransition>Ver o catálogo</Link>
           </Button>
         </div>
       </div>
@@ -69,16 +70,22 @@ export default function PerfilBarbearia() {
   return (
     <div className="min-h-screen bg-background">
       <div className="relative">
+        {/* O MESMO nome da capa do cartão no catálogo: é por ele que o banner
+            atravessa a navegação em vez de ser trocado. Fixo e não derivado do
+            slug porque aqui só existe uma barbearia na tela. */}
         <CapaBarbearia
           bannerUrl={barbearia.banner_url}
           corPrimaria={corDetalhe}
           className="h-40 sm:h-56"
+          nomeDeTransicao={TRANSICAO.capa}
         />
         <Button
           variant="secondary"
           size="sm"
           className="absolute left-4 top-4 gap-2"
-          onClick={() => navigate('/barbearias')}
+          // `viewTransition` na volta também: o banner encolhe de volta para o
+          // cartão em vez de a tela trocar seca.
+          onClick={() => navigate('/barbearias', { viewTransition: true })}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Catálogo
@@ -97,6 +104,7 @@ export default function PerfilBarbearia() {
             logoUrl={barbearia.logo_url}
             corPrimaria={corDetalhe}
             className="h-20 w-20"
+            nomeDeTransicao={TRANSICAO.logo}
           />
 
           <div className="min-w-0 flex-1">

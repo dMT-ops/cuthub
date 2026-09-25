@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Menu, Pin, PinOff, LogOut, Scissors } from 'lucide-react';
 import { ThemeToggle } from '@/components/tema/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useSair } from '@/lib/auth/useSair';
 import { useBarbeariaAtual } from '@/hooks/useBarbeariaAtual';
 import { useSidebarState } from '@/hooks/useSidebarState';
 import { itensDoPapel } from '@/lib/navigation.config';
@@ -10,7 +11,8 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/co
 import { Button } from '@/components/ui/button';
 
 export function Sidebar(props: ReturnType<typeof useSidebarState>) {
-  const { user, signOut, perfil } = useAuth();
+  const { user, perfil } = useAuth();
+  const sair = useSair();
   // Menu montado pelo papel. O `GuardaDoDashboard` usa a MESMA lista para
   // barrar a URL digitada -- esconder o item sem barrar a rota seria teatro.
   const itens = itensDoPapel(perfil?.tipo);
@@ -73,7 +75,7 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
               <Button
                 variant="ghost"
                 className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 justify-start px-2"
-                onClick={() => signOut()}
+                onClick={() => void sair()}
               >
                 <LogOut size={18} className="mr-2" />
                 Sair
@@ -176,7 +178,7 @@ export function Sidebar(props: ReturnType<typeof useSidebarState>) {
           
           <Button
             variant="ghost"
-            onClick={() => signOut()}
+            onClick={() => void sair()}
             aria-label="Sair"
             className={`
               text-destructive hover:text-destructive hover:bg-destructive/10 

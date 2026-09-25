@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { LogOut, ScrollText, Shield, Store } from 'lucide-react';
 
@@ -5,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/tema/ThemeToggle';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useSair } from '@/lib/auth/useSair';
+import { registrarAreaAtual } from '@/lib/auth/areaAtual';
 import { cn } from '@/lib/utils';
 
 const ITENS = [
@@ -22,7 +25,11 @@ const ITENS = [
  * exatamente o erro que não pode acontecer.
  */
 export function AdminLayout() {
-  const { perfil, signOut } = useAuth();
+  const { perfil } = useAuth();
+  const sair = useSair();
+
+  // O chapéu desta aba é o console. Ver `areaAtual.ts`.
+  useEffect(() => registrarAreaAtual('admin'), []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,7 +99,7 @@ export function AdminLayout() {
                   desfazer quando o primeiro aviso de plataforma existir. */}
               <NotificationBell />
               <ThemeToggle />
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
+              <Button variant="ghost" size="sm" onClick={() => void sair()}>
                 <LogOut className="mr-2 h-4 w-4" /> Sair
               </Button>
             </div>

@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
+import { prefereMenosMovimento } from '@/lib/ui/movimento';
 
 interface ScrollRevealProps {
   children: React.ReactNode;
   className?: string;
   /** Atraso em ms — serve para escalonar itens de uma mesma lista. */
   atraso?: number;
-}
-
-function prefereMenosMovimento(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**

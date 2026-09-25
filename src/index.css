@@ -226,3 +226,130 @@ input:-webkit-autofill:active {
   caret-color: hsl(var(--foreground));
   transition: background-color 9999s ease-out 0s;
 }
+
+/* ===========================================================================
+   TRANSIÇÃO DE PÁGINA — View Transitions API
+
+   O React Router 7 chama `document.startViewTransition` quando o link tem
+   `viewTransition`. Sem CSS nenhum o navegador já faz um cross-fade do
+   documento inteiro; o que está aqui embaixo é o que troca esse cross-fade
+   genérico por movimento com direção, e o que impede a casca do cliente de
+   piscar junto com o conteúdo.
+
+   Onde a API não existe (navegador antigo), o Router navega normal e nada
+   disto roda. Não há fallback para escrever.
+   =========================================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    /* O cross-fade padrão do navegador dura 250ms. Aqui ele é só a base sobre
+       a qual o deslizamento do conteúdo acontece.
+       Subiu de 260 para 420ms em 25/09: o Chefe olhou os 320ms do miolo e disse
+       "está muito rápida". Toda a coreografia subiu junto, mantendo a proporção
+       entre as partes — o que estava rápido era o conjunto, não uma peça. */
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* O GRUPO É A GEOMETRIA: ele interpola posição e tamanho do instantâneo, e o
+     navegador o deixa em 250ms por conta própria. Medido em 25/09: com o resto
+     da coreografia em 420–520ms, a geometria assentava antes de o fade acabar.
+     Só aparece quando as duas telas têm tamanhos diferentes — que é exatamente
+     o caso do catálogo para o perfil. */
+  ::view-transition-group(root),
+  ::view-transition-group(miolo) {
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* A CASCA NÃO ANIMA.
+     `view-transition-name` num elemento o tira do instantâneo do `root` e lhe
+     dá um grupo próprio. Sem `animation: none` ele ainda receberia o
+     cross-fade do grupo — e o cabeçalho piscaria a cada navegação, que é o
+     oposto do que a casca compartilhada existe para resolver. */
+  ::view-transition-group(casca),
+  ::view-transition-old(casca),
+  ::view-transition-new(casca),
+  ::view-transition-group(casca-inferior),
+  ::view-transition-old(casca-inferior),
+  ::view-transition-new(casca-inferior) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  /* O MIOLO ENTRA DESLIZANDO.
+     O deslocamento é curto de propósito (ver o keyframe): o conteúdo já está
+     no lugar certo, o movimento só dá direção à troca. Mais que isso vira
+     carrossel. */
+  ::view-transition-old(miolo) {
+    animation: miolo-sai 320ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  ::view-transition-new(miolo) {
+    animation: miolo-entra 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* A CAPA E A LOGO DA BARBEARIA TÊM GRUPO PRÓPRIO.
+     A intenção é a morfose do cartão do catálogo para o topo do perfil: mesmo
+     nome nas duas telas faz o navegador interpolar posição e tamanho.
+
+     MEDIDO EM 25/09, E HOJE NÃO É ISSO QUE ACONTECE: na ida só existem
+     `::view-transition-old(capa-barbearia)` e `-old(logo-barbearia)`; não há
+     `-new` nem `-group`. Motivo: `/b/:slug` busca os dados no componente e
+     commita um Skeleton, então no instante da captura o destino não tem capa
+     nenhuma para casar. O efeito real é um fade de 420ms da capa antiga, não a
+     morfose.
+
+     O nome fica porque é dele que a correção depende, e porque ele já tira a
+     capa do cross-fade do `root`. Fechar isso exige os dados prontos ANTES do
+     commit — `loader` na rota alimentando o cache do react-query — e isso troca
+     o Skeleton por navegação que espera. É decisão de produto, não de CSS. */
+  ::view-transition-group(capa-barbearia),
+  ::view-transition-group(logo-barbearia) {
+    animation-duration: 680ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Para quando a morfose passar a acontecer: a imagem cresce de um recorte
+     pequeno para um grande, e sem isto o navegador estica o instantâneo antigo
+     e a foto aparece deformada no meio do caminho. */
+  ::view-transition-old(capa-barbearia),
+  ::view-transition-new(capa-barbearia) {
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+/* 16px e não 12: com a animação mais longa, um deslocamento curto demais faz
+   o movimento parecer lento em vez de suave — a distância tem de acompanhar a
+   duração, senão sobra tempo e falta percurso. Ainda é deslocamento pequeno,
+   de propósito: o conteúdo já está no lugar certo e o movimento só dá direção. */
+@keyframes miolo-entra {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes miolo-sai {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* QUEM PEDIU MENOS MOVIMENTO NÃO RECEBE MOVIMENTO NENHUM — nem o cross-fade
+   que o navegador faz por conta própria. `animation: none` nos pseudo-elementos
+   do `root` corta a transição inteira e a navegação volta a ser instantânea.
+
+   Isto não é excesso de zelo: a transição de página é a única animação do
+   produto que a pessoa não pode evitar olhando para outro lado, porque ela
+   acontece na tela toda. Ver `src/lib/ui/movimento.ts`. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
