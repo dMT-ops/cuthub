@@ -2589,3 +2589,495 @@ por tipo e por leitura.
 
 **Próximo:** F14.2 — notificação de horário remarcado e resumo da agenda de
 amanhã, em `00031` (a ordem pedia `00030`, que ficou com o caixa).
+
+---
+
+## [OPUS 5] 2026-09-25 — "Minha área" mandava o profissional para o painel errado
+
+Entrada de recuperação: o log parou na F14.1 (23/09) e **três entregas de 24/09
+ficaram sem registro**. Elas estão no git e importam para quem ler daqui:
+
+- `1d2bb08` — botão de ver senha no login e no cadastro.
+- `7354f06` — **o seed ganhou `barbeiro@cuthub.com` e `cliente@cuthub.com`**
+  (`senha123`), ancorados no profissional "João C." e no "Cliente A 1" que a
+  `00008` já cria. Isso paga o débito que vinha desde a Fase 8: até então
+  **nenhuma tela de profissional ou de cliente jamais foi inspecionada**,
+  porque não havia conta para entrar. As contas que existiam nesses papéis
+  (`vitor@`, `medina@`) nasceram pelo app e não sobrevivem a um `db reset`.
+- O bug abaixo, que estava na árvore de trabalho sem commit e sem log.
+
+### O BUG
+
+Relatado em 24/09. O Vitor é `profissional`. Ele entra, escolhe **"Área do
+cliente"**, clica em **"Explorar"** — que é a página pública `/barbearias` — e
+de lá clica em **"Minha área"**. Caía no painel do barbeiro, **sem caminho de
+volta** para a área do cliente.
+
+### A CAUSA RAIZ, QUE NÃO ERA O LINK
+
+A tentação é consertar o link de `/barbearias`. O defeito é anterior: **a
+escolha feita em `/escolher-acesso` não existia em lugar nenhum além da URL
+atual**. Era um `<Link>` e nada mais. Qualquer página fora dos dois layouts
+apagava a escolha, e o destino voltava a ser recalculado só pelo papel —
+`areaDoPapel('profissional')` é `gestao`, porque checa a gestão primeiro.
+
+Isso está **certo no login** (a área de trabalho é que manda ao entrar) e
+**errado em toda volta**. A própria tela de escolha admitia a limitação: "você
+pode trocar a qualquer momento saindo e entrando de novo".
+
+`/barbearias` foi só onde o sintoma apareceu, porque é a única página pública
+com "Minha área" — conferido por grep, não por memória.
+
+### A CORREÇÃO
+
+`src/lib/auth/areaAtual.ts` guarda o chapéu em `sessionStorage`.
+
+**`sessionStorage` e não `localStorage`, de propósito.** O chapéu é da aba. Com
+`localStorage`, o painel numa aba e a área do cliente noutra brigariam pelo
+mesmo valor e a última a carregar venceria — o "Minha área" apontaria para o
+lugar errado na outra aba.
+
+**Quem registra são os três layouts, não a tela de escolha.** Assim o valor
+também fica certo para quem entrou por URL direta, por favorito do navegador ou
+por link de notificação — caminhos que nunca passam pela escolha.
+
+`rotaDaAreaAtual(area, tipo)` em `areas.ts` decide o destino. **Ela valida a
+área contra o papel**: o valor mora no navegador e o usuário o edita à vontade,
+então área que o papel não pode ocupar é descartada em favor do destino de
+sempre. Isto **não é controle de acesso** — quem barra continua sendo o
+`ProtectedRoute`; é só o link não mentir. E dentro da gestão o papel ainda manda
+na porta: o profissional entra pela agenda, não pelo índice de métricas.
+
+### DUAS COISAS QUE ACHEI REVISANDO, E NÃO DAVA PARA DEIXAR
+
+**1. `areaAtual.ts` está em `src/lib/` e não tinha teste.** A regra 2 do
+`CLAUDE.md` faz TDD obrigatório ali. Escrito agora, e ele prende o que importa:
+valor inválido vindo do armazenamento vira `null`, e `sessionStorage` que
+**lança** (aba anônima, política do navegador) não derruba a tela nos três
+acessos.
+
+**2. O chapéu sobrevivia ao logout.** Quem sai da conta e entra com **outra** na
+mesma aba herdava a escolha da anterior. O caso concreto: o dono que entra
+depois de um profissional que estava na área do cliente — `cliente` é área
+**válida** para `owner`, então a validação não descarta, e o "Minha área" dele
+apontaria para `/minha-conta`. `esquecerAreaAtual()` entrou no `signOut`, com
+teste. O chapéu é da pessoa, não da aba.
+
+### BATERIA
+
+`tsc -b` 0 · **117 testes** (eram 94 na F14.1) · oxlint 0 erros/13 warnings ·
+build ok.
+
+### NÃO MEDIDO NO NAVEGADOR, E AGORA POR OUTRO MOTIVO
+
+Tentei, e desta vez o impedimento não foi falta de sessão — o seed resolveu
+isso. Foi a **extensão do Claude in Chrome, que não está conectada**:
+`tabs_context_mcp` responde "Browser extension is not connected". Supabase de pé
+(`supabase_db_cuthub`, as 9 contas conferidas no banco) e Vite servindo em
+`localhost:5173`, mas sem navegador não há medição.
+
+O que **está** provado sem o navegador: `Barbearias.test.tsx` renderiza a página
+de verdade e lê o `href` do "Minha área" nos quatro casos (profissional vindo do
+cliente → `/minha-conta`; vindo do painel → `/dashboard/agenda`; sem chapéu →
+comportamento de antes; deslogado não vê o link). É a ligação, que é onde o bug
+morava — um teste só da função pura não pegaria alguém trocando o helper de
+volta.
+
+O que **falta** medir com o navegador de pé, e continua pendente:
+o passeio real Vitor → escolher acesso → Explorar → Minha área, e os três
+pontos da área do cliente que estão abertos desde 23/09 (cabeçalho em 375px,
+estiramento em 1920, contraste do botão dentro da faixa). **Com
+`barbeiro@cuthub.com` e `cliente@cuthub.com` no seed, tudo isso virou medível
+na hora em que a extensão conectar.**
+
+**Próximo passo: F14.2** — notificação de horário remarcado e resumo da agenda
+de amanhã, em `00031`.
+
+---
+
+## [OPUS 5] 2026-09-25 — A logo pulava 64px ao sair da área do cliente para o catálogo
+
+O Chefe: "clico em Explorar ou em Novo agendamento e a logo se desloca para o
+lado". Está certo, e o número é grande.
+
+### MEDIDO — e desta vez foi no navegador de verdade
+
+A extensão do Claude in Chrome continua desconectada (`list_connected_browsers`
+devolve `[]`). Usei **Chrome headless por CDP**, script em
+`node --remote-debugging-port`, com login real `cliente@cuthub.com` e
+`Emulation.setDeviceMetricsOverride` para o viewport — que também **contorna o
+`resize_window` quebrado** que o `CLAUDE.md` registra. Fica como caminho para as
+próximas medições enquanto a extensão não voltar.
+
+| viewport | logo.x `/minha-conta` | logo.x `/barbearias` | desloca |
+|---|---|---|---|
+| 1920 | 184 | 216 | **+32** |
+| 1440 | 104 | 168 | **+64** |
+| 1280 | 24 | 88 | **+64** |
+| 1024 / 768 / 375 | 24 / 24 / 16 | 24 / 24 / 16 | 0 |
+
+**A logo em si não mudava**: ícone 24×24 e fonte 18px idênticos nas duas telas,
+em todos os viewports. Quem andava era a margem.
+
+### CAUSA
+
+Duas escadas de largura diferentes, e `mx-auto` no meio:
+
+```
+ClienteLayout  max-w-4xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px]
+Barbearias     max-w-6xl                           2xl:max-w-screen-2xl   (1152/1536)
+```
+
+Miolo mais estreito, centrado, joga a marca para dentro. Abaixo de `lg` o salto
+some porque as duas larguras já batem no viewport e a escada não vale mais — por
+isso o defeito só existia no desktop.
+
+O `2xl:max-w-screen-2xl` (1536) do catálogo nem batia com o **1600** que a
+landing e a área do cliente já compartilhavam desde 22–23/09. Era sobra.
+
+### A RESSALVA QUE EU TINHA LEVANTADO, E QUE NÃO SE SUSTENTOU
+
+Na primeira resposta eu disse que alinhar o catálogo à área do cliente pioraria
+o caminho público (landing → catálogo) de 8 para 72px em 1440, e tratei isso
+como troca. **Grep nos links de entrada desfez o argumento: a landing não linka
+para `/barbearias`.** Os oito caminhos até o catálogo saem todos da área do
+cliente (`ClienteLayout`, `MinhaConta`, `MeusAgendamentos`, `MeusFavoritos`,
+`MinhasPromocoes`) ou de páginas de barbearia. O caminho que eu estava
+protegendo não existe como clique.
+
+### A CORREÇÃO
+
+`src/lib/ui/grade.ts` passa a ser o único lugar onde a escada mora
+(`GRADE_DO_CLIENTE`), usada nos três pontos do `ClienteLayout` e nos dois do
+`Barbearias`. **Constante e não classe repetida**, porque foi exatamente a
+repetição que deixou as duas divergirem — e a próxima tela dentro do caminho do
+cliente não tem como inventar uma sexta grade sem querer.
+
+Cuidado que valeu conferir: o Tailwind v4 precisa enxergar as classes no `.ts`
+novo. Conferido no `dist` depois do build — `max-w-4xl`, `max-w-6xl`,
+`max-w-7xl` e `1600px` estão no CSS gerado, não foram podados.
+
+### MEDIDO DEPOIS
+
+| viewport | 1920 | 1440 | 1280 | 1024 | 900 | 768 | 375 |
+|---|---|---|---|---|---|---|---|
+| desloca | **0** | **0** | **0** | **0** | **0** | **0** | **0** |
+
+Miolo agora idêntico nas duas telas em toda largura (1600/1280/1280/1024/896/768/375).
+
+`tsc -b` 0 · 117 testes · oxlint 0 erros/13 warnings · build ok.
+
+### O QUE **NÃO** FOI CONSERTADO, DE PROPÓSITO
+
+O cabeçalho ainda encolhe de **109 para 65px** na mesma navegação: a fileira de
+abas com o "Novo agendamento" é do `ClienteLayout` e não existe em
+`/barbearias`, então todo o conteúdo abaixo sobe 44px de uma vez. Isso é outro
+defeito, de outra natureza — some a casca inteira, não a margem — e o conserto
+dele é **pôr o catálogo dentro do `ClienteLayout`** para quem está logado
+(rota tipo `/minha-conta/explorar`, com `/barbearias` seguindo como porta
+pública), extraindo o corpo do catálogo num componente usado pelas duas cascas.
+Não fiz: é decisão de arquitetura e a queixa do Chefe era a lateral.
+
+Fica registrado também que existem **quatro grades** no produto — landing
+(1152/1600, `px-5/8/16`), cliente+catálogo (agora unificados), `/b/:slug`
+(896/1152/1280, sem degrau `2xl`) e `AdminLayout` (1152 fixo). O perfil público
+não tem logo do CutHub no cabeçalho, então ali a marca não pula; mas o miolo
+pula de 1600 para 1280 em 1920, um clique depois.
+
+---
+
+## [OPUS 5] 2026-09-25 — O catálogo passa a viver dentro da casca do cliente
+
+Pedido do Chefe, logo depois do conserto da logo: *"assim que eu estiver na
+página barbearias, manter o menu que tem na área do cliente, e caso eu clique
+em um ele volta — pois tem um deslocamento muito brusco, como se o cliente
+fosse para outra tela que ele não está familiarizado."*
+
+É o defeito que a entrada anterior deixou registrado como "não consertado, de
+propósito": o cabeçalho caía de **109 para 65px** e todo o conteúdo subia 44px,
+porque `/barbearias` era uma tela solta com cabeçalho próprio.
+
+### A DECISÃO: UMA CASCA, DUAS MOLDURAS — NÃO DUAS URLS
+
+A saída óbvia seria criar `/minha-conta/explorar` e mandar os links do cliente
+para lá. **Não fiz**, porque isso dá dois endereços para o mesmo conteúdo: link
+de notificação, favorito do navegador e URL digitada continuariam caindo na
+versão solta, que é justamente a tela "não familiar".
+
+`/barbearias` continua sendo **uma** URL. O que muda é a moldura, decidida por
+quem olha:
+
+```
+naAreaDoCliente = rotaDaAreaAtual(lerAreaAtual(), tipo) === ROTA_DA_AREA.cliente
+```
+
+Reusa o helper da correção de 24/09, já testado, e cobre os quatro casos de
+graça: cliente puro sem chapéu registrado (→ casca), profissional com o chapéu
+de cliente (→ casca), profissional no chapéu de gestão (→ cabeçalho público com
+"Minha área" para o painel) e visitante deslogado (→ Entrar / Criar conta).
+
+`CascaDoCliente` saiu do `ClienteLayout` para componente próprio — cabeçalho,
+abas do desktop e barra inferior do celular. O `ClienteLayout` ficou com o que é
+só dele: marcar o chapéu da aba e servir o `<Outlet />`. **Casca extraída e não
+copiada**: foi copiar classe de grade que produziu o bug da logo, uma entrada
+atrás.
+
+### DENTRO DA CASCA, O "MINHA ÁREA" SOME
+
+De propósito. Com as abas presentes, ele seria um terceiro caminho para o mesmo
+lugar. Quem volta são as abas — é o que o Chefe pediu.
+
+### MEDIDO NO NAVEGADOR (Chrome headless por CDP, login `cliente@cuthub.com`)
+
+| viewport | logo.x conta/catálogo | header.h | topo do `main` | abas no catálogo |
+|---|---|---|---|---|
+| 1920 | 184 / **184** | 109 / **109** | 109 / **109** | as 5 + ação |
+| 1440 | 104 / **104** | 109 / **109** | 109 / **109** | as 5 + ação |
+| 1280 | 24 / **24** | 109 / **109** | 109 / **109** | as 5 + ação |
+| 1024 | 24 / **24** | 109 / **109** | 109 / **109** | as 5 + ação |
+| 768 | 24 / **24** | 109 / **109** | 109 / **109** | as 5 + ação |
+| 375 | 16 / **16** | 65 / **65** | 65 / **65** | barra inferior, 5 itens |
+
+Zero de diferença em tudo que se media antes. A queda de 44px acabou.
+
+**Navegação provada por clique, não por leitura de classe:**
+
+```
+/minha-conta  --clique em "Explorar"--> /barbearias
+   abas continuam as 6, "Explorar" fica destacada (bg-secondary)
+/barbearias   --clique em "Agenda"----> /minha-conta/agendamentos
+   abas continuam as 6
+375px: barra inferior presente em /barbearias, 5 itens, y=747 de 812
+```
+
+Deslogado, `/barbearias` segue com o cabeçalho público de 65px e sem abas —
+conferido em contexto limpo.
+
+`tsc -b` 0 · **118 testes** · oxlint 0 erros/13 warnings · build ok.
+
+### O TESTE MUDOU DE CONTRATO, E TINHA QUE MUDAR
+
+`Barbearias.test.tsx` afirmava o `href` do "Minha área" para o profissional com
+chapéu de cliente. Esse link **deixou de existir** nesse caso, então o teste
+passou a afirmar a moldura: quem está na área do cliente vê as abas apontando
+para `/minha-conta*` e **não** vê "Minha área"; quem não está vê o contrário.
+
+Achado do teste: **cada aba aparece duas vezes no DOM** — a fileira do desktop e
+a barra do celular coexistem, escondidas uma ou outra só por CSS. O helper do
+teste confere o destino em *todas* as ocorrências e falha se as duas navegações
+discordarem.
+
+### DUAS RESSALVAS
+
+**1.** O botão "Novo agendamento" continua na casca quando já se está no
+catálogo, e ali ele aponta para a própria página. Deixei: tirar criaria de novo
+uma diferença entre as duas telas, que é o que estávamos consertando. A aba
+"Explorar" destacada já diz onde a pessoa está.
+
+**2.** Para o visitante **deslogado**, o catálogo agora segue a escada do
+cliente, então em 1440 o miolo vai de 1152 (landing) para 1280 — 72px de
+deslocamento se alguém for da landing para `/barbearias`. **A landing não linka
+para o catálogo** (conferido por grep: os 8 links de entrada saem todos da área
+do cliente ou de páginas de barbearia), então isso não é um clique — só acontece
+com URL digitada. Fica medido e registrado; se virar caminho de verdade, o
+conserto é unificar a grade da landing também.
+
+---
+
+## [OPUS 5] 2026-09-25 — Transição de página: o prop estava lá e não fazia nada
+
+O Chefe pediu animações e transições. Escolheu, entre as opções que eu levantei,
+**transição de página** com intensidade **expressiva**.
+
+### O LEVANTAMENTO MUDOU A CONVERSA
+
+Antes de propor qualquer coisa, o que já existia:
+
+- `tailwindcss-animate` **instalado e ligado** (`@plugin` no `index.css`), então
+  todo primitivo Radix já anima — diálogo, sheet, dropdown, select, tooltip.
+- `transition-colors` espalhado em botão, input, aba, badge.
+- **`motion-reduce:` em exatamente dois arquivos**, `Sidebar.tsx` e o `Layout.tsx`
+  do painel. O resto do produto ignorava `prefers-reduced-motion`.
+- **A landing não tem animação nenhuma.** Nem uma. E a entrada de 22/09 descreve
+  uma revelação planejada ("a folha do dia se escrevendo, 80ms entre linhas") que
+  **não está no código**.
+- **`src/components/ui/scroll-reveal.tsx` é código morto**: tem teste verde,
+  respeita `prefers-reduced-motion` e é usado em **zero** lugares. Ficou órfão
+  quando a landing foi reescrita e as sete revelações viraram uma.
+
+### O BLOQUEIO, QUE SÓ A MEDIÇÃO ACHOU
+
+Liguei `viewTransition` nos links da casca, nomeei cabeçalho/miolo/barra e
+escrevi a coreografia em CSS. Medi: **`document.startViewTransition` chamado
+ZERO vez.** Nenhum erro, nenhum aviso — o prop é ignorado em silêncio.
+
+Causa, conferida **no pacote instalado** e não de memória: a orquestração da
+transição vive dentro do `RouterProvider`
+(`react-router/dist/development/chunk-7SIULPXI.js:9724`). O app usava
+`<BrowserRouter>` + `<Routes>`, o router **declarativo** — e ali o
+`viewTransition` do `<Link>` nunca chega a esse caminho.
+
+**Migração para data router**, com `createRoutesFromElements`, que existe
+exatamente para isso: a árvore de rotas em JSX ficou **idêntica, linha por
+linha**. Só o invólucro mudou. O `AuthProvider` subiu para fora do router porque
+não usa nenhum hook de navegação — conferido antes de mover.
+
+Depois da migração: `startViewTransition` chamado **1 vez** por navegação.
+
+### MEDIDO — `getAnimations()` nos pseudo-elementos, não `finished`
+
+Primeiro cronometrei `transition.finished`: 940ms com movimento e 350ms sem.
+Concluí que o corte de movimento não estava funcionando. **Estava errado**: o
+`finished` inclui render e dados, não só a animação. O instrumento certo é
+`getAnimations()` filtrado por `pseudoElement`.
+
+**Movimento normal — 8 animações:**
+
+```
+::view-transition-new(miolo)      320ms   <- miolo-entra, nosso
+::view-transition-old(miolo)      200ms   <- miolo-sai, nosso
+::view-transition-old/new(root)   260ms   <- cross-fade, nosso override
+::view-transition-group(root)     250ms   <- padrão do navegador
+::view-transition-group(miolo)    250ms   <- padrão do navegador
+```
+
+**Nenhuma animação de `casca` nem de `casca-inferior`** — o cabeçalho e a barra
+do celular ficam parados, que era o objetivo.
+
+**Movimento reduzido — `total: 0`.** Zero animação, com
+`Emulation.setEmulatedMedia` provando `matchMedia` verdadeiro. Nem o cross-fade
+que o navegador faz por conta própria.
+
+### O ELEMENTO COMPARTILHADO **NÃO** MORFA. FAZ FADE.
+
+A gaveta a abrir. No salto cartão → perfil, as animações são:
+
+```
+420ms  ::view-transition-old(capa-barbearia)
+420ms  ::view-transition-old(logo-barbearia)
+```
+
+**Não existe `-new` nem `-group`.** Causa: `/b/:slug` busca os dados no
+componente e commita um `Skeleton`, então no instante da captura o destino não
+tem capa para casar com a de origem. O que se vê é a capa antiga sumindo em
+420ms, não crescendo para o topo do perfil.
+
+O que **está** certo e medido: só o cartão **clicado** recebe o nome
+(`["capa-barbearia", null, null]` nos três cartões), em repouso nenhum cartão
+tem nome (`none` nos três), e o perfil tem o mesmo nome. A fiação está boa; o
+que falta é o dado.
+
+Fechar isso exige os dados prontos **antes** do commit — `loader` na rota
+alimentando o cache do react-query, que o data router agora permite. Mas isso
+troca o `Skeleton` por uma navegação que **espera**, e isso é decisão de produto.
+**Não fiz.** Corrigi o comentário do CSS que afirmava a morfose: comentário que
+mente é pior que o fade.
+
+### DECISÃO QUE EU DESFIZ NO MEIO
+
+Escrevi `nomeDeTransicao(prefixo, id)` com seis casos de teste — nome derivado do
+slug, saneado para `<custom-ident>`. Na implementação vi que era **generalidade
+especulativa**: como o `useViewTransitionState` garante que só o cartão em
+trânsito recebe nome, nunca há dois elementos disputando, e nome **fixo**
+basta. Apaguei a função e os testes dela. Ficar com helper testado e não
+necessário é o mesmo pecado do `ScrollReveal`, que eu tinha acabado de apontar
+nesta mesma entrada.
+
+Sobrou `src/lib/ui/movimento.ts` com `prefereMenosMovimento` — **extraída** do
+`scroll-reveal.tsx`, que tinha uma cópia privada, antes de eu criar a segunda.
+
+### BATERIA
+
+`tsc -b` 0 · **120 testes** · oxlint 0 erros/13 warnings · build ok.
+
+### PENDÊNCIAS QUE ESTA ENTREGA DEIXA
+
+1. **A morfose da capa** — precisa de `loader`; trade-off de produto acima.
+2. **A landing continua sem animação**, e a revelação que a log de 22/09
+   descreve nunca foi implementada.
+3. **`scroll-reveal.tsx` segue órfão.** Ou entra em uso (as listas do cliente
+   seriam o lugar), ou sai do repositório com o teste.
+4. **Só a casca do cliente pede transição.** A sidebar do painel e o console do
+   admin não têm `viewTransition` nos links — de propósito, para uma coisa por
+   vez, mas fica a assimetria.
+
+---
+
+## [OPUS 5] 2026-09-25 — Transição mais lenta, e o "Sair" que não saía do catálogo
+
+Dois pedidos do Chefe: a transição estava rápida demais, e um bug — sair da
+conta em `/barbearias` deixava a pessoa ali mesmo, em vez de ir para o login.
+
+### O BUG, E ELE É MEU
+
+**Reproduzido no Chrome antes de mexer:**
+
+| tela | depois de clicar em "Sair" |
+|---|---|
+| `/barbearias` | **fica em `/barbearias`** — token fora do `localStorage`, abas do cliente desaparecidas, `location.pathname` inalterado |
+| `/minha-conta` | vai para `/login` ✓ |
+
+Causa: **o `signOut` nunca navegou.** Quem levava ao login era o
+`ProtectedRoute`, ao notar a sessão sumida. Enquanto todo botão de sair vivia em
+tela protegida, o guarda cobria a lacuna.
+
+Foi a minha entrega de hoje que a descobriu: ao pôr a casca do cliente em
+`/barbearias`, que é **pública e não tem guarda**, o botão de sair passou a
+existir num lugar onde ninguém redireciona. O bug estava latente desde sempre;
+eu criei a tela que o mostra.
+
+Piorou porque o `AuthProvider` saiu de dentro do `RouterProvider` na migração de
+hoje — ele não tem mais como chamar `useNavigate`, então a correção não podia ser
+no `signOut`.
+
+### A CORREÇÃO
+
+`src/lib/auth/useSair.ts`: um hook que derruba a sessão **e** navega para
+`/login` com `replace` (para o "voltar" do navegador não devolver a tela de quem
+acabou de sair). Usado pelos quatro botões de sair — casca do cliente,
+`AdminLayout` e os dois da `Sidebar`.
+
+**Hook e não a mesma linha repetida quatro vezes**: foi classe repetida em cinco
+lugares que produziu o bug da logo pulando, três entradas atrás.
+
+Os botões de sair do `ProtectedRoute` ficaram como estavam: eles vivem em
+estados de erro dentro do próprio guarda, que já resolve o destino. Mexer ali
+seria navegação dupla.
+
+**Teste de regressão que eu provei que pega:** com a correção, verde; revertendo
+o `CascaDoCliente` para o `signOut` cru, o teste falha com "Unable to find an
+element with the text: tela de login". Teste que não fica vermelho sem o
+conserto não é guarda, é enfeite.
+
+**Medido depois:** `/barbearias` + Sair → `/login`, token fora do storage.
+`/minha-conta` + Sair → `/login`, sem regressão.
+
+### A VELOCIDADE
+
+Toda a coreografia subiu junto, mantendo a proporção entre as partes — o que
+estava rápido era o conjunto, não uma peça.
+
+| pseudo-elemento | antes | agora |
+|---|---|---|
+| `new(miolo)` — o conteúdo entra | 320ms | **520ms** |
+| `old(miolo)` — o anterior sai | 200ms | **320ms** |
+| `old/new(root)` — cross-fade de base | 260ms | **420ms** |
+| `group(root)` e `group(miolo)` — geometria | 250ms (padrão) | **420ms** |
+| `capa/logo-barbearia` | 420ms | **680ms** |
+
+O deslocamento do `miolo` foi de 12 para **16px**: com animação mais longa, um
+percurso curto demais faz o movimento parecer lento em vez de suave — sobra
+tempo e falta distância.
+
+**Os grupos eram uma incoerência que só a medição mostrou.** Eles ficaram nos
+250ms padrão do navegador enquanto o resto subia; a geometria assentava antes de
+o fade terminar. Só aparece quando as duas telas têm tamanhos diferentes — que é
+exatamente o salto catálogo → perfil.
+
+**Tudo confirmado com `getAnimations()`**, e sob `prefers-reduced-motion: reduce`
+segue em **0 animações**.
+
+`tsc -b` 0 · **121 testes** · oxlint 0 erros/13 warnings · build ok.
+
+As quatro pendências da entrada anterior seguem abertas (morfose da capa, landing
+sem animação, `scroll-reveal` órfão, painel sem transição).
