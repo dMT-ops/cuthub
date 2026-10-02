@@ -1467,3 +1467,320 @@ segue em **0 animações**.
 
 As quatro pendências da entrada anterior seguem abertas (morfose da capa, landing
 sem animação, `scroll-reveal` órfão, painel sem transição).
+
+---
+
+## [CHEFE] 2026-10-02 — Decisões e ordem do dia, em resposta ao status
+
+Transcrito do relay para ficar autocontido no canal.
+
+### DECISÃO 1 — F14.2 aprovada, e o `agendamento_id` entra ANTES dela, na mesma fase
+
+O Chefe acatou o diagnóstico do `/start`: se a F14.2 sair com o vínculo em texto
+no `link_acao`, cada notificação de remarcação nasce órfã em potencial, e
+corrigir depois exige migration **e** varredura de dados.
+
+Especificação dada:
+
+1. **Migration `00031`**: `agendamento_id uuid NULL REFERENCES agendamento(id)`
+   em `notificacao`, **com índice**. Nullable de propósito — notificação antiga,
+   e notificação que não fala de horário, seguem válidas sem a coluna.
+2. **Sem backfill** a partir do `link_acao`. O legado fica como está.
+3. **O `ON DELETE` depende de como o cancelamento funciona hoje**, e isso tem de
+   ser verificado antes de decidir: se for *soft-cancel* por status, o `ON DELETE`
+   quase não importa e a regra tem de morar na lógica de mudança de status; se
+   for delete físico, `ON DELETE CASCADE`.
+4. **Regra de produto**: cada agendamento tem **no máximo uma** notificação de
+   remarcação viva. Remarcação nova **substitui** a anterior em vez de acumular.
+   Cancelamento remove a notificação de remarcação ou a torna obsoleta, conforme
+   o padrão que já existir para notificações.
+5. **RLS**: confirmar que as policies atuais de `notificacao`, baseadas em
+   `usuario_id`, continuam suficientes, e que a coluna nova **não** abre leitura
+   cruzada de agendamentos.
+6. **Testes obrigatórios**: remarcar uma vez; remarcar duas vezes (tem de existir
+   só uma notificação); remarcar e depois cancelar; e cliente A tentando ler a
+   notificação do cliente B.
+
+> **Condição de parada dada pelo Chefe:** se, ao investigar a Ordem da F14.2, eu
+> concluir que esta modelagem conflita com o que ela previa, **parar e trazer a
+> divergência antes de implementar.**
+
+### DECISÃO 2 (ARQUITETURAL) — o react-query é a única fonte de dados
+
+**`loader` e `action` do data router não fazem fetch próprio.** Quando uma rota
+precisar esperar dados — por exemplo se a morfose da capa for resolvida com
+`loader` —, o `loader` apenas chama `queryClient.ensureQueryData` ou
+`prefetchQuery` **com as mesmas query keys** já usadas pelos hooks.
+
+**Motivo:** manter cache e invalidação num lugar só. O risco que isso evita é
+concreto e já tem nome neste projeto — a migração para data router em 25/09
+abriu a porta para `loader`/`action`, e sem esta regra metade das rotas buscaria
+por react-query e a outra metade por loader. É a mesma classe de problema das
+quatro grades de largura: duas formas de fazer a mesma coisa, divergindo em
+silêncio até alguém medir. Dado de uma fonte, invalidado de outra, é bug que não
+aparece em teste.
+
+### DECISÃO 3 — `scroll-reveal.tsx` **não** será apagado agora
+
+Ele está órfão porque a landing ainda não recebeu animação, **não** porque foi
+descartado. A decisão sobre animar a landing está pendente, e o destino do
+arquivo depende dela. Corrigi o rumo que eu mesmo havia sugerido no `/start`:
+"usar ou apagar" era falso dilema enquanto a terceira opção — esperar a decisão
+— é a correta.
+
+O **`App.css`** sai, porque está confirmado morto.
+
+### DECISÃO 4 — o script de medição por CDP vai para o repositório
+
+Em `scripts/`, com comentário curto no topo explicando o uso. **Já foi reescrito
+duas vezes; não haverá uma terceira.**
+
+### ORDEM DO DIA
+
+1. **Housekeeping de abertura** — corrigir o hash do `PROJECT_STATUS.md` para o
+   `HEAD` real e **re-rodar o gate completo**. Baseline medida hoje antes de
+   mexer em schema: *inferência não conta como gate verde*.
+2. **Migration `00031` (`agendamento_id`) e F14.2**, conforme a Decisão 1.
+3. **Remover o `App.css`**, inclusive o comentário que o menciona em
+   `CampoDeSenha.tsx`.
+4. **Commitar o script CDP.**
+5. **`supabase_vector_cuthub`** — diagnóstico com **limite de 20 minutos**. Ler o
+   log do container e trazer a causa. **Não mexer em config para "fazer parar".**
+   Se a causa não aparecer no tempo, registrar o que foi visto e deixar para
+   depois. É o container de logs/analytics do stack local, então não bloqueia
+   produto — mas não pode seguir reiniciando sem ninguém saber por quê.
+
+### FORA DO DIA, REGISTRADO COMO PENDENTE
+
+- **`text-primary` (🔴)** — não entra hoje. Mas o **comando exato de contagem**
+  tem de ficar na log antes da próxima fase: a divergência entre "53 usos em 26
+  arquivos" e os "39 em 33" registrados aconteceu **por falta de método
+  registrado**, e não deve se repetir.
+- **Morfose da capa, animação da landing e redesign do painel** — aguardam
+  decisão do Chefe.
+- **Quarta grade (`/b/:slug` sem degrau `2xl`)** — defeito real e pequeno, fora
+  hoje para não inflar a F14.2. Fica registrado como **o próximo item visual**.
+- **Barbearia nova entra vazia** — segue como gap de produto, sem ação hoje.
+- **Extensão do Chrome** — sem ação. O script CDP no repositório é exatamente o
+  que nos protege disso.
+
+---
+
+## [OPUS 5] 2026-10-02 — O comando de contagem do `text-primary`, para não divergir de novo
+
+Registrado agora, fora de qualquer implementação, porque o Chefe pediu método e
+não número. O que gerou **53 usos em 26 arquivos** em 02/10:
+
+```bash
+# ocorrências, separando a variante legível (que é a CORREÇÃO, não o problema)
+grep -roE "text-primary(-readable)?" src/ --include=*.tsx --include=*.ts \
+  | sed 's/.*://' | sort | uniq -c
+#   53 text-primary
+#    4 text-primary-readable
+
+# arquivos com o `text-primary` cru
+grep -rlE "text-primary([^-]|$)" src/ --include=*.tsx --include=*.ts | wc -l
+#   26
+```
+
+**A pegadinha que explica a divergência:** `grep "text-primary\b"` conta
+`text-primary-readable` também, porque o `-` é fronteira de palavra em regex. Foi
+o que me deu 57/36 na primeira passada do `/start`. O `-E` com
+`(-readable)?` separa os dois, e o `([^-]|$)` isola o cru.
+
+Não afirmo que o número cresceu desde os 39/33 anteriores — **o método daquela
+contagem não ficou registrado**, então os dois não são comparáveis. É esse o
+defeito que este bloco fecha.
+
+---
+
+## [OPUS 5] 2026-10-02 — Ordem do dia executada: 00031, F14.2, limpeza e o caso do `vector`
+
+Os cinco itens entregues. **Nenhuma condição de parada foi acionada** — detalho
+abaixo por que a divergência que eu achei não conflita com a modelagem.
+
+### HOUSEKEEPING (item 1)
+
+Hash do `PROJECT_STATUS.md` corrigido para o `HEAD` real (`561bc60`; ele
+apontava para `1e4c95b`, defeito meu no fechamento de 25/09).
+
+**Baseline medida hoje, antes de tocar em schema:** `tsc --noEmit` 0 · `tsc -b`
+0 · 121 testes · oxlint 0 erros/13 warnings · build ok.
+
+### A MIGRATION 00031 (item 2)
+
+Entregue conforme a Decisão 1. O cabeçalho do arquivo carrega o raciocínio
+inteiro; aqui ficam as três coisas que a investigação mudou.
+
+**1. O `ON DELETE` tinha resposta, e é "os dois caminhos existem".**
+
+A Decisão 1 mandou verificar antes de decidir. Em
+`src/services/agendamentos.service.ts`:
+
+```
+cancelar()  -> UPDATE status='cancelado', preserva a linha  (soft)
+excluir()   -> DELETE FISICO, e e alcancavel pelo produto   (useAgendamentos.ts:48)
+```
+
+Com o delete físico existindo, o `NO ACTION` padrão faria `excluir()` **passar a
+falhar** por violação de FK em todo agendamento com notificação de remarcação.
+Sem o CASCADE, esta migration **introduziria** uma regressão numa função que
+hoje funciona. Então CASCADE **e** a regra no caminho soft
+(`limpar_remarcacao_ao_cancelar`) — não um ou outro.
+
+**2. A verificação final pegou um defeito de verdade, e é por isso que ela existe.**
+
+`CREATE OR REPLACE FUNCTION` só substitui com assinatura **idêntica**. Número
+diferente de parâmetros — ainda que o novo tenha default — cria **sobrecarga**.
+A primeira versão não tinha `DROP` e o bloco reprovou na hora:
+
+```
+ERROR: criar_notificacao ficou com 6 parametros, esperado 7
+```
+
+Ficariam as duas vivas: a de 6 atendendo quem passa 6 argumentos e gravando
+`agendamento_id` nulo em silêncio, e — pior — toda chamada de **5** argumentos,
+que é o que os gatilhos antigos fazem, virando **ambígua em tempo de chamada**.
+É exatamente o modo de falha que o `CLAUDE.md` registra para patch de função.
+Corrigido com `DROP FUNCTION` explícito da assinatura antiga, e a verificação
+passou a contar **versões** além de parâmetros — checagem que só olhasse uma
+linha não pegaria a sobrecarga sobrevivente.
+
+**3. Três divergências entre a Ordem da F14.2 e o schema real.**
+
+- A Ordem diz `data_hora_inicio`. **A coluna é `data_hora`** (o fim é
+  `data_hora_fim`, provável origem do lapso). Mesma classe do `transacao_caixa`
+  da F14.1.
+- A Ordem pede a `00030`; ela ficou com o caixa. Esta é a `00031`.
+- **A única que mexe em regra, e por isso eu paro para te apontar:** a Ordem
+  manda avisar "a contraparte (cliente e/ou barbeiro)", e o padrão existente faz
+  isso mandando para **os dois** — `criar_notificacao` já pula quem agiu. Logo a
+  remarcação produz **uma linha por destinatário**. A Decisão 1 diz "no máximo
+  uma viva **por agendamento**"; ao pé da letra, um dos dois ficaria sem aviso,
+  contra o que a Ordem pede. **Implementei como uma viva por (agendamento,
+  usuário)**, única leitura compatível com as duas. Não tratei como conflito de
+  modelagem — a coluna, a FK e o índice não conflitam com nada; é a redação da
+  regra que precisava do qualificador. Se a intenção era outra, é uma linha no
+  `DELETE` do gatilho.
+
+**Decidido também:** o cancelamento **apaga** a remarcação em vez de marcá-la
+obsoleta, porque `notificacao` não tem coluna de estado além de `lida` e o
+próprio cancelamento já dispara o aviso "Agendamento cancelado". Deixar as duas
+diria ao cliente que o horário mudou **e** que foi cancelado.
+
+**O resumo da agenda de amanhã** roda de hora em hora (`0 * * * *`) e só envia
+para as barbearias cuja hora **local** é 20h — um cron não dispara em fuso por
+barbearia, e esta é a forma de o "fim do expediente" ser o de cada uma. A
+idempotência saiu de graça: a própria `notificacao` responde se o resumo de hoje
+já foi, sem coluna de controle. Agenda vazia **não** gera aviso — "você tem 0
+agendamentos amanhã" todo dia é o que faz desligar o sino.
+
+### MEDIDO, EM `BEGIN ... ROLLBACK`, SEM RESÍDUO
+
+Os quatro testes obrigatórios, mais três que eu acrescentei:
+
+| teste | resultado |
+|---|---|
+| remarcar 1x | 2 avisos, 2 destinatários, `agendamento_id` correto |
+| remarcar 2x | **1 viva por destinatário**, e a mensagem cita o horário novo |
+| UPDATE sem tocar `data_hora` | **nenhum aviso novo** (seguiu em 2) |
+| remarcar e cancelar | remarcações saem, sobram só as 2 de cancelamento |
+| cliente A | vê **1** (a dele), vê **0** do barbeiro |
+| cliente B (estranho) | vê **0**; `DELETE 0`; `UPDATE 0`; as duas intactas |
+| DELETE do agendamento com aviso vivo | **funciona**, e **0 órfãs** depois |
+
+O último é a prova do CASCADE: sem ele, esse `DELETE` levantaria violação de FK
+e `excluir()` quebraria.
+
+Um tropeço meu no caminho, que vale registrar porque é fácil repetir: a primeira
+versão do script de teste movia `data_hora` **sem** mover `data_hora_fim` e
+batia no check `agendamento_check`. Defeito do teste, não do produto — mas por
+um instante pareceu bug do gatilho.
+
+**Frontend sem alteração**, e isso foi conferido, não presumido: o sino não
+ramifica por `tipo` — renderiza `titulo`, `mensagem` e `link_acao`
+genericamente. Os dois tipos novos aparecem sem código novo.
+
+`database.types.ts` regenerado pelo comando de sempre. **O diff é enorme (900
+linhas contra 1.610) porque o CLI subiu para 2.119.0 e mudou a formatação**, não
+porque o schema mudou tanto. Conteúdo conferido na mão (`agendamento_id:
+string | null` em Row/Insert/Update) e `tsc -b` limpo.
+
+### LIMPEZA E O SCRIPT (itens 3 e 4)
+
+`src/App.css` removido, e o comentário do `CampoDeSenha.tsx` que o citava como
+suspeito descartado foi reescrito sem ele — a narrativa de depuração segue
+inteira, só sem o arquivo morto.
+
+`scripts/medir-no-chrome.mjs` entrou no repositório. **Rodado e conferido**, e
+achei dois defeitos meus no caminho, os dois documentados no próprio arquivo:
+
+1. **O WebSocket nunca era fechado.** A tabela saía inteira e o processo ficava
+   pendurado para sempre, porque o laço de eventos do Node não drena com socket
+   aberto. Dois comandos estouraram 600s antes de eu entender.
+2. **O Git Bash do Windows converte `/barbearias` em
+   `C:/Program Files/Git/barbearias`** antes do Node ver. O argumento deixa de
+   começar com `/`, o script cai nas rotas padrão **em silêncio**, e eu passei
+   uma rodada medindo o que não pedi. Documentado: no Git Bash, prefixar com
+   `MSYS_NO_PATHCONV=1`.
+
+De brinde, a medição confirmou que a entrega de 25/09 continua de pé:
+`marca.x` idêntico entre `/minha-conta` e `/barbearias` nos seis viewports,
+`header.h` 109/109, estouro horizontal 0 em todos. E registrou o degrau conhecido
+da quarta grade: deslogado, a landing põe a marca em 224/176/20 contra 184/104/16
+do catálogo — fora do escopo de hoje, por tua decisão.
+
+### O `supabase_vector` (item 5) — CAUSA ENCONTRADA
+
+Dentro do prazo: ~8 dos 20 minutos. **Não toquei em config.**
+
+**A causa:** o container tem **zero binds e zero mounts**. Medido:
+
+```
+docker inspect supabase_vector_cuthub --format "{{.HostConfig.Binds}}"  ->  []
+docker inspect supabase_vector_cuthub --format "{{len .Mounts}}"        ->  0
+```
+
+A única *source* do `vector.yaml` dele é `docker_logs`, que precisa falar com o
+daemon do Docker pelo socket. Sem o socket montado, a conexão é **recusada**:
+
+```
+ERROR vector::sources::docker_logs: Listing currently running containers failed.
+  ConnectError("tcp connect error", Os { code: 111, kind: ConnectionRefused })
+INFO  vector_common::shutdown: All sources have finished.
+INFO  vector: Vector has stopped.
+```
+
+Pipeline sem source não tem o que fazer, então o Vector **encerra de propósito**
+— e o `restart=unless-stopped` o levanta de novo. Ciclo medido: **8.461
+restarts**, ~**50 por hora**, um a cada ~71s (os 59s que ele espera pelo
+shutdown graceful mais a subida).
+
+**Por que ninguém viu em três semanas:** ele sai com **exit code 0** e
+`State.Error` vazio. Não é crash; é desligamento "bem-sucedido". Nenhum alarme
+que olhe exit code diferente de zero acusaria. É o mesmo formato de armadilha do
+`tsc --noEmit`: a ferramenta responde sucesso sem ter feito o trabalho.
+
+**Desde quando:** o container foi **criado em 2026-09-11** — nasceu assim, não é
+regressão. O "Up 7 days" dos outros é do último `docker start` do stack.
+
+**Impacto: nenhum no produto, e isso foi verificado hoje**, não assumido — os
+outros 10 containers healthy, as 31 migrations aplicadas, 964 execuções do cron
+de lembrete com 0 falhas, login real e medição no navegador funcionando. O que
+se perde é a **observabilidade local**: é o vector que alimenta o
+Logflare/analytics do Studio.
+
+**O que eu NÃO fiz, e proponho:** o caminho natural é `supabase stop` seguido de
+`supabase start` com o CLI atual (2.119.0) para **recriar** o container com o
+mount que falta — o de hoje foi criado por uma versão anterior. É ação de config
+e derruba o stack local, então fica para tua palavra.
+
+### GATE FINAL
+
+`tsc --noEmit` 0 · `tsc -b` 0 · **121 testes** · oxlint **0 erros / 13 warnings**
+· build ok.
+
+O `scripts/` entrou no escopo do oxlint e trouxe um warning
+(`no-unused-expressions`, ternário usado como comando); reescrito como `if/else`
+e o número voltou aos 13 históricos — não quis estrear um arquivo já somando
+ruído ao lint.

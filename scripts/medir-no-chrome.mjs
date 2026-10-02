@@ -116,7 +116,8 @@ class Cdp {
       const p = m.id && this.pendentes.get(m.id);
       if (!p) return;
       this.pendentes.delete(m.id);
-      m.error ? p.rej(new Error(JSON.stringify(m.error))) : p.res(m.result);
+      if (m.error) p.rej(new Error(JSON.stringify(m.error)));
+      else p.res(m.result);
     };
   }
 
