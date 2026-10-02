@@ -33,9 +33,9 @@ interface CampoDeSenhaProps {
  * Chefe relatou o ícone sumindo — primeiro no hover, depois no tema escuro.
  * Passei por `text-muted-foreground` e por `text-foreground/80`, e nenhuma
  * medição explicou o sumiço: nos dois casos o contraste calculado passava
- * folgado nos dois temas. Descartei regra global de botão (não existe), o
- * `App.css` com `:hover` (não é importado por ninguém) e herança de variável
- * (`.dark` vai no `documentElement`, o mesmo elemento do `:root`).
+ * folgado nos dois temas. Descartei regra global de botão (não existe) e
+ * herança de variável (`.dark` vai no `documentElement`, o mesmo elemento do
+ * `:root`).
  *
  * O que sobrou como suspeito foi o próprio `/80`: ele gera
  * `color-mix(in oklab, var(--color-foreground) 80%, transparent)` sobre um
