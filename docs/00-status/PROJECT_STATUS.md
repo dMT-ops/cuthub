@@ -1,7 +1,15 @@
 # CutHub — estado atual
 
 **Atualizado em:** 2026-10-02
-**Branch:** feat/fase-implantacao  ·  **Último commit:** 3ddec27 docs: decisoes de 02/10, execucao da ordem do dia e a causa do vector
+**Branch:** feat/fase-implantacao
+**Último commit de código:** `0e9c131` — notificacao sabe de qual agendamento fala, e a F14.2 (00031)
+
+> O campo é o último commit **de código**, de propósito. "Último commit" era
+> impossível de manter honesto: o `/end` escreve este arquivo e só depois
+> commita, então o hash nascia desatualizado — aconteceu em 25/09 e eu corri
+> atrás com um commit extra que ficou obsoleto no mesmo instante. Para o estado
+> do projeto, o que importa é onde o código está; os commits de fechamento são
+> documentação deste próprio arquivo.
 
 ## Fase atual
 
