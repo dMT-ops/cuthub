@@ -1,7 +1,7 @@
 # CutHub — estado atual
 
 **Atualizado em:** 2026-10-02
-**Branch:** feat/fase-implantacao  ·  **Último commit:** 0e9c131 feat: notificacao sabe de qual agendamento fala, e a F14.2 (00031)
+**Branch:** feat/fase-implantacao  ·  **Último commit:** 3ddec27 docs: decisoes de 02/10, execucao da ordem do dia e a causa do vector
 
 ## Fase atual
 
@@ -18,6 +18,17 @@ F14.2 (horário remarcado + resumo da agenda de amanhã) em 02/10, junto com o
 
 ## Gaps e riscos conhecidos
 
+- 🟠 **A regra da remarcação foi interpretada, não confirmada.** A Decisão 1 diz
+  "no máximo uma notificação de remarcação viva **por agendamento**"; a Ordem da
+  F14.2 manda avisar a contraparte mandando para os dois, o que produz uma linha
+  **por destinatário**. Implementei como uma viva por (agendamento, usuário) —
+  ao pé da letra, um dos dois ficaria sem aviso. Se a intenção era outra, é uma
+  linha no `DELETE` de `notificar_agendamento_remarcado` (`00031`).
+- 🟡 **O `database.types.ts` mudou de formatação inteira** em 02/10 porque o
+  `supabase` CLI subiu para 2.119.0 (985 linhas, antes ~1.610, conteúdo
+  equivalente). O arquivo é saída de ferramenta e o `CLAUDE.md` proíbe editá-lo
+  à mão; quem olhar um diff antigo dele vai achar que o schema mudou muito mais
+  do que mudou.
 - 🔴 **`text-primary` a 1.89 de contraste** para barbearia sem cor configurada —
   **53 usos em 26 arquivos**, medidos em 02/10 com o comando registrado na log
   (o número antigo, 39 em 33, vinha de método não registrado e não é
@@ -64,4 +75,4 @@ F14.2 (horário remarcado + resumo da agenda de amanhã) em 02/10, junto com o
 02/10 — Fase 14 fechada: `00031` liga a notificação ao agendamento (FK em
 CASCADE, porque `excluir()` faz delete físico) e entrega a F14.2. `App.css`
 removido, script de medição por CDP no repositório, e a causa do
-`supabase_vector` encontrada.
+`supabase_vector` encontrada. Gate verde nos quatro passos.

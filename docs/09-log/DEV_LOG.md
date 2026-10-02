@@ -58,3 +58,59 @@ erros, 13 warnings) · build ✅
 - [ ] 🟡 `src/App.css` é arquivo morto, não importado por ninguém.
 - [ ] **F14.2** (horário remarcado + resumo da agenda de amanhã, `00031`),
       aguardando aprovação.
+
+## 2026-10-02
+
+**Feito:** Fase 14 fechada. `00031` liga `notificacao` a `agendamento`
+(`agendamento_id` NULL, FK em CASCADE, índice parcial) e entrega a F14.2:
+gatilho de horário remarcado, limpeza da remarcação no cancelamento e job
+`resumo_da_agenda_de_amanha`. Também: `App.css` removido, script de medição por
+CDP commitado em `scripts/medir-no-chrome.mjs`, e a causa do `supabase_vector`
+encontrada.
+
+**Decisões:** (1) **CASCADE na FK não foi escolha estética** — `excluir()` faz
+DELETE físico e é alcançável pelo produto, então sem CASCADE a FK faria essa
+função passar a falhar; a regra do cancelamento soft vai em gatilho próprio.
+(2) **react-query segue como fonte única de dados** — `loader`/`action` não
+fazem fetch, só chamam `ensureQueryData`/`prefetchQuery` com as mesmas query
+keys, para não haver duas formas de buscar dado no projeto. (3) `scroll-reveal`
+**não** foi apagado: ele depende da decisão sobre animar a landing. (4) Uma
+remarcação viva **por (agendamento, usuário)**, não por agendamento — ao pé da
+letra um dos dois destinatários ficaria sem aviso.
+
+**Quality gate:** tsc --noEmit ✅ · tsc -b ✅ · testes ✅ (121) · oxlint ✅ (0
+erros, 13 warnings) · build ✅
+
+## Pendências para o próximo /start
+
+- [ ] 🔴 **`text-primary` a 1.89 de contraste** — 53 usos em 26 arquivos
+      (comando de contagem registrado na log de 02/10). Decisão de produto,
+      aberta desde a Fase 13.
+- [ ] 🟠 **Confirmar a regra da remarcação** (`00031`,
+      `notificar_agendamento_remarcado`) — implementei "uma viva por
+      (agendamento, usuário)" interpretando a Decisão 1. Se a intenção era uma
+      por agendamento, é uma linha no `DELETE` do gatilho.
+- [ ] 🟠 **Morfose da capa** (`src/pages/publico/PerfilBarbearia.tsx`) — o
+      Skeleton ocupa o destino na captura. Decidir entre `loader` na rota
+      (chamando `ensureQueryData`, conforme a decisão 2) ou aceitar o fade.
+- [ ] 🟠 **Landing sem animação** (`src/pages/Landing.tsx`) — decidir se entra.
+      O destino do `scroll-reveal.tsx` depende desta.
+- [ ] 🟡 **`supabase_vector_cuthub`: causa achada, conserto pendente** — o
+      container tem zero mounts, a source `docker_logs` não alcança o socket e o
+      Vector sai com **exit 0** (por isso nenhum alarme acusou). Conserto
+      provável: `supabase stop && supabase start` com o CLI 2.119.0 para recriar
+      o container com o mount. Derruba o stack local — precisa da tua palavra.
+- [ ] 🟡 **Alarme para os jobs do `pg_cron`** — agora são dois
+      (`lembretes_de_agendamento`, `resumo_da_agenda_de_amanha`); 964 execuções
+      com 0 falhas até hoje, mas nada avisa na primeira.
+- [ ] 🟡 **Quarta grade: `/b/:slug` sem degrau `2xl`** — em 1920 o miolo cai de
+      1600 para 1280 um clique depois do catálogo. Registrado como o próximo
+      item visual.
+- [ ] 🟡 **Painel e admin sem `viewTransition`** (`Sidebar.tsx`,
+      `AdminLayout.tsx`) — assimetria assumida, fechar ou declarar.
+- [ ] 🟡 **Extensão do Chrome segue desconectada** — sem ação por decisão; o
+      `scripts/medir-no-chrome.mjs` cobre a medição. No Git Bash, rodar com
+      `MSYS_NO_PATHCONV=1`.
+- [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
+- [ ] 🟡 Barbearia nova entra no catálogo vazia.
+- [ ] **Próxima fase não foi aberta** — a Fase 14 fechou e não há ordem na fila.
