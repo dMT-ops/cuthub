@@ -2016,3 +2016,86 @@ nos dois sentidos.
   rolagem. A assimetria cresceu de propósito: o painel é ferramenta de trabalho,
   e movimento ali atrapalha mais do que ajuda. Vale uma palavra do Chefe.
 - 🟡 **Nenhuma fase nova aberta.** A 14 fechou; tudo acima é acabamento e dívida.
+
+---
+
+## [OPUS 5] 2026-10-05 — O cartão do preview cortado: eu quebrei o herói da landing hoje
+
+O Chefe viu: *"o card mostrando uma visão fictícia do sistema está cortado"*.
+Regressão minha, entregue, commitada e no remoto há poucas horas — na mesma
+entrega das animações de rolagem.
+
+### A CAUSA, QUE É EXATAMENTE O ERRO QUE EU EVITEI NO CATÁLOGO
+
+Eu envolvi o bloco assim:
+
+```jsx
+<ScrollReveal atraso={320}>
+  <div className="lg:col-span-6">
+    <PreviewDashboard />
+  </div>
+</ScrollReveal>
+```
+
+**Quem envolve passa a ser o item da grade.** O `ScrollReveal` renderiza um
+`<div>` sem classe nenhuma, e o `lg:col-span-6` foi parar num filho, onde não
+vale nada. Numa grade `lg:grid-cols-12` o item sem `col-span` ocupa **uma**
+coluna — e o cartão, que tem conteúdo de largura mínima, estourou a caixa.
+
+### MEDIDO ANTES (no build, via `vite preview`)
+
+| viewport | coluna do texto | coluna do preview | cartão | cortado? |
+|---|---|---|---|---|
+| 1920 | 704 | **64** | 64 | **sim** |
+| 1440 | 524 | **54** | 54 | **sim** |
+| 1280 | 524 | **54** | 54 | **sim** |
+| 1024 | 460 | **43** | 43 | **sim** |
+| 375 | 335 | 335 | 335 | não |
+
+O celular escapou porque abaixo de `lg` não existe grade — as colunas empilham.
+Por isso o defeito só aparecia no desktop, que é onde o Chefe olhou.
+
+`cortado` aqui é `scrollWidth > clientWidth` no cartão: conteúdo mais largo que
+a caixa. Não é opinião, é a caixa não caber no que tem dentro.
+
+### MEDIDO DEPOIS
+
+| viewport | 1920 | 1440 | 1280 | 1024 | 375 |
+|---|---|---|---|---|---|
+| texto / preview | 704 / **704** | 524 / **524** | 524 / **524** | 460 / **460** | 335 / 335 |
+| cortado | não | não | não | não | não |
+
+Estouro horizontal 0 em todos. A altura da página caiu de 2410 para 2240px,
+que é a confirmação de que o layout do herói de fato mudou.
+
+A revelação continua funcionando depois do conserto: 16 blocos, **0 invisíveis**
+após rolar, **0 blocos animados** sob `prefers-reduced-motion`, e nenhum `<div>`
+dentro de `<ol>`/`<ul>`.
+
+### O QUE FALHOU NO MEU PROCESSO, E ISSO É O PONTO
+
+Eu **auditei exatamente este risco** e escrevi sobre ele na entrada anterior —
+no catálogo, decidi não animar os cartões justamente porque "o `<div>` passaria
+a ser o item da grade". Na seção 02 da landing eu coloquei
+`className="lg:col-span-5"` no próprio `ScrollReveal`, que é a forma certa. E
+ainda assim deixei o preview errado três blocos acima.
+
+A razão de não ter sido pego é mais útil que a razão de ter acontecido:
+**eu medi a animação e não medi o layout.** As medições de 05/10 contaram blocos
+invisíveis, altura de página e HTML inválido. Nenhuma olhou a largura das
+colunas do herói, porque o herói "já estava medido desde 22/09" — só que eu
+havia acabado de mexer nele.
+
+Regra que fica: **envolver elemento é mudar layout.** Quando o `ScrollReveal`
+(ou qualquer invólucro) entra numa grade ou num flex, a medição tem de incluir a
+largura dos itens, não só o efeito novo. Auditei os outros nove usos com isso em
+mente — os quatro do texto do herói envolvem filhos de bloco, os de `NUMEROS` e
+`ETAPAS` carregam as classes do item, e os de rótulo e da chamada final são
+filhos de `div` comum. **Só o preview estava errado.**
+
+O comentário no código agora diz a regra no lugar onde ela foi violada.
+
+### GATE
+
+`tsc --noEmit` 0 · `tsc -b` 0 · 125 testes · oxlint 0 erros / 13 warnings ·
+build ok.

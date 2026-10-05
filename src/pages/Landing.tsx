@@ -166,10 +166,15 @@ export default function Landing() {
               </ScrollReveal>
             </div>
 
-            <ScrollReveal atraso={320}>
-              <div className="lg:col-span-6">
-                <PreviewDashboard />
-              </div>
+            {/* `lg:col-span-6` vai no PRÓPRIO `ScrollReveal`, e não num `div`
+                dentro dele. Quem envolve passa a ser o item da grade, e a
+                classe de coluna num filho não vale nada — medido em 05/10,
+                depois de eu entregar justamente esse erro: a coluna do preview
+                ficou com 64px em 1920 (contra 704 da coluna de texto) e o
+                cartão aparecia cortado. Vale para todo `ScrollReveal` que
+                envolve item de grade ou de flex. */}
+            <ScrollReveal atraso={320} className="lg:col-span-6">
+              <PreviewDashboard />
             </ScrollReveal>
           </div>
         </section>
