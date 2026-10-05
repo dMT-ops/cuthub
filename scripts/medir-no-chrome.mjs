@@ -12,6 +12,17 @@
  * nas rotas padrão. Custou uma rodada inteira em 02/10 para aparecer. No
  * PowerShell e no cmd não acontece.
  *
+ * **Para medição confiável, meça o BUILD e não o dev server:**
+ *
+ *   npm run build && npx vite preview --port 4173
+ *   BASE=http://localhost:4173 node scripts/medir-no-chrome.mjs /barbearias
+ *
+ * O dev server re-otimiza dependências por rota e manda recarregar; no headless
+ * esse recarregamento às vezes não chega, e a primeira navegação para uma rota
+ * nova devolve `#root` vazio. Em 05/10 isso custou meia hora e uma conclusão
+ * errada ("quebrei o login"). O `preview` serve o bundle pronto e não tem
+ * otimizador — todas as medições de grade de 05/10 saíram dele.
+ *
  * Precisa do Vite de pé (`npm run dev`) e, para as rotas logadas, do Supabase
  * local com o seed aplicado — ele faz login de verdade com `cliente@cuthub.com`.
  *
@@ -42,7 +53,7 @@
  * Sem dependência: usa o `WebSocket` nativo do Node (>= 22) para falar CDP.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -92,6 +103,53 @@ chrome.on('error', (e) => {
   console.error(e.message);
   process.exit(1);
 });
+
+/**
+ * Mata o Chrome INTEIRO, e nao so o processo que o `spawn` devolveu.
+ *
+ * No Windows o `chrome.exe` lancado viram varios processos filhos (renderer,
+ * gpu, utility) e `child.kill()` derruba apenas o pai -- os filhos ficam. Em
+ * 05/10 isso acumulou **485 processos do Chrome** ao longo de uma sessao de
+ * medicoes, e o efeito nao apareceu como erro do script: apareceu como
+ * `npm test` ficando vermelho por TIMEOUT em teste sincrono, porque a maquina
+ * nao tinha mais folga. Levei um tempo culpando o teste.
+ *
+ * `taskkill /T` na PID do `spawn` TAMBEM nao basta, e foi medido: o Chrome se
+ * relanca e o processo original sai, entao a arvore que o Node conhece ja nao e
+ * a do navegador vivo -- sobravam 11 processos por rodada. Quem fecha de
+ * verdade e o proprio navegador, pelo CDP (`Browser.close`). O taskkill fica
+ * como rede para o caso de o CDP ja estar morto.
+ */
+function encerrarChrome() {
+  try {
+    chrome.kill();
+  } catch {
+    /* ja morreu */
+  }
+
+  // Rede final: mata o que sobrou DESTE perfil temporario, e so dele.
+  //
+  // Filtrar pelo `--user-data-dir` e deliberado em vez de `taskkill /IM
+  // chrome.exe`: o navegador do humano esta aberto na mesma maquina, e em 05/10
+  // eu derrubei os 485 processos acumulados com um kill geral -- que fechou o
+  // Chrome dele junto. Nao se limpa a propria sujeira derrubando a sessao de
+  // quem esta trabalhando.
+  try {
+    if (process.platform === 'win32') {
+      // Sem escapar a barra invertida: no `-like` do PowerShell só `*` e `?` são
+      // curinga, e o caminho do perfil temporário não tem nenhum dos dois.
+      spawnSync('powershell', ['-NoProfile', '-Command',
+        `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ` +
+        `Where-Object { $_.CommandLine -like '*${perfil}*' } | ` +
+        `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+      ], { stdio: 'ignore' });
+    } else {
+      process.kill(-chrome.pid, 'SIGKILL');
+    }
+  } catch {
+    /* melhor esforco */
+  }
+}
 
 async function esperarChrome() {
   for (let i = 0; i < 40; i++) {
@@ -192,8 +250,28 @@ async function abrirAba(cdp, { contextoLimpo = false } = {}) {
 
 /** Entra de verdade pelo formulario: nada de forjar token no localStorage. */
 async function entrar(aba) {
-  await aba.ir('/login');
-  await aba.esperar('#email');
+  // RE-NAVEGA EM VEZ DE DESISTIR: pagina em branco na primeira navegacao e
+  // comum contra o dev server, e a segunda costuma resolver.
+  //
+  // MAS A RETENTATIVA NAO E O CONSERTO, e vale dizer porque: em 05/10 o `/login`
+  // veio vazio tres navegacoes seguidas, e o que resolveu foi apagar
+  // `node_modules/.vite` e reiniciar o dev server -- cache de dependencias
+  // velho. Antes de culpar o app, reinicie o servidor; e se a medicao precisa
+  // ser confiavel, meca o BUILD (ver BASE no topo), nao o dev server.
+  //
+  // Eu cheguei a concluir que tinha quebrado o login por causa disto. O teste
+  // com `git stash` estava confundido: o que mudava o resultado era TOCAR os
+  // arquivos, forcando o Vite a reprocessar, e nao o conteudo deles.
+  let entrou = false;
+  for (let tentativa = 1; tentativa <= 3 && !entrou; tentativa++) {
+    await aba.ir('/login');
+    try {
+      await aba.esperar('#email', 6000);
+      entrou = true;
+    } catch {
+      if (tentativa === 3) throw new Error('`/login` nao renderizou em 3 navegacoes');
+    }
+  }
   await aba.js(`
     const set = (el, v) => {
       Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, v);
@@ -348,11 +426,14 @@ try {
   } catch {
     /* ja fechado */
   }
+  // Pede ao navegador que se feche: e isto que derruba a arvore inteira.
   try {
-    chrome.kill();
+    if (cdp) await cdp.send('Browser.close');
   } catch {
-    /* ja morreu */
+    /* sem CDP vivo, cai na rede abaixo */
   }
+  await dormir(800);
+  encerrarChrome();
   await dormir(400);
   try {
     rmSync(perfil, { recursive: true, force: true });

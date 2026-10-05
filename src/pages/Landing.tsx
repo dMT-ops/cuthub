@@ -2,6 +2,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PreviewDashboard } from '@/components/landing/PreviewDashboard';
+import { ScrollReveal } from '@/components/ui/scroll-reveal';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 /**
@@ -122,38 +123,54 @@ export default function Landing() {
             vazar. 65px e a altura real do cabecalho. */}
         <section className="mx-auto flex max-w-6xl px-5 py-16 sm:px-8 sm:py-24 2xl:min-h-[calc(100vh-65px)] 2xl:max-w-[1600px] 2xl:items-center 2xl:px-16 2xl:py-20">
           <div className="grid w-full gap-12 lg:grid-cols-12 lg:items-center lg:gap-10 2xl:gap-16">
+            {/* O herói já está na dobra, então aqui a revelação acontece na
+                CARGA e não na rolagem — o `IntersectionObserver` dispara de
+                imediato para quem já está visível. O escalonamento de 80ms
+                desenha a ordem de leitura: rótulo, título, promessa, ação.
+                O número vem do plano de 22/09, que descrevia a página "se
+                escrevendo de cima para baixo, 80ms entre linhas". */}
             <div className="lg:col-span-6">
-              <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
-                — GESTÃO DE ALTA PRECISÃO
-              </p>
-
-              <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl 2xl:text-7xl">
-                Domine cada{' '}
-                {/* Aqui o dourado é letra, e pode ser: sobre o preto ele tem
-                    9.87, muito acima dos 3.0 que texto grande exige. A regra
-                    do `index.css` proíbe isso sobre o CREME, não sobre a
-                    superfície da marca. */}
-                <span className="text-primary">centímetro</span> da operação.
-              </h1>
-
-              <p className="mt-7 max-w-[52ch] text-base leading-relaxed text-brand-ink-foreground/70 sm:text-lg 2xl:text-xl">
-                Agenda, clientes, equipe e caixa trabalhando juntos. Menos
-                mensagens perdidas, mais cadeiras ocupadas.
-              </p>
-
-              <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-                <Button asChild size="lg" className="w-full tracking-[0.12em] sm:w-auto">
-                  <Link to="/cadastro">COMEÇAR AGORA</Link>
-                </Button>
-                <p className="text-[11px] font-medium tracking-[0.16em] text-brand-ink-foreground/50">
-                  +800 BARBEARIAS ORGANIZADAS
+              <ScrollReveal>
+                <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+                  — GESTÃO DE ALTA PRECISÃO
                 </p>
-              </div>
+              </ScrollReveal>
+
+              <ScrollReveal atraso={80}>
+                <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl 2xl:text-7xl">
+                  Domine cada{' '}
+                  {/* Aqui o dourado é letra, e pode ser: sobre o preto ele tem
+                      9.87, muito acima dos 3.0 que texto grande exige. A regra
+                      do `index.css` proíbe isso sobre o CREME, não sobre a
+                      superfície da marca. */}
+                  <span className="text-primary">centímetro</span> da operação.
+                </h1>
+              </ScrollReveal>
+
+              <ScrollReveal atraso={160}>
+                <p className="mt-7 max-w-[52ch] text-base leading-relaxed text-brand-ink-foreground/70 sm:text-lg 2xl:text-xl">
+                  Agenda, clientes, equipe e caixa trabalhando juntos. Menos
+                  mensagens perdidas, mais cadeiras ocupadas.
+                </p>
+              </ScrollReveal>
+
+              <ScrollReveal atraso={240}>
+                <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+                  <Button asChild size="lg" className="w-full tracking-[0.12em] sm:w-auto">
+                    <Link to="/cadastro">COMEÇAR AGORA</Link>
+                  </Button>
+                  <p className="text-[11px] font-medium tracking-[0.16em] text-brand-ink-foreground/50">
+                    +800 BARBEARIAS ORGANIZADAS
+                  </p>
+                </div>
+              </ScrollReveal>
             </div>
 
-            <div className="lg:col-span-6">
-              <PreviewDashboard />
-            </div>
+            <ScrollReveal atraso={320}>
+              <div className="lg:col-span-6">
+                <PreviewDashboard />
+              </div>
+            </ScrollReveal>
           </div>
         </section>
 
@@ -162,23 +179,32 @@ export default function Landing() {
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20 2xl:max-w-[1600px] 2xl:px-16 2xl:py-24">
-            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
-              01 / RESULTADO NA ROTINA
-            </p>
+            <ScrollReveal>
+              <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+                01 / RESULTADO NA ROTINA
+              </p>
+            </ScrollReveal>
 
             {/* As divisórias entram por `divide-*`, e só a partir de sm: em
                 375px as colunas viram empilhamento e uma linha vertical entre
                 blocos empilhados não separaria nada. */}
             <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:divide-x sm:divide-brand-ink-foreground/10 lg:grid-cols-4">
-              {NUMEROS.map(({ valor, texto }) => (
-                <div key={texto} className="sm:px-6 sm:first:pl-0 lg:px-8">
+              {/* Escalonado pelo índice: os quatro números entram em sequência,
+                  não em bloco. 90ms é o passo — o suficiente para ler como
+                  ordem, pouco o bastante para não virar espera. */}
+              {NUMEROS.map(({ valor, texto }, i) => (
+                <ScrollReveal
+                  key={texto}
+                  atraso={i * 90}
+                  className="sm:px-6 sm:first:pl-0 lg:px-8"
+                >
                   <dt className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-5xl 2xl:text-6xl">
                     {valor}
                   </dt>
                   <dd className="mt-3 text-[11px] font-medium leading-relaxed tracking-[0.12em] text-brand-ink-foreground/60">
                     {texto}
                   </dd>
-                </div>
+                </ScrollReveal>
               ))}
             </dl>
           </div>
@@ -189,12 +215,14 @@ export default function Landing() {
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-24 2xl:max-w-[1600px] 2xl:px-16 2xl:py-28">
-            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
-              02 / TUDO CONECTADO
-            </p>
+            <ScrollReveal>
+              <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+                02 / TUDO CONECTADO
+              </p>
+            </ScrollReveal>
 
             <div className="mt-10 grid gap-12 lg:grid-cols-12 lg:gap-16">
-              <div className="lg:col-span-5">
+              <ScrollReveal className="lg:col-span-5">
                 <h2 className="font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-4xl 2xl:text-5xl">
                   Da primeira mensagem ao fechamento do caixa.
                 </h2>
@@ -202,12 +230,17 @@ export default function Landing() {
                   O CutHub organiza a rotina sem mudar o jeito que sua equipe
                   trabalha.
                 </p>
-              </div>
+              </ScrollReveal>
 
               <ol className="lg:col-span-7">
-                {ETAPAS.map(({ n, titulo, texto }) => (
-                  <li
+                {/* `as="li"` e não `<div>`: filho direto de `<ol>` só pode ser
+                    `<li>`. Era por isso que esta lista não podia ser animada
+                    antes — ver o comentário do `as` em `scroll-reveal.tsx`. */}
+                {ETAPAS.map(({ n, titulo, texto }, i) => (
+                  <ScrollReveal
                     key={n}
+                    as="li"
+                    atraso={i * 90}
                     className="grid grid-cols-[auto_1fr] gap-x-5 border-t border-brand-ink-foreground/10 py-7 first:border-t-0 first:pt-0 sm:gap-x-8"
                   >
                     <span className="font-display text-sm font-bold tabular-nums text-primary">
@@ -221,7 +254,7 @@ export default function Landing() {
                         {texto}
                       </p>
                     </div>
-                  </li>
+                  </ScrollReveal>
                 ))}
               </ol>
             </div>
@@ -233,18 +266,23 @@ export default function Landing() {
         {/* --------------------------------------------------------------- */}
         <section className="border-t border-brand-ink-foreground/10 bg-brand-ink-elevated">
           <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28 2xl:max-w-[1600px] 2xl:px-16 2xl:py-32">
-            <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
-              — PRÓXIMO ATENDIMENTO
-            </p>
-            <h2 className="mx-auto mt-6 max-w-[16ch] font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-5xl 2xl:text-6xl">
-              Coloque sua barbearia no controle.
-            </h2>
-            <p className="mt-6 text-brand-ink-foreground/70">
-              Comece agora. Sem cartão de crédito.
-            </p>
-            <Button asChild size="lg" className="mt-10 tracking-[0.12em]">
-              <Link to="/cadastro">CRIAR CONTA DA BARBEARIA</Link>
-            </Button>
+            {/* A chamada final é a única seção centralizada, e por isso ela
+                entra como um bloco só: escalonar texto centralizado faz as
+                linhas parecerem desalinhadas no meio do caminho. */}
+            <ScrollReveal>
+              <p className="text-[11px] font-medium tracking-[0.22em] text-brand-ink-foreground/50">
+                — PRÓXIMO ATENDIMENTO
+              </p>
+              <h2 className="mx-auto mt-6 max-w-[16ch] font-display text-3xl font-extrabold uppercase leading-[1] tracking-tight sm:text-5xl 2xl:text-6xl">
+                Coloque sua barbearia no controle.
+              </h2>
+              <p className="mt-6 text-brand-ink-foreground/70">
+                Comece agora. Sem cartão de crédito.
+              </p>
+              <Button asChild size="lg" className="mt-10 tracking-[0.12em]">
+                <Link to="/cadastro">CRIAR CONTA DA BARBEARIA</Link>
+              </Button>
+            </ScrollReveal>
           </div>
         </section>
       </main>

@@ -1,8 +1,8 @@
 # CutHub — estado atual
 
-**Atualizado em:** 2026-10-02
+**Atualizado em:** 2026-10-05
 **Branch:** feat/fase-implantacao
-**Último commit de código:** `0e9c131` — notificacao sabe de qual agendamento fala, e a F14.2 (00031)
+**Último commit de código:** `pendente` — ver o commit de 05/10 nesta branch
 
 > O campo é o último commit **de código**, de propósito. "Último commit" era
 > impossível de manter honesto: o `/end` escreve este arquivo e só depois
@@ -48,27 +48,20 @@ F14.2 (horário remarcado + resumo da agenda de amanhã) em 02/10, junto com o
   é um fade. Fechar pede `loader` na rota alimentando o cache do react-query — o
   data router agora permite —, mas isso troca o `Skeleton` por navegação que
   espera. **Decisão de produto.**
-- 🟠 **A landing não tem animação nenhuma**, e a revelação descrita no log de
-  22/09 ("a folha do dia se escrevendo, 80ms entre linhas") nunca foi escrita.
-- 🟡 **`src/components/ui/scroll-reveal.tsx` é código morto** com teste verde:
-  usado em zero lugares desde a reescrita da landing. Ou entra em uso, ou sai
-  com o teste.
 - 🟡 **A extensão do Claude in Chrome está desconectada** (`list_connected_browsers`
   devolve `[]`). O DEV_LOG de 24/09 a dava como conectada. Toda medição de 25/09
   foi feita em **Chrome headless por CDP**, que também contorna o `resize_window`
   quebrado — vale como caminho padrão enquanto isso durar.
-- 🟡 **Quatro grades de largura no produto**: landing (1152/1600, `px-5/8/16`),
-  cliente + catálogo (unificados em 25/09), `/b/:slug` (896/1152/1280, sem degrau
-  `2xl`) e `AdminLayout` (1152 fixo). Deslogado, ir da landing para o catálogo
-  desloca 72px em 1440 — mas a landing **não linka** para o catálogo, então não é
-  um clique.
+- 🟡 **O painel e o console do admin não têm movimento nenhum** — nem
+  `viewTransition` nos links, nem revelação de rolagem. A assimetria com a área
+  do cliente e a landing cresceu em 05/10 e é deliberada: o painel é ferramenta
+  de trabalho. Fechar ou declarar.
+- 🟡 **A landing e o catálogo têm larguras diferentes para o visitante
+  deslogado** (landing 1152/1600 com `px-5/8/16`; catálogo e `/b/:slug` agora
+  unificados em `GRADE_DO_CLIENTE`). A landing **não linka** para o catálogo,
+  então não é um clique — fica medido e registrado.
 - 🟡 Redesign do painel: fechar ou declarar formalmente que fica no visual antigo.
 - 🟡 Barbearia nova entra no catálogo vazia.
-- 🟡 **Sem alarme para falha dos jobs do `pg_cron`.** Hoje há dois
-  (`lembretes_de_agendamento` e `resumo_da_agenda_de_amanha`); o primeiro tem
-  **964 execuções e 0 falhas** entre 19/09 e 02/10, medidas em
-  `cron.job_run_details`. Nada quebrado — o gap é não haver quem avise na
-  primeira falha.
 - 🟡 **`supabase_vector_cuthub` reinicia a cada ~71s, e a causa é conhecida
   desde 02/10:** o container tem **zero mounts**, então a source `docker_logs`
   não alcança o socket do Docker (`ConnectionRefused`), o pipeline fica sem
@@ -80,7 +73,8 @@ F14.2 (horário remarcado + resumo da agenda de amanhã) em 02/10, junto com o
 
 ## Última sessão
 
-02/10 — Fase 14 fechada: `00031` liga a notificação ao agendamento (FK em
-CASCADE, porque `excluir()` faz delete físico) e entrega a F14.2. `App.css`
-removido, script de medição por CDP no repositório, e a causa do
-`supabase_vector` encontrada. Gate verde nos quatro passos.
+05/10 — `00032` fecha os buracos da 00031: o vínculo passa de 1 para 6 produtores
+de notificação, e o resumo da agenda — cujo caminho de envio **nunca havia
+executado** — recebe a hora como entrada e ficou testável. Entrou alarme para o
+`pg_cron`, a quarta grade fechou, e a landing ganhou revelação de rolagem. Gate
+verde nos quatro passos.

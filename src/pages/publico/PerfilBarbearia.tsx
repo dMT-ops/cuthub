@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePerfilPublico } from '@/hooks/useCatalogo';
 import { CapaBarbearia, LogoBarbearia } from '@/components/publico/CapaBarbearia';
 import { TRANSICAO } from '@/lib/ui/movimento';
+import { GRADE_DO_CLIENTE } from '@/lib/ui/grade';
 import { BotaoFavorito } from '@/components/publico/BotaoFavorito';
 import { CardPromocao } from '@/components/publico/CardPromocao';
 import { usePromocoesVigentes } from '@/hooks/usePromocoes';
@@ -31,7 +32,7 @@ export default function PerfilBarbearia() {
     return (
       <div className="min-h-screen bg-background">
         <Skeleton className="h-48 w-full" />
-        <div className="mx-auto max-w-4xl space-y-4 px-4 py-8">
+        <div className={`${GRADE_DO_CLIENTE} space-y-4 py-8`}>
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-full max-w-md" />
           <Skeleton className="h-40 w-full" />
@@ -92,7 +93,12 @@ export default function PerfilBarbearia() {
         </Button>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:max-w-6xl xl:max-w-7xl">
+      {/* A MESMA grade da area do cliente, inclusive o degrau `2xl`. Ate 05/10
+          esta pagina parava em `xl:max-w-7xl`, e em 1920 o miolo caia de 1600
+          para 1280 um clique depois do catalogo -- a "quarta grade" que o log
+          registrava. Agora vem da constante, que e o que impede de divergir de
+          novo. */}
+      <div className={GRADE_DO_CLIENTE}>
         {/* `relative z-10` nao e enfeite: o banner esta num wrapper
             `position: relative` e, na ordem de pintura do CSS, elemento
             posicionado cobre conteudo estatico independentemente da ordem no

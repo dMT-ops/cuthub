@@ -15,6 +15,7 @@ import { rotaDaAreaAtual, ROTA_DA_AREA } from '@/lib/auth/areas';
 import { lerAreaAtual } from '@/lib/auth/areaAtual';
 import { GRADE_DO_CLIENTE } from '@/lib/ui/grade';
 import { CascaDoCliente } from '@/components/layout/CascaDoCliente';
+import { ScrollReveal } from '@/components/ui/scroll-reveal';
 import { TRANSICAO } from '@/lib/ui/movimento';
 
 const TODAS = 'todas';
@@ -50,13 +51,20 @@ export default function Barbearias() {
 
   const corpo = (
     <>
-      <div className="max-w-2xl">
+      {/* A abertura do catálogo é revelada; os CARTÕES não, de propósito.
+          Eles já têm `transition-all duration-300 hover:-translate-y-1`, e o
+          `ScrollReveal` aplica a própria `transition-all` com `translate-y` no
+          mesmo elemento — as duas disputariam a mesma propriedade. Envolver o
+          cartão num `<div>` evitaria o conflito, mas o `<div>` passaria a ser o
+          item da grade, e a largura e a altura dos cartões foram medidas em
+          25/09 e 02/10. Movimento não vale reabrir layout provado. */}
+      <ScrollReveal className="max-w-2xl">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Barbearias no CutHub</h1>
         <p className="mt-3 text-muted-foreground">
           Encontre pelo nome ou pela cidade e veja serviços, equipe e produtos
           antes de agendar.
         </p>
-      </div>
+      </ScrollReveal>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">

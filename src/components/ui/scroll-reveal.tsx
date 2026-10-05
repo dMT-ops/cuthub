@@ -8,6 +8,13 @@ interface ScrollRevealProps {
   className?: string;
   /** Atraso em ms — serve para escalonar itens de uma mesma lista. */
   atraso?: number;
+  /**
+   * Tag do elemento revelado. Existe por necessidade de HTML, não de estética:
+   * `<div>` como filho direto de `<ol>`/`<ul>` é inválido, e a landing revela
+   * etapas que vivem numa lista. Sem isto, animar a lista exigiria desmontar a
+   * semântica dela.
+   */
+  as?: 'div' | 'li' | 'section' | 'article';
 }
 
 /**
@@ -22,7 +29,17 @@ interface ScrollRevealProps {
  * torna inútil. Nesse caso o conteúdo é renderizado estático e o observer nem
  * chega a ser criado.
  */
-export function ScrollReveal({ children, className, atraso = 0 }: ScrollRevealProps) {
+export function ScrollReveal({
+  children,
+  className,
+  atraso = 0,
+  as = 'div',
+}: ScrollRevealProps) {
+  // A união de tags faz o TS exigir um `ref` que satisfaça TODAS ao mesmo tempo
+  // — interseção impossível (`HTMLDivElement & HTMLLIElement`). `ElementType`
+  // relaxa isso aqui dentro sem abrir mão da união na API pública, que é o que
+  // importa para quem usa o componente.
+  const Tag = as as React.ElementType;
   // Lido na primeira renderização, e não num efeito: decidir depois faria o
   // conteúdo piscar invisível antes de o efeito rodar — justamente para quem
   // pediu para não ver movimento.
@@ -32,7 +49,9 @@ export function ScrollReveal({ children, className, atraso = 0 }: ScrollRevealPr
   // enfeite nunca pode custar o conteúdo, e resolver na inicialização evita
   // um render extra só para desfazer o estado invisível.
   const [visivel, setVisivel] = useState(() => typeof IntersectionObserver !== 'function');
-  const ref = useRef<HTMLDivElement>(null);
+  // `HTMLElement` e nao `HTMLDivElement`: com `as` a tag varia, e o tipo
+  // estreito faria o `ref` recusar `li`.
+  const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (semMovimento) return;
@@ -51,19 +70,44 @@ export function ScrollReveal({ children, className, atraso = 0 }: ScrollRevealPr
     );
 
     observador.observe(alvo);
-    return () => observador.disconnect();
+
+    // REDE DE SEGURANÇA, e não redundância. Medido em 05/10: rolando a landing
+    // até o fim de uma vez, 7 de 16 blocos ficavam invisíveis para sempre. Um
+    // salto instantâneo — tecla End, âncora, ou a restauração de scroll quando
+    // a pessoa VOLTA para a página — leva o elemento de abaixo da viewport para
+    // acima dela sem nunca intersectar, e o `IntersectionObserver` só notifica
+    // quando a interseção MUDA. Sem notificação, `opacity-0` é definitivo.
+    //
+    // Então: se já passou (a borda de cima está acima do fim da viewport),
+    // revela. A condição é a mesma que o observer usaria, só avaliada por
+    // evento em vez de por interseção — por isso não revela o que ainda está
+    // abaixo, e a revelação progressiva continua progressiva.
+    const conferirPorEvento = () => {
+      const r = alvo.getBoundingClientRect();
+      if (r.top < window.innerHeight * 0.9) {
+        setVisivel(true);
+        observador.unobserve(alvo);
+        window.removeEventListener('scroll', conferirPorEvento);
+      }
+    };
+    window.addEventListener('scroll', conferirPorEvento, { passive: true });
+
+    return () => {
+      observador.disconnect();
+      window.removeEventListener('scroll', conferirPorEvento);
+    };
   }, [semMovimento]);
 
   if (semMovimento) {
     return (
-      <div ref={ref} className={className}>
+      <Tag ref={ref} className={className}>
         {children}
-      </div>
+      </Tag>
     );
   }
 
   return (
-    <div
+    <Tag
       ref={ref}
       style={atraso ? { transitionDelay: `${atraso}ms` } : undefined}
       className={cn(
@@ -73,6 +117,6 @@ export function ScrollReveal({ children, className, atraso = 0 }: ScrollRevealPr
       )}
     >
       {children}
-    </div>
+    </Tag>
   );
 }
