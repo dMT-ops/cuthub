@@ -114,3 +114,58 @@ erros, 13 warnings) · build ✅
 - [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
 - [ ] 🟡 Barbearia nova entra no catálogo vazia.
 - [ ] **Próxima fase não foi aberta** — a Fase 14 fechou e não há ordem na fila.
+
+## 2026-10-05
+
+**Feito:** `00032` — o `agendamento_id` passou de 1 para 6 produtores de
+notificação (o `CASCADE` da `00031` só limpava remarcações), o resumo da agenda
+recebeu `p_agora` e ficou testável, e entrou alarme para os jobs do `pg_cron`
+(`cron_alarme_estado` + `verificar_falhas_do_cron`, avisando `admin_supremo`).
+A quarta grade fechou: `/b/:slug` usa `GRADE_DO_CLIENTE`. A landing ganhou
+**revelação de rolagem** em 11 pontos, usando o `ScrollReveal` que estava órfão.
+Corrigida no mesmo dia uma regressão minha: o cartão do preview da landing
+ficava com 64px de coluna em vez de 704.
+
+**Decisões:** (1) **Horário não é dado de ambiente, é entrada** — o resumo lia
+`now()` direto e por isso só era exercível esperando as 20h; agora recebe
+`p_agora` com default, o cron chama sem argumento e o teste escolhe a hora.
+(2) **Alarme do cron por marcador de `runid`**, não por janela de tempo: janela
+perde falha se o alarme atrasar e repete aviso se adiantar. (3) **Os cartões do
+catálogo não serão animados**: têm `hover:-translate-y-1` e disputariam a mesma
+propriedade com o `ScrollReveal`; envolvê-los reabriria largura e altura já
+medidas. (4) **Envolver elemento é mudar layout** — a classe de item de grade vai
+no próprio `ScrollReveal`, nunca num filho. Foi violar isso que cortou o preview.
+(5) **Medição confiável é contra o BUILD** (`vite preview`), não contra o dev
+server, que re-otimiza por rota e devolve página em branco na primeira
+navegação.
+
+**Quality gate:** tsc --noEmit ✅ · tsc -b ✅ · testes ✅ (125) · oxlint ✅ (0
+erros, 13 warnings) · build ✅ · migrations 32/32 sem drift · 3 jobs no `pg_cron`
+
+## Pendências para o próximo /start
+
+- [ ] 🔴 **`text-primary` a 1.89 de contraste** — 53 usos em 26 arquivos.
+      Decisão de produto, aberta desde a Fase 13.
+- [ ] 🟠 **Confirmar a regra da remarcação** (`00031`,
+      `notificar_agendamento_remarcado`): implementei "uma viva por
+      *(agendamento, usuário)*". Se a intenção era uma por agendamento, é uma
+      linha no `DELETE` do gatilho.
+- [ ] 🟠 **A F14.2 nunca foi vista em uso real** — remarcar um agendamento pelo
+      painel e conferir a notificação no sino. Está provada no banco, não na
+      tela.
+- [ ] 🟠 **Morfose da capa** (`src/pages/publico/PerfilBarbearia.tsx`) — decidir
+      entre `loader` chamando `ensureQueryData` (troca o `Skeleton` por navegação
+      que espera) ou aceitar o fade.
+- [ ] 🟡 **Declarar o movimento do painel** (`Sidebar.tsx`, `AdminLayout.tsx`):
+      sem `viewTransition` e sem revelação de rolagem, de propósito. Fechar ou
+      assumir por escrito.
+- [ ] 🟡 **`supabase_vector_cuthub`: causa achada, conserto pendente** —
+      `supabase stop && supabase start` com o CLI 2.119.0 para recriar o
+      container com o mount que falta. Derruba o stack local; precisa da tua
+      palavra.
+- [ ] 🟡 **`supabase_edge_runtime_cuthub` parado desde 11/09** — inofensivo (sem
+      `supabase/functions/`). Decidir se fica parado ou sai do stack.
+- [ ] ❓ **Redesign do painel:** fechar ou declarar "fica no visual antigo".
+- [ ] 🟡 Barbearia nova entra no catálogo vazia.
+- [ ] **Próxima fase não foi aberta** — a 14 fechou e não há ordem na fila. Tudo
+      acima é acabamento e dívida.
