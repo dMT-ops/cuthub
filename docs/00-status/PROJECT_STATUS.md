@@ -2,7 +2,7 @@
 
 **Atualizado em:** 2026-10-05
 **Branch:** feat/fase-implantacao
-**Último commit de código:** `pendente` — ver o commit de 05/10 nesta branch
+**Último commit de código:** `73359ed` — 00032 fecha os buracos da 00031, alarme do cron, quarta grade e revelacao de rolagem
 
 > O campo é o último commit **de código**, de propósito. "Último commit" era
 > impossível de manter honesto: o `/end` escreve este arquivo e só depois
