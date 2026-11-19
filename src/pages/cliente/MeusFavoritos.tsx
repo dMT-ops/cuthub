@@ -84,7 +84,7 @@ export default function MeusFavoritos() {
                           nome={b.nome ?? ''}
                           logoUrl={b.logo_url}
                           corPrimaria={b.cor_primaria}
-                          className="-mt-10 h-12 w-12"
+                          className="relative z-10 -mt-10 h-12 w-12"
                         />
                         <div className="min-w-0">
                           <p className="truncate font-medium">{b.nome}</p>

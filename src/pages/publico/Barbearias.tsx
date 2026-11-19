@@ -206,7 +206,7 @@ function CartaoDeBarbearia({ b }: { b: BarbeariaDoCatalogo }) {
           nomeDeTransicao={emTransito ? TRANSICAO.capa : undefined}
         />
         <div className="p-5">
-          <div className="-mt-10 mb-3 flex items-end justify-between">
+          <div className="relative z-10 -mt-10 mb-3 flex items-end justify-between">
             <LogoBarbearia
               nome={b.nome ?? ''}
               logoUrl={b.logo_url}

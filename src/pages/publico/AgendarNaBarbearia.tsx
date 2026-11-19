@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { addDays, format, isSameDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, Clock, LogIn, Scissors } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -85,6 +85,8 @@ export default function AgendarNaBarbearia() {
     });
   }, [ocupacao.data, dia, duracaoTotal]);
 
+  const queryClient = useQueryClient();
+
   const confirmar = async () => {
     if (!perfil?.barbearia.id || !profissionalEfetivo || !horario) return;
     setEnviando(true);
@@ -96,6 +98,10 @@ export default function AgendarNaBarbearia() {
         dataHora: horario,
         observacoes: observacoes.trim() || null,
       });
+      // Sem isso, a lista de Meus agendamentos abre com o cache anterior e o
+      // agendamento recém-criado só aparece depois de recarregar a página.
+      await queryClient.invalidateQueries({ queryKey: ['meus_agendamentos'] });
+      void queryClient.invalidateQueries({ queryKey: ['ocupacao_publica'] });
       toast.success('Agendamento confirmado!');
       navigate('/minha-conta/agendamentos');
     } catch (err: any) {
